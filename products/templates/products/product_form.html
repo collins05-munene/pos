@@ -2,7 +2,7 @@
 
 {% block title %}
     {% if object %}
-        Modify Product: {{object.name}}
+        Modify Product: {{ object.name }}
     {% else %}
         Register Product
     {% endif %}
@@ -14,15 +14,15 @@
         <div class="form-card-header">
             <h3 class="form-title">
                 {% if object %}
-                    Update Product Profile
+                    Update Products Profile
                 {% else %}
-                    Create Product Profile
+                    Create Products Profile
                 {% endif %}
             </h3>
             <p class="form-subtitle">Fill out the form fields down below.</p>
         </div>
 
-        <form method="POST" novalidate class="styled-form" enctype="multipart/form-data">
+        <form method="POST" enctype="multipart/form-data" novalidate class="styled-form">
             {% csrf_token %}
          
             <div class="form-fields-stack">
@@ -42,98 +42,131 @@
                         {% endif %}
                       
                         {% for error in field.errors %}
-                            <div class="field-error-message">{{ error }}</div>
+                            <div class="field-error-message">
+                                {{ error }}
+                            </div>
                         {% endfor %}
                     </div>
                 {% endfor %}
             </div>
 
             <hr class="form-divider">
-
-           <!-- 3. PRODUCT IMAGES SECTION -->
-<div class="formset-container">
-    <h4 class="formset-title">Product Images</h4>
-    {{ images.management_form }}
-    
-    <!-- JS looks at this container to inject new rows -->
-    <div id="image-formset-container">
-        {% for image_form in images %}
-            <div class="image-form-row" style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
-                {% for hidden in image_form.hidden_fields %}
-                    {{ hidden }}
-                {% endfor %}
-                
-                {% for field in image_form.visible_fields %}
-                    <div class="form-field-group">
-                        <label class="field-label">{{ field.label }}</label>
-                        {{ field }}
-                        {% for error in field.errors %}
-                            <div class="field-error-message">{{ error }}</div>
-                        {% endfor %}
+            <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
+                <h3 class="form-title">Product Variants</h3>
+                <p class="form-subtitle">Manage combinations, SKUs, and stock rules.</p>
+            </div>
+            
+            {{ variants.management_form }}
+            <div class="form-fields-stack">
+                {% for variant_form in variants %}
+                    <div class="variant-form-row" style="background: #f9fafb; padding: 1.5rem; border-radius: 6px; border: 1px solid #e5e7eb;">
+                        {{ variant_form.id }}
+                        
+                        <div class="form-fields-stack" style="gap: 1rem;">
+                            {% for field in variant_form.visible_fields %}
+                                <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
+                                    <label for="{{ field.id_for_label }}" class="field-label">
+                                        {{ field.label }}
+                                        {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                                    </label>
+                                    <div class="field-widget-container">
+                                        {{ field }}
+                                    </div>
+                                    {% if field.help_text %}
+                                        <div class="field-help-text">{{ field.help_text|safe }}</div>
+                                    {% endif %}
+                                    {% for error in field.errors %}
+                                        <div class="field-error-message">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        {% if variant_form.errors and not variant_form.visible_fields.errors %}
+                            <div class="field-error-message" style="margin-top: 0.5rem;">
+                                {{ variant_form.non_field_errors }}
+                            </div>
+                        {% endif %}
                     </div>
                 {% endfor %}
             </div>
-        {% endfor %}
-    </div>
 
-    <!-- The magic button -->
-    <button type="button" id="add-image-btn" class="btn btn-secondary" style="margin-top: 10px; background-color: #6c757d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-        + Add Another Image
-    </button>
+            <hr class="form-divider">
+
+<div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
+    <h3 class="form-title">Product Images</h3>
+    <p class="form-subtitle">Upload media displays and set your baseline primary asset (Max 4 images).</p>
+</div>
+
+{% if images.non_form_errors %}
+    <div class="formset-global-error" style="color: #dc3545; background: #fdf2f2; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid #fde8e8; font-weight: 500;">
+        {{ images.non_form_errors }}
+    </div>
+{% endif %}
+{{ images.management_form }}
+<div class="form-fields-stack">
+    {% for image_form in images %}
+        <div class="image-form-row" style="background: #f9fafb; padding: 1.5rem; border-radius: 6px; border: 1px solid #e5e7eb; margin-bottom: 1rem; position: relative;">
+            {{ image_form.id }}
+            
+            <div class="form-fields-stack" style="gap: 1rem;">
+                {% for field in image_form.visible_fields %}
+                    {% if field.name == 'DELETE' %}
+                        <div class="form-delete-container" style="margin-top: 0.5rem; background: #fef2f2; padding: 0.5rem 1rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.5rem; color: #991b1b;">
+                            {{ field }}
+                            <label for="{{ field.id_for_label }}" style="font-size: 0.875rem; font-weight: 500; cursor: pointer;">
+                                Remove this image asset
+                            </label>
+                        </div>
+                    {% else %}
+                        <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
+                            <label for="{{ field.id_for_label }}" class="field-label">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                            </label>
+                            
+                            {% if field.name == 'image' and image_form.instance.image %}
+                                <div class="current-image-preview" style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 1rem;">
+                                    <img src="{{ image_form.instance.image.url }}" style="width: 65px; height: 65px; object-fit: cover; border-radius: 4px; border: 1px solid #d1d5db;" alt="Saved asset">
+                                    <span style="font-size: 0.825rem; color: #4b5563;">
+                                        Current asset saved. Leave file input empty to preserve it, or select a new file to replace it.
+                                    </span>
+                                </div>
+                            {% endif %}
+
+                            <div class="field-widget-container">
+                                {{ field }}
+                            </div>
+                            
+                            {% if field.help_text %}
+                                <div class="field-help-text">{{ field.help_text|safe }}</div>
+                            {% endif %}
+                            
+                            {% for error in field.errors %}
+                                <div class="field-error-message" style="color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            {% if image_form.non_field_errors %}
+                <div class="field-error-message" style="margin-top: 0.5rem; color: #dc3545; font-weight: 500;">
+                    {{ image_form.non_field_errors }}
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
 </div>
 
             <hr class="form-divider">
-
             <div class="form-actions">
                 <a href="{% url 'product-list' %}" class="btn-link cancel-btn">Cancel</a>
                 <button type="submit" class="btn btn-submit">
-                    {% if object %}Save Adjustments{% else %}Save Product{% endif %}
+                    {% if object %}Save Adjustments{% else %}Save{% endif %}
                 </button>
             </div>
         </form>
     </div>
 </div>
-<script>
-    document.getElementById('add-image-btn').addEventListener('click', function() {
-        // 1. Grab all rows and the total form count manager
-        const imageRows = document.getElementsByClassName('image-form-row');
-        const totalForms = document.getElementById('id_images-TOTAL_FORMS');
-        
-        let currentFormCount = imageRows.length;
-        
-        // 2. Clone the very first image row structure
-        const newRow = imageRows[0].cloneNode(true);
-        
-        // 3. Clear out any previous selections/files in the cloned fields
-        const inputs = newRow.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.type === 'file') input.value = ''; // Reset the file selector
-            if (input.type === 'checkbox') input.checked = false; // Reset the primary flag
-            
-            // Crucial: Update Django's index prefixes from [0] to, [2], etc.
-            if (input.name) {
-                input.name = input.name.replace('-0-', `-${currentFormCount}-`);
-            }
-            if (input.id) {
-                input.id = input.id.replace('-0-', `-${currentFormCount}-`);
-            }
-        });
-
-        // 4. Update the labels to match the new inputs
-        const labels = newRow.querySelectorAll('label');
-        labels.forEach(label => {
-            if (label.getAttribute('for')) {
-                const newFor = label.getAttribute('for').replace('-0-', `-${currentFormCount}-`);
-                label.setAttribute('for', newFor);
-            }
-        });
-
-        // 5. Inject the new row into the DOM container
-        document.getElementById('image-formset-container').appendChild(newRow);
-        
-        // 6. Tell Django it now needs to process one more form input
-        totalForms.value = currentFormCount + 1;
-    });
-</script>
-
 {% endblock %}

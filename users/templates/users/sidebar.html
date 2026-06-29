@@ -34,7 +34,7 @@
                 <a href="{% url 'uom-list' %}">Units of Measure</a>
             </li>
             <li>
-                <a href="#">Suppliers</a>
+                <a href="{% url 'supplier-list' %}">Suppliers</a>
             </li>
             <li class="menu-title">Finance</li>
             <li>
@@ -90,5 +90,10 @@
                 <a href="#">Categories</a>
             </li>
         </ul>
+           <div class="sidebar-footer">
+            <strong>{{user.username}}</strong>
+            <p>{{user.get_role_display}}</p>
+            <a href="{% url 'logout' %}">Logout</a>
+        </div>
     </aside>
 {% endif %}    

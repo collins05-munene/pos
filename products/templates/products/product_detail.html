@@ -1,0 +1,112 @@
+{% extends 'users/base.html' %}
+
+{% block title %} {{product.name}} - Product Details {% endblock %}
+
+{% block extra_head %}
+    <style>
+        
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        background: #fff;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 12px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+        color: #333;
+    }
+    tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <a href="{% url 'product-list' %}" class="back-link">&larr; Back to Product List</a>
+
+    <div class="product-container">
+        <div class="product-header">
+            <h1>{{ product.name }}</h1>
+            <p>{{ product.description|default:"<i>No description provided.</i>" }}</p>
+        </div>
+
+        <div class="product-meta">
+            <div class="meta-item">
+                <strong>SKU Prefix</strong>
+                {{ product.sku_prefix }}
+            </div>
+            <div class="meta-item">
+                <strong>Category</strong>
+                {{ product.category.name }}
+            </div>
+            <div class="meta-item">
+                <strong>Brand</strong>
+                {{ product.brand.name|default:"N/A" }}
+            </div>
+            <div class="meta-item">
+                <strong>Unit of Measure</strong>
+                {{ product.unit_of_measure.name }}
+            </div>
+        
+        </div>
+
+        {% if product.images.all %}
+            <h3>Product Images</h3>
+            <div class="image-gallery">
+                {% for img in product.images.all %}
+                    <div class="image-card">
+                        {% if img.is_primary %}
+                            <span class="badge">Primary</span>
+                        {% endif %}
+                        <img src="{{ img.image.url }}" alt="{{ product.name }}">
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <h3>Available Variants</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Size</th>
+                    <th>Color</th>
+                    <th>Cost Price</th>
+                    <th>Retail Price</th>
+                    <th>Stock Alert Threshold</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for variant in product.variants.all %}
+                    <tr>
+                        <td><strong>{{ variant.sku }}</strong></td>
+                        <td>{{ variant.size|default:"-" }}</td>
+                        <td>{{ variant.color|default:"-" }}</td>
+                        <td>${{ variant.cost_price }}</td>
+                        <td>${{ variant.retail_price }}</td>
+                        <td>{{ variant.low_stock_threshold }} units</td>
+                        <td>
+                            {% if variant.is_active %}
+                                <span class="status-active">Active</span>
+                            {% else %}
+                                <span class="status-inactive">Disabled</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: #666;">
+                            This product has no variations setup.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

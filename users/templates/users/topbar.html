@@ -1,49 +1,16 @@
 <header class="topbar">
-
-
-<div class="left-side">
-
-
-<input
-type="search"
-placeholder="Search products...">
-
-
-</div>
-
-
-
-<div class="right-side">
-
-
-<button>
-
-
-
-</button>
-
-
-
-<div class="status">
-
-
-Terminal Open
-
-
-</div>
-
-
-
-<div class="profile">
-
-
-{{user.username}}
-
-
-</div>
-
-
-</div>
-
-
+    <div class="left-side">
+        <input type="search" placeholder="Search products...">
+    </div>
+    <div class="right-side">
+        <button></button>
+        <div class="status">
+            {% if user.is_superuser %}
+                Admin
+            {% else %}
+                Cashier
+            {% endif %}
+        </div>
+        <div class="profile">{{user.first_name}} {{user.last_name}}</div>
+    </div>
 </header>

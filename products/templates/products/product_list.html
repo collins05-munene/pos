@@ -12,9 +12,10 @@
             <h2>Products Directory</h2>
             <p>Manage products</p>
         </div>
-        <a href="{% url 'product-create' %}" class="btn btn-primary">
+        <a href="{% url 'product-create' %}" class="btn btn-primary" >
             Add New Product
         </a>
+        
     </div>
 
    
@@ -26,7 +27,6 @@
                     <th scope="col" >Prefix</th>
                     <th scope="col" >Category</th>
                     <th scope="col" >Unit of Measure</th>
-                    <th scope="col" >Description</th>
                     <th scope="col" >Brand</th>
                     <th scope="col" >Variations</th>
                     <th scope="col" style="text-align: right;">Actions</th>
@@ -39,7 +39,6 @@
                     <td class="brand-name">{{ product.sku_prefix }}</td>
                     <td class="brand-name">{{ product.category.name }}</td>
                     <td class="brand-name">{{ product.unit_of_measure.name }}</td>
-                    <td class="brand-desc">{{ product.description|default:"No description provided." }}</td>
                     <td class="brand-name">{{ product.brand.name }}</td>
                     <td>
                         {% if has_variations %}
@@ -51,7 +50,9 @@
                     
                     <td class="brand-actions">
                         <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
-                        <a href="{% url 'category-delete' category.id %}" class="action-link delete-link">Delete</a>
+                        <a href="#" class="action-link delete-link">Delete</a>
+                        <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
+                        
                     </td>
                 </tr>
                 {% empty %}
