@@ -1,0 +1,106 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Supplier Directory {% endblock %}
+
+
+{% block content %}
+<div class="directory-container">
+    
+  
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Supplier Directory</h2>
+            <p>Manage manufacturers and product lines.</p>
+        </div>
+        <a href="{% url 'supplier-create' %}" class="btn btn-primary">
+            Add New Supplier
+        </a>
+    </div>
+
+   
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col">Company Name</th>
+                    <th scope="col">Supplier Name</th>
+                    <th scope="col">Supplier Phone</th>
+                    <th scope="col">Supplier Email</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for supplier in suppliers %}
+                <tr>
+                    <td class="brand-name">{{ supplier.company_name }}</td>
+                    <td class="brand-name">{{ supplier.contact_name }}</td>
+                    <td class="brand-name">{{ supplier.phone }}</td>
+                    <td class="brand-name">{{ supplier.email }}</td>
+                    <td class="brand-actions">
+                        <a href="{% url 'supplier-update'  supplier.id %}" class="action-link edit-link">Update</a>
+                        
+                        <a href="{% url 'supplier-detail'  supplier.id %}" class="action-link edit-link">View</a>
+                        
+                        <a href="{% url 'supplier-delete' supplier.id %}" class="action-link delete-link">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                
+                <tr>
+                    <td colspan="9" class="empty-state-row">
+                        <div class="empty-state">
+                            <h3>No Suppliers Registered</h3>
+                            <p>Get started by adding your first brand manufacture to the system.</p>
+                            <a href="{% url 'supplier-create' %}" class="btn btn-secondary">Add one now</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if is_paginated %}
+        <div class="pagination-container">
+        
+            <span class="pagination-info">
+                Showing page <strong>{{ page_obj.number }}</strong> of <strong>{{ paginator.num_pages }}</strong>
+            </span>
+            
+            
+            <nav class="pagination-nav">
+                <ul class="pagination-list">
+                
+                    {% if page_obj.has_previous %}
+                        <li class="pagination-item">
+                            <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
+                        </li>
+                    {% else %}
+                        <li class="pagination-item">
+                            <span class="pagination-link disabled">Previous</span>
+                        </li>
+                    {% endif %}
+
+            
+                    <li class="pagination-item">
+                        <span class="pagination-link active">{{ page_obj.number }}</span>
+                    </li>
+
+            
+                    {% if page_obj.has_next %}
+                        <li class="pagination-item">
+                            <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
+                        </li>
+                    {% else %}
+                        <li class="pagination-item">
+                            <span class="pagination-link disabled">Next</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    {% endif %}
+
+
+</div>
+{% endblock %}

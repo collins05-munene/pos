@@ -67,6 +67,8 @@ ProductImageFormSet = forms.inlineformset_factory(
     ProductImage,
     fields = ['image', 'is_primary'],
     extra=1,
+    max_num=4,
+    validate_max=True,
     can_delete=True,
     widgets = {
         'image': forms.FileInput(attrs={'class': 'form-control'}),

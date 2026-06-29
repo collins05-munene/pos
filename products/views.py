@@ -106,7 +106,10 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
             data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
             data['variants'] = ProductVariantFormSet(instance=self.object)
-            data['images'] = ProductImageFormSet(instance=self.object)
+
+            images_formset = ProductImageFormSet(instance=self.object)
+            images_formset.extra=4
+            data['images'] = images_formset
         return data
     
     def form_valid(self, form):
@@ -135,12 +138,25 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
+        
+        has_variants = self.object.variants.exists() if self.object else False
+
         if self.request.POST:
             data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object)
             data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
-            data['variants'] = ProductVariantFormSet(instance=self.object)
-            data['images'] = ProductImageFormSet(instance=self.object)
+            variants_formset = ProductVariantFormSet(instance=self.object)
+            if has_variants:
+                variants_formset.extra = 0
+            data['variants'] = variants_formset
+
+
+            images_formset = ProductImageFormSet(instance=self.object)
+
+            current_image_count = self.object.images.count() if self.object else 0
+           
+            images_formset.extra = max(0, 4 - current_image_count)
+            data['images'] = images_formset
         return data
     
     def form_valid(self,form):
@@ -165,3 +181,11 @@ class ProductDeleteView(LoginRequiredMixin,DeleteView):
     template_name = 'products/product_confirm_delete.html'
     success_url = reverse_lazy('product-list')
 
+
+class ProductDetailView(AdminRequiredMixin, DeleteView):
+    model = Product
+    template_name = 'products/product_detail.html'
+    context_object_name = 'product'
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related('variants', 'images')
