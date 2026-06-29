@@ -1,0 +1,68 @@
+{% extends 'users/base.html' %}
+
+{% block title %}
+    {% if object %}
+        Modify Brand: {{object.name}}
+    {% else %}
+        Register Brand
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page-container">
+
+  
+    <div class="form-card">
+        <div class="form-card-header">
+            <h3 class="form-title">
+                {% if object %}
+                    Update Brand Profile
+                {% else %}
+                    Create Brand Profile
+                {% endif %}
+            </h3>
+            <p class="form-subtitle">Fill out the form fields down below.</p>
+        </div>
+
+        <form method="POST" novalidate class="styled-form">
+            {% csrf_token %}
+         
+            <div class="form-fields-stack">
+                {% for field in form %}
+                    <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
+                        <label for="{{ field.id_for_label }}" class="field-label">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                        </label>
+                        
+                       
+                        <div class="field-widget-container">
+                            {{ field }}
+                        </div>
+                        
+                        
+                        {% if field.help_text %}
+                            <div class="field-help-text">{{ field.help_text|safe }}</div>
+                        {% endif %}
+                      
+                        {% for error in field.errors %}
+                            <div class="field-error-message">
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <hr class="form-divider">
+
+            <div class="form-actions">
+                <a href="{% url 'brand-list' %}" class="btn-link cancel-btn">Cancel</a>
+                <button type="submit" class="btn btn-submit">
+                    {% if object %}Save Adjustments{% else %}Add Brand{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

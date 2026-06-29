@@ -1,0 +1,115 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Products Directory {% endblock %}
+
+
+{% block content %}
+<div class="directory-container">
+    
+  
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Products Directory</h2>
+            <p>Manage products</p>
+        </div>
+        <a href="{% url 'product-create' %}" class="btn btn-primary">
+            Add New Product
+        </a>
+    </div>
+
+   
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col" >Product Name</th>
+                    <th scope="col" >Prefix</th>
+                    <th scope="col" >Category</th>
+                    <th scope="col" >Unit of Measure</th>
+                    <th scope="col" >Description</th>
+                    <th scope="col" >Brand</th>
+                    <th scope="col" >Variations</th>
+                    <th scope="col" style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td class="brand-name">{{ product.name }}</td>
+                    <td class="brand-name">{{ product.sku_prefix }}</td>
+                    <td class="brand-name">{{ product.category.name }}</td>
+                    <td class="brand-name">{{ product.unit_of_measure.name }}</td>
+                    <td class="brand-desc">{{ product.description|default:"No description provided." }}</td>
+                    <td class="brand-name">{{ product.brand.name }}</td>
+                    <td>
+                        {% if has_variations %}
+                            True
+                        {% else %}
+                            False
+                        {% endif %}
+                    </td>
+                    
+                    <td class="brand-actions">
+                        <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
+                        <a href="{% url 'category-delete' category.id %}" class="action-link delete-link">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                
+                <tr>
+                    <td colspan="8" class="empty-state-row">
+                        <div class="empty-state">
+                            <h3>No Products registered</h3>
+                            <p>Get started by adding your first product to the system.</p>
+                            <a href="{% url 'product-create' %}" class="btn btn-secondary">Add one now</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% if is_paginated %}
+    <div class="pagination-container">
+       
+        <span class="pagination-info">
+            Showing page <strong>{{ page_obj.number }}</strong> of <strong>{{ paginator.num_pages }}</strong>
+        </span>
+        
+        
+        <nav class="pagination-nav">
+            <ul class="pagination-list">
+            
+                {% if page_obj.has_previous %}
+                    <li class="pagination-item">
+                        <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
+                    </li>
+                {% else %}
+                    <li class="pagination-item">
+                        <span class="pagination-link disabled">Previous</span>
+                    </li>
+                {% endif %}
+
+         
+                <li class="pagination-item">
+                    <span class="pagination-link active">{{ page_obj.number }}</span>
+                </li>
+
+           
+                {% if page_obj.has_next %}
+                    <li class="pagination-item">
+                        <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
+                    </li>
+                {% else %}
+                    <li class="pagination-item">
+                        <span class="pagination-link disabled">Next</span>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+{% endif %}
+
+
+</div>
+{% endblock %}

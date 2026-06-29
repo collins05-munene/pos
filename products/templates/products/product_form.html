@@ -1,0 +1,139 @@
+{% extends 'users/base.html' %}
+
+{% block title %}
+    {% if object %}
+        Modify Product: {{object.name}}
+    {% else %}
+        Register Product
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page-container">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h3 class="form-title">
+                {% if object %}
+                    Update Product Profile
+                {% else %}
+                    Create Product Profile
+                {% endif %}
+            </h3>
+            <p class="form-subtitle">Fill out the form fields down below.</p>
+        </div>
+
+        <form method="POST" novalidate class="styled-form" enctype="multipart/form-data">
+            {% csrf_token %}
+         
+            <div class="form-fields-stack">
+                {% for field in form %}
+                    <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
+                        <label for="{{ field.id_for_label }}" class="field-label">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                        </label>
+                        
+                        <div class="field-widget-container">
+                            {{ field }}
+                        </div>
+                        
+                        {% if field.help_text %}
+                            <div class="field-help-text">{{ field.help_text|safe }}</div>
+                        {% endif %}
+                      
+                        {% for error in field.errors %}
+                            <div class="field-error-message">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <hr class="form-divider">
+
+           <!-- 3. PRODUCT IMAGES SECTION -->
+<div class="formset-container">
+    <h4 class="formset-title">Product Images</h4>
+    {{ images.management_form }}
+    
+    <!-- JS looks at this container to inject new rows -->
+    <div id="image-formset-container">
+        {% for image_form in images %}
+            <div class="image-form-row" style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+                {% for hidden in image_form.hidden_fields %}
+                    {{ hidden }}
+                {% endfor %}
+                
+                {% for field in image_form.visible_fields %}
+                    <div class="form-field-group">
+                        <label class="field-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% for error in field.errors %}
+                            <div class="field-error-message">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- The magic button -->
+    <button type="button" id="add-image-btn" class="btn btn-secondary" style="margin-top: 10px; background-color: #6c757d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+        + Add Another Image
+    </button>
+</div>
+
+            <hr class="form-divider">
+
+            <div class="form-actions">
+                <a href="{% url 'product-list' %}" class="btn-link cancel-btn">Cancel</a>
+                <button type="submit" class="btn btn-submit">
+                    {% if object %}Save Adjustments{% else %}Save Product{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    document.getElementById('add-image-btn').addEventListener('click', function() {
+        // 1. Grab all rows and the total form count manager
+        const imageRows = document.getElementsByClassName('image-form-row');
+        const totalForms = document.getElementById('id_images-TOTAL_FORMS');
+        
+        let currentFormCount = imageRows.length;
+        
+        // 2. Clone the very first image row structure
+        const newRow = imageRows[0].cloneNode(true);
+        
+        // 3. Clear out any previous selections/files in the cloned fields
+        const inputs = newRow.querySelectorAll('input');
+        inputs.forEach(input => {
+            if (input.type === 'file') input.value = ''; // Reset the file selector
+            if (input.type === 'checkbox') input.checked = false; // Reset the primary flag
+            
+            // Crucial: Update Django's index prefixes from [0] to, [2], etc.
+            if (input.name) {
+                input.name = input.name.replace('-0-', `-${currentFormCount}-`);
+            }
+            if (input.id) {
+                input.id = input.id.replace('-0-', `-${currentFormCount}-`);
+            }
+        });
+
+        // 4. Update the labels to match the new inputs
+        const labels = newRow.querySelectorAll('label');
+        labels.forEach(label => {
+            if (label.getAttribute('for')) {
+                const newFor = label.getAttribute('for').replace('-0-', `-${currentFormCount}-`);
+                label.setAttribute('for', newFor);
+            }
+        });
+
+        // 5. Inject the new row into the DOM container
+        document.getElementById('image-formset-container').appendChild(newRow);
+        
+        // 6. Tell Django it now needs to process one more form input
+        totalForms.value = currentFormCount + 1;
+    });
+</script>
+
+{% endblock %}

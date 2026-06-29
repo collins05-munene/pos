@@ -1,0 +1,101 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Category Directory {% endblock %}
+
+
+{% block content %}
+<div class="directory-container">
+    
+  
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Category Directory</h2>
+            <p>Manage product departments and classifications.</p>
+        </div>
+        <a href="{% url 'category-create' %}" class="btn btn-primary">
+            Add New Category
+        </a>
+    </div>
+
+   
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 25%;">Category Name</th>
+                    <th scope="col" style="width: 25%;">Web Address Nickname</th>
+                    <th scope="col" style="width: 25%;">Parent</th>
+                    <th scope="col" style="width: 25%; text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                <tr>
+                    <td class="brand-name">{{ category.name }}</td>
+                    <td class="brand-desc">{{ category.slug|default:"No slug provided." }}</td>
+                    <td class="brand-name">{{ category.parent }}</td>
+                    
+                    <td class="brand-actions">
+                        <a href="{% url 'category-update' category.id %}" class="action-link edit-link">Update</a>
+                        <a href="{% url 'category-delete' category.id %}" class="action-link delete-link">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                
+                <tr>
+                    <td colspan="3" class="empty-state-row">
+                        <div class="empty-state">
+                            <h3>No Categories registered</h3>
+                            <p>Get started by adding your first category to the system.</p>
+                            <a href="{% url 'category-create' %}" class="btn btn-secondary">Add one now</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% if is_paginated %}
+    <div class="pagination-container">
+       
+        <span class="pagination-info">
+            Showing page <strong>{{ page_obj.number }}</strong> of <strong>{{ paginator.num_pages }}</strong>
+        </span>
+        
+        
+        <nav class="pagination-nav">
+            <ul class="pagination-list">
+            
+                {% if page_obj.has_previous %}
+                    <li class="pagination-item">
+                        <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
+                    </li>
+                {% else %}
+                    <li class="pagination-item">
+                        <span class="pagination-link disabled">Previous</span>
+                    </li>
+                {% endif %}
+
+         
+                <li class="pagination-item">
+                    <span class="pagination-link active">{{ page_obj.number }}</span>
+                </li>
+
+           
+                {% if page_obj.has_next %}
+                    <li class="pagination-item">
+                        <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
+                    </li>
+                {% else %}
+                    <li class="pagination-item">
+                        <span class="pagination-link disabled">Next</span>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+{% endif %}
+
+
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>{% block title %} POS System {% endblock %}</title>
+        <link rel="stylesheet" href="{% static 'css/style.css' %}">
+        <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
+        <link rel="stylesheet" href="{% static 'css/topbar.css' %}">
+        <link rel="stylesheet" href="{% static 'css/list.css' %}">
+        <link rel="stylesheet" href="{% static 'css/form.css' %}">
+        <link rel="stylesheet" href="{% static 'css/delete.css' %}">
+        {% block extra_head %} {% endblock %}
+    </head>
+    <body>
+        <div class="app-container">
+            {% include 'users/sidebar.html' %}
+            <div class="main-content"> {% include 'users/topbar.html' %} 
+                <div class="page-content">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert {{message.tags}}"> {{message}} </div>
+                        {% endfor %}
+                    {% endif %}
+                    {% block content %} {% endblock %}
+                </div>
+            </div>
+        </div>
+        {% block extra_js %} {% endblock %}
+    </body>
+</html>

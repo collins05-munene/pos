@@ -1,0 +1,244 @@
+/* Layout Containers */
+.form-page-container {
+    max-width: 680px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1f2937;
+}
+
+/* Breadcrumbs Section styling */
+.breadcrumb-nav {
+    margin-bottom: 1.5rem;
+}
+
+.breadcrumb-list {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+    color: #6b7280;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "/";
+    padding: 0 0.5rem;
+    color: #d1d5db;
+    font-weight: 400;
+}
+
+.breadcrumb-link {
+    color: #4f46e5;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.breadcrumb-link:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: #4b5563;
+    font-weight: 500;
+}
+
+/* Main Form Card Styling */
+.form-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.form-card-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.form-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 0.25rem 0;
+}
+
+.form-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.styled-form {
+    padding: 2rem;
+}
+
+/* Input Stack fields spacing */
+.form-fields-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.field-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.required-asterisk {
+    color: #dc2626;
+    margin-left: 0.15rem;
+}
+
+/* Universal Input Interception target formatting */
+.field-widget-container input[type="text"],
+.field-widget-container input[type="email"],
+.field-widget-container input[type="number"],
+.field-widget-container textarea,
+.field-widget-container select {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    color: #111827;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Input Focus states adjustments */
+.field-widget-container input:focus,
+.field-widget-container textarea:focus,
+.field-widget-container select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.field-widget-container textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* Metadata Text elements helper details */
+.field-help-text {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.15rem;
+}
+
+/* Error UI Design alerts rendering */
+.form-field-group.has-errors .field-label {
+    color: #b91c1c;
+}
+
+.form-field-group.has-errors input,
+.form-field-group.has-errors textarea,
+.form-field-group.has-errors select {
+    border-color: #f87171;
+    background-color: #fffafb;
+}
+
+.form-field-group.has-errors input:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+}
+
+.field-error-message {
+    font-size: 0.815rem;
+    color: #dc2626;
+    font-weight: 500;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Separation lines rule styling */
+.form-divider {
+    border: 0;
+    border-top: 1px solid #e5e7eb;
+    margin: 2rem 0 1.5rem 0;
+}
+
+/* Action Control Blocks alignment layouts */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+}
+
+.btn-link {
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.625rem 1.25rem;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.cancel-btn {
+    color: #4b5563;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+}
+
+.cancel-btn:hover {
+    background-color: #f9fafb;
+    color: #111827;
+    border-color: #c5c9d1;
+}
+
+.btn-submit {
+    border: none;
+    cursor: pointer;
+    background-color: #4f46e5;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.625rem 1.25rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background-color 0.15s ease;
+}
+
+.btn-submit:hover {
+    background-color: #4338ca;
+}
+
+/* Small Responsive view layout tweaks */
+@media (max-width: 480px) {
+    .form-card {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+    .form-page-container {
+        padding: 0;
+        margin: 1rem auto;
+    }
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+    .form-actions *, .btn-submit {
+        width: 100%;
+        text-align: center;
+        display: block;
+    }
+}

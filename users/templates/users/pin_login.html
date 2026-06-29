@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cashier Terminal Login</title>
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+
+<body>
+
+<div class="auth-wrapper">
+
+    <div class="auth-card">
+
+        <h2 class="auth-title">Cashier Login</h2>
+        <p class="auth-subtitle">Enter your username and PIN to login.</p>
+
+        <form method="POST">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert-banner alert-danger">
+                    {{ form.non_field_errors|striptags }}
+                </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label>Cashier Username</label>
+                <input type="text" name="username" required>
+            </div>
+
+            <div class="form-group">
+                <label>PIN</label>
+                <input type="password" id="id_pin" name="pin" required>
+            </div>
+            <button type="submit" class="btn-primary">Authenticate</button>
+           
+        </form>
+
+        <a href="{% url 'login' %}" class="toggle-auth-link">
+            Management Login (Password)
+        </a>
+
+    </div>
+
+</div>
+
+
+</body>
+</html>

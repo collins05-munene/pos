@@ -1,0 +1,140 @@
+/* Container Frame Center Layout */
+.delete-page-container {
+    max-width: 540px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Card Container Components */
+.delete-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}
+
+/* Flex Container formatting alignment layout */
+.delete-card-body {
+    display: flex;
+    padding: 2rem;
+    gap: 1.25rem;
+}
+
+/* Alert Warning Icon formatting decoration styling */
+.warning-icon-wrapper {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    background-color: #fef2f2;
+    border-radius: 50%;
+}
+
+.warning-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #dc2626;
+}
+
+/* Text block containers styles layout typography */
+.delete-text-content {
+    flex: 1;
+}
+
+.delete-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 0.5rem 0;
+}
+
+.delete-message {
+    font-size: 0.925rem;
+    line-height: 1.5;
+    color: #4b5563;
+    margin: 0;
+}
+
+.entity-name {
+    color: #111827;
+    background-color: #f3f4f6;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+/* Form block control panels structural design alignment */
+.delete-form {
+    background-color: #f9fafb;
+    padding: 1.25rem 2rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.delete-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Functional Input and Link Action Items Button Elements */
+.btn-cancel, .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+}
+
+.btn-cancel {
+    color: #374151;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-cancel:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+    border-color: #c5c9d1;
+}
+
+.btn-danger {
+    color: #ffffff;
+    background-color: #dc2626;
+    border: 1px solid #dc2626;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+}
+
+/* Responsive View Adjustment Optimization */
+@media (max-width: 480px) {
+    .delete-card-body {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .delete-actions {
+        flex-direction: column;
+    }
+    
+    .btn-cancel, .btn-danger {
+        width: 100%;
+    }
+}

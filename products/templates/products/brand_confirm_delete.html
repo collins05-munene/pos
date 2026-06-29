@@ -1,0 +1,38 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Remove Entry Profile {% endblock %}
+
+{% block content %}
+<div class="delete-page-container">
+    
+    <!-- Warning Context Box Card -->
+    <div class="delete-card">
+        <div class="delete-card-body">
+            
+            <!-- Warning Alert Icon Element -->
+            <div class="warning-icon-wrapper">
+                <svg class="warning-icon" xmlns="http://w3.org" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+
+            <div class="delete-text-content">
+                <h4 class="delete-title">Confirmation Required</h4>
+                <p class="delete-message">
+                    Are you entirely confident you wish to permanently strip the brand entity profile 
+                    <strong>"{{ object.name }}"</strong> out of the active system directories? 
+                    This action cannot be undone.
+                </p>
+            </div>
+        </div>
+
+        <form method="POST" class="delete-form">
+            {% csrf_token %}
+            <div class="delete-actions">
+                <a href="{% url 'brand-list' %}" class="btn-cancel">No, Abort Operations</a>
+                <button type="submit" class="btn-danger">Yes, Permanently Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

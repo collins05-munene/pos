@@ -1,0 +1,148 @@
+:root{
+    --primary:#2563eb;
+    --bg:#c9bfbfc0;
+    --card:#ffffff;
+    --border:rgba(255,255,255,.08);
+    --text:#e5e7eb;
+    --muted:#303235;
+    --danger:#ef4444;
+}
+
+
+.auth-wrapper{
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background: var(--bg);
+    padding:20px;
+}
+
+.auth-card{
+    width:380px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:28px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    color:var(--text);
+}
+
+
+.auth-title{
+    font-size:22px;
+    font-weight:600;
+    margin-bottom:6px;
+    color: black;
+}
+
+.auth-subtitle{
+    font-size: 18px;
+    color:var(--muted);
+    margin-bottom:20px;
+}
+
+
+.form-group{
+    margin-bottom:14px;
+}
+
+label{
+    font-size:18px;
+    color:var(--muted);
+    display:block;
+    margin-bottom:6px;
+}
+
+input{
+    width:100%;
+    padding:10px 12px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background: var(--bg);
+    color: black;
+    outline:none;
+}
+
+input:focus{
+    border-color:var(--primary);
+}
+
+
+.btn-primary{
+    width:100%;
+    padding:10px;
+    border:none;
+    border-radius:8px;
+    background:var(--primary);
+    color:white;
+    cursor:pointer;
+    font-weight:500;
+}
+
+.btn-primary:hover{
+    opacity:.9;
+    background-color: #2563eb;
+}
+
+
+.alert-banner{
+    padding:10px;
+    border-radius:8px;
+    font-size:13px;
+    margin-bottom:12px;
+}
+
+.alert-danger{
+    background:rgba(239, 68, 68, 0.541);
+    color:black;
+}
+
+
+.toggle-auth-link{
+    display:block;
+    margin-top:14px;
+    text-align:center;
+    font-size:15px;
+    color:var(--muted);
+    text-decoration:none;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.toggle-auth-link:hover{
+    color:rgb(255, 255, 0255);
+    background-color:#2563eb;
+    transition: 0.6s;
+}
+
+
+.keypad-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-top:14px;
+}
+
+.keypad-btn{
+    padding:12px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:#0f172a;
+    color:white;
+    cursor:pointer;
+}
+
+.keypad-btn:hover{
+    background:#1e293b;
+}
+
+.keypad-btn.clear{
+    background:rgba(250, 44, 44, 0.795);
+    color:#020202;
+}
+
+.keypad-btn.submit{
+    background:var(--primary);
+    border:none;
+}

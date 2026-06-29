@@ -1,0 +1,155 @@
+.sidebar{
+    width:260px;
+    min-width:260px;
+
+    background:#0f172a;
+    color:white;
+
+    display:flex;
+    flex-direction:column;
+
+    height:100vh;
+
+    position:sticky;
+    top:0;
+
+    overflow-y:auto;
+}
+
+.logo{
+
+
+padding:30px;
+
+
+border-bottom:
+1px solid rgba(255,255,255,.1);
+
+
+}
+
+
+
+.logo h2{
+
+
+font-size:24px;
+
+
+}
+
+
+
+.logo p{
+
+
+font-size:13px;
+
+
+opacity:.6;
+
+
+}
+
+
+
+
+.menu{
+
+
+list-style:none;
+
+padding:2rem;
+
+
+}
+
+
+
+
+.menu-title{
+
+
+font-size:12px;
+
+
+text-transform:uppercase;
+
+
+opacity:.6;
+
+
+margin-top:25px;
+
+
+margin-bottom:10px;
+
+
+}
+
+
+
+
+.menu li a{
+
+
+display:block;
+
+
+padding:12px;
+
+color: white;
+
+border-radius:8px;
+
+
+transition:.3s;
+
+
+}
+
+
+
+
+.menu li a:hover{
+
+
+background:#1e293b;
+color: bisque;
+
+}
+
+
+
+
+.sidebar-footer{
+
+
+margin-top:auto;
+
+
+padding:20px;
+
+
+border-top:
+1px solid rgba(255,255,255,.1);
+
+
+}
+
+
+
+
+.sidebar-footer a{
+
+
+display:block;
+
+
+margin-top:10px;
+
+
+color:#f87171;
+
+
+}

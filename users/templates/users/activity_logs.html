@@ -1,0 +1,68 @@
+{% extends 'users/base.html' %}
+
+{% block title %} System Activity Logs {% endblock %}
+
+{% block content %}
+    <div>
+        <div>
+            <div>
+                <h2>Security & Operational Audit Log</h2>
+                <p>Track Authentication flow records and terminal event timelines.</p>
+            </div>
+        </div>
+        <div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Action Event</th>
+                        <th>Log Details</th>
+                        <th>IP Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                        <tr>
+                            <td>{{log.timestamp|date:"Y-m-d H:i:s"}}</td>
+                            <td><strong>{{log.user.username|default:"System / Anonymous"}}</strong></td>
+                            <td>
+                                {% if log.user %}
+                                    <span>{{log.user.get_role_display}}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{log.details}}</td>
+                            <td>{{log.ip_address|default:"localhost"}}</td>
+
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td>No activity records found in the database.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if is_paginated %}
+            <div>
+                {% if page_obj.has_previous %}
+                    <a href="?page={{page_obj.previous_page_number}}">Previous</a>
+                {% else %}
+                    <span>Previous</span>
+                {% endif %}
+                <span>
+                    Page <strong>{{page_obj.number}}</strong> of {{paginator.num_pages}}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{page_obj.next_page_number}}">Next</a>
+                {% else %}
+                    <span>Next</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
