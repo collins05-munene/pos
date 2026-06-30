@@ -1,99 +1,84 @@
 {% if user.get_role_display == 'Admin' %}
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>POS</h2>
-            <p>Retail Suite</p>
-        </div>
+<aside class="sidebar" id="mainSidebar">
+    <div class="logo">
+        <h2>POS</h2>
+        <p>Retail Suite</p>
+    </div>
 
-        <ul class="menu">
-            <li class="menu-title">Dashboard</li>
-            <li>
-                <a href="#">Overview</a>
-            </li>
-            <li class="menu-title">Sales</li>
-            <li>
-                <a href="#">POS Terminal</a>
-            </li>
-            <li>
-                <a href="#">Receipts</a>
-            </li>
-            <li>
-                <a href="#">Returns</a>
-            </li>
-            <li class="menu-title">Inventory</li>
-            <li>
-                <a href="{% url 'product-list' %}">Products</a>
-            </li>
-            <li>
-                <a href="{% url 'brand-list' %}">Brands</a>
-            </li>
-            <li>
-                <a href="{% url 'category-list' %}">Categories</a>
-            </li>
-            <li>
-                <a href="{% url 'uom-list' %}">Units of Measure</a>
-            </li>
-            <li>
-                <a href="{% url 'supplier-list' %}">Suppliers</a>
-            </li>
-            <li class="menu-title">Finance</li>
-            <li>
-                <a href="#">Cash Drawer</a>
-            </li>
-            <li>
-                <a href="#">Expenses</a>
-            </li>
-            <li class="menu-title">Reports</li>
-            <li>
-                <a href="#">Sales Report</a>
-            </li>
-            <li>
-                <a href="#">Profit Report</a>
-            </li>
-            <li class="menu-title">System</li>
-            <li>
-                <a href="{% url 'activity_logs' %}">Audit Logs</a>
-            </li>
-        </ul>
-        <div class="sidebar-footer">
-            <strong>{{user.username}}</strong>
-            <p>{{user.get_role_display}}</p>
-            <a href="{% url 'logout' %}">Logout</a>
-        </div>
-    </aside>
+    <ul class="menu">
+        <li class="menu-title">Dashboard</li>
+        <li><a href="#">Overview</a></li>
+        <li class="menu-title">Sales</li>
+        <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
+        <li><a href="#">Receipts</a></li>
+        <li><a href="#">Returns</a></li>
+        <li class="menu-title">Inventory</li>
+        <li><a href="{% url 'product-list' %}">Products</a></li>
+        <li><a href="{% url 'brand-list' %}">Brands</a></li>
+        <li><a href="{% url 'category-list' %}">Categories</a></li>
+        <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
+        <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
+        <li class="menu-title">Finance</li>
+        <li><a href="#">Cash Drawer</a></li>
+        <li><a href="#">Expenses</a></li>
+        <li class="menu-title">Reports</li>
+        <li><a href="#">Sales Report</a></li>
+        <li><a href="#">Profit Report</a></li>
+        <li class="menu-title">System</li>
+        <li><a href="{% url 'activity_logs' %}">Audit Logs</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <strong>{{ user.username }}</strong>
+        <p>{{ user.get_role_display }}</p>
+        <a href="{% url 'logout' %}">Logout</a>
+    </div>
+</aside>
 {% else %}
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>POS</h2>
-            <p>Retail Suite</p>
-        </div>
-        <ul class="menu">
-            <li class="menu-title">Dashboard</li>
-            <li>
-                <a href="#">Overview</a>
-            </li>
-            <li class="menu-title">Sales</li>
-            <li>
-                <a href="#">POS Terminal</a>
-            </li>
-            <li>
-                <a href="#">Receipts</a>
-            </li>
-            <li>
-                <a href="#">Returns</a>
-            </li>
-            <li class="menu-title">Inventory</li>
-            <li>
-                <a href="#">Products</a>
-            </li>
-            <li>
-                <a href="#">Categories</a>
-            </li>
-        </ul>
-           <div class="sidebar-footer">
-            <strong>{{user.username}}</strong>
-            <p>{{user.get_role_display}}</p>
-            <a href="{% url 'logout' %}">Logout</a>
-        </div>
-    </aside>
-{% endif %}    
+<aside class="sidebar" id="mainSidebar">
+    <div class="logo">
+        <h2>POS</h2>
+        <p>Retail Suite</p>
+    </div>
+    <ul class="menu">
+        <li class="menu-title">Dashboard</li>
+        <li><a href="#">Overview</a></li>
+        <li class="menu-title">Sales</li>
+        <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
+        <li><a href="#">Receipts</a></li>
+        <li><a href="#">Returns</a></li>
+        <li class="menu-title">Inventory</li>
+        <li><a href="#">Products</a></li>
+        <li><a href="#">Categories</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <strong>{{ user.username }}</strong>
+        <p>{{ user.get_role_display }}</p>
+        <a href="{% url 'logout' %}">Logout</a>
+    </div>
+</aside>
+{% endif %}
+
+<button id="sidebarToggle" aria-label="Toggle Sidebar" aria-expanded="true" aria-controls="mainSidebar">☰</button>
+
+<script>
+(function () {
+    'use strict';
+
+    function initSidebarToggle() {
+        const sidebar = document.getElementById('mainSidebar');
+        const toggle = document.getElementById('sidebarToggle');
+        if (!sidebar || !toggle) return;
+
+        toggle.addEventListener('click', function () {
+            const isHidden = sidebar.classList.toggle('sidebar-hidden');
+            toggle.setAttribute('aria-expanded', String(!isHidden));
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSidebarToggle);
+    } else {
+        initSidebarToggle();
+    }
+}());
+</script>

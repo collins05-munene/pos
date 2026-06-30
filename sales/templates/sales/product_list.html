@@ -1,0 +1,24 @@
+{% for variant in products %}
+<div class="variant-tile">
+    <span class="tile-title">{{ variant.product.name }}</span>
+    {% if variant.size or variant.color %}
+        <span style="font-size:0.8rem; color:#4b5563; display:block; margin-bottom:0.25rem;">
+            {{ variant.size|default:"" }} / {{ variant.color|default:"" }}
+        </span>
+    {% endif %}
+    <span class="tile-sku">{{ variant.sku }}</span>
+    <div class="tile-price" style="margin-bottom: 0.75rem;">KSH {{ variant.retail_price }}</div>
+
+    <form method="POST" action="{% url 'cart_add' %}" data-ajax-cart>
+        {% csrf_token %}
+        <input type="hidden" name="variant_id" value="{{ variant.id }}">
+        <button type="submit" style="width: 100%; background: #2563eb; color: white; border: none; padding: 0.5rem; border-radius: 4px; font-weight: bold; cursor: pointer;">
+            Add to Cart
+        </button>
+    </form>
+</div>
+{% empty %}
+<div style="grid-column: span 4; text-align: center; color: #6b7280; padding: 2rem;">
+    No active item lines found matching criteria.
+</div>
+{% endfor %}
