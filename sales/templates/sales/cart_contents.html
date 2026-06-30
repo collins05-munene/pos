@@ -1,0 +1,110 @@
+<style>
+    .cart-container { 
+        display: flex; 
+        flex-direction: column; 
+        height: 100%; 
+    }
+    .cart-header { 
+        padding: 1rem 1.5rem; 
+        border-bottom: 1px solid #e5e7eb; 
+        background: #fff; 
+    }
+    .cart-rows-box { 
+        flex-grow: 1; 
+        overflow-y: auto; 
+        padding: 0 1.5rem; 
+    }
+    .cart-item-row { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        padding: 1rem 0; 
+        border-bottom: 1px solid #f3f4f6; 
+    }
+    .qty-input { 
+        width: 50px; 
+        padding: 0.25rem; 
+        text-align: center; 
+        font-size: 1rem; 
+        border: 1px solid #d1d5db; 
+        border-radius: 4px; 
+    }
+    .cart-totals-footer { 
+        padding: 1.5rem; 
+        background: #fff; 
+        border-top: 1px solid #e5e7eb; 
+    }
+    .row-btn-remove { 
+        background: none; 
+        border: none; 
+        color: #ef4444; 
+        font-size: 1.2rem; 
+        cursor: pointer; 
+    }
+    .update-btn { 
+        background: #e5e7eb; 
+        border: 1px solid #d1d5db; 
+        padding: 0.25rem 0.5rem; 
+        border-radius: 4px; 
+        font-size: 0.8rem; 
+        cursor: pointer; 
+        margin-left: 4px; 
+    }
+</style>
+
+<div id="cart-panel" class="cart-container">
+    <div class="cart-header">
+        <h3 style="margin:0; color:#111827;">Current Checkout Session</h3>
+        <small style="color:#6b7280;">Staged units: {{ cart.total_items }} lines</small>
+    </div>
+
+    <div class="cart-rows-box">
+        {% if cart.total_items > 0 %}
+            {% for item in cart %}
+                <div class="cart-item-row">
+                    <div style="flex: 1.8;">
+                        <span style="font-weight: 500; display:block; font-size:0.9rem;">{{ item.name }}</span>
+                        <small style="color:#6b7280; font-family: monospace;">{{ item.sku }}</small>
+                    </div>
+
+                    <div style="flex: 1.2; text-align: center;">
+                        <form method="POST" action="{% url 'cart_update' %}" data-ajax-cart style="display: flex; align-items: center; justify-content: center;">
+                            {% csrf_token %}
+                            <input type="hidden" name="variant_id" value="{{ item.variant_id }}">
+                            <input type="number" name="quantity" value="{{ item.quantity }}" class="qty-input" min="1">
+                            <button type="submit" class="update-btn">✓</button>
+                        </form>
+                    </div>
+
+                    <div style="flex: 1; text-align: right; font-weight: 500;">
+                        KSH {{ item.total_price }}
+                    </div>
+
+                    <div style="flex: 0.5; text-align: right;">
+                        <form method="POST" action="{% url 'cart_remove' %}" data-ajax-cart>
+                            {% csrf_token %}
+                            <input type="hidden" name="variant_id" value="{{ item.variant_id }}">
+                            <button type="submit" class="row-btn-remove" title="Remove line item">&times;</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; margin-top: 5rem; color:#9ca3af;">
+                <span style="font-size: 3rem; display:block; margin-bottom: 1rem;">🛒</span>
+                Workspace empty. Scan or select assets.
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="cart-totals-footer">
+        <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; margin-bottom: 1.5rem;">
+            <span>Subtotal Baseline:</span>
+            <span style="color: #2563eb;">KSH {{ cart.get_total_price|default:"0.00" }}</span>
+        </div>
+
+        <button type="button" disabled style="width: 100%; background: #10b981; color: white; border: none; padding: 1rem; font-size: 1.1rem; font-weight: bold; border-radius: 6px; cursor: not-allowed; opacity: 0.6;">
+            Proceed to Payment Stages &rarr;
+        </button>
+    </div>
+</div>

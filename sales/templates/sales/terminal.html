@@ -1,0 +1,319 @@
+{% extends 'users/base.html' %}
+
+{% block title %} POS Terminal {% endblock %}
+
+{% block extra_head %}
+<style>
+    .main-content {
+        flex: 1;
+        min-width: 0; 
+        transition: margin-left 0.3s ease;
+    }
+
+    @media (max-width: 900px) {
+        .checkout-panel {
+            max-width: none;
+        }
+    }
+    .terminal-grid {
+        display: flex; 
+        width: 100%; 
+        height: 100%; 
+        transition: padding 0.3s ease;
+    }
+    .catalog-panel {
+    flex: 1.8; 
+    display: flex; 
+    flex-direction: column; 
+    padding: 1.5rem; 
+    background: #fff; 
+    border-right: 1px solid #e5e7eb; 
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    }
+
+   
+    .checkout-panel { 
+        flex: 1.2; 
+        background: #f9fafb; 
+        display: flex; 
+        flex-direction: column;
+        max-width: 350px;
+        margin-left: auto; 
+    }
+    .search-container { 
+        display: flex; 
+        gap: 0.5rem; 
+        margin-bottom: 1rem; 
+        flex-shrink: 0;
+    }
+    .search-input { 
+        width: 100%; 
+        padding: 0.75rem; 
+        border: 1px solid #d1d5db; 
+        border-radius: 6px; 
+        font-size: 1.1rem; 
+    }
+    .search-btn {
+        background: #2563eb; 
+        color: white; 
+        border: none; 
+        padding: 0 1.5rem; 
+        border-radius: 6px; 
+        font-weight: bold; 
+        cursor: pointer; 
+    }
+    .category-scroll { 
+        display: flex; 
+        gap: 0.5rem; 
+        overflow-x: auto; 
+        padding-bottom: 0.7rem; 
+        margin-bottom: 1rem; 
+        border-bottom: 1px solid #f3f4f6; 
+        flex-shrink: 0;
+    }
+    .cat-badge { 
+        background: #e5e7eb; 
+        padding: 0.5rem 1rem; 
+        border-radius: 20px; 
+        font-size: 0.85rem; 
+        font-weight: 500; 
+        cursor: pointer; 
+        white-space: nowrap; 
+    }
+    .product-matrix { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+        gap: 1rem; 
+        overflow-y: auto; 
+        flex-grow: 1; 
+        padding: 0.25rem; 
+        flex-shrink: 1;
+        min-height: 0;
+    }
+    .variant-tile { 
+        border: 1px solid #e5e7eb; 
+        border-radius: 6px; 
+        padding: 1rem; 
+        background: #fff; 
+        text-align: left; 
+        transition: box-shadow 0.2s; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: space-between; 
+    }
+    .tile-title { 
+        font-weight: 600; 
+        display: block; 
+        margin-bottom: 0.25rem; 
+        font-size: 0.95rem; 
+        color: #111827; 
+    }
+    .tile-sku { 
+        color: #6b7280; 
+        font-size: 0.8rem; 
+        display: block; 
+        font-family: monospace; 
+        margin-bottom: 0.25rem; 
+    }
+    .tile-price { 
+        color: #2563eb; 
+        font-weight: bold; 
+        font-size: 1.1rem; 
+    }
+    .cat-badge[data-active="true"] {
+        background: #2563eb;
+        color: #fff;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="terminal-grid">
+
+    <div class="catalog-panel">
+
+        <form id="product-search-form" method="GET" action="{% url 'pos_terminal' %}" class="search-container" data-ajax-cart>
+            <input type="text" name="q" id="product-search-input" class="search-input" value="{{ search_query }}" placeholder="Search by product title or SKU...">
+            <button type="submit" class="search-btn">Search</button>
+        </form>
+
+        <div class="category-scroll">
+            <span class="cat-badge cat-filter" data-category="" {% if not active_category %}data-active="true"{% endif %}>All Categories</span>
+            {% for cat in categories %}
+                <span class="cat-badge cat-filter" data-category="{{ cat.id }}" {% if active_category == cat.id %}data-active="true"{% endif %}>{{ cat.name }}</span>
+            {% endfor %}
+        </div>
+
+        <div id="product-matrix" class="product-matrix">
+            {% include 'sales/product_list.html' %}
+        </div>
+    </div>
+
+    <div class="checkout-panel">
+        {% include 'sales/cart_contents.html' %}
+    </div>
+
+</div>
+{% endblock %}{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    function getCsrfToken() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+    }
+
+    function debounce(func, delay) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    
+    async function ajaxCartSubmit(form) {
+        const data = new FormData(form);
+
+        let response;
+        try {
+            response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                body: data,
+            });
+        } catch (_) {
+            form.submit();
+            return;
+        }
+
+        if (!response.ok) { form.submit(); return; }
+
+        const payload = await response.json();
+        if (!payload.ok) { form.submit(); return; }
+
+        const checkoutPanel = document.querySelector('.checkout-panel');
+        checkoutPanel.innerHTML = payload.cart_html;
+
+        delegateCartEvents(checkoutPanel);
+
+        const skuInput = document.querySelector('input[name="sku"]');
+        if (skuInput) {
+            skuInput.value = '';
+            skuInput.focus();
+        }
+    }
+
+    async function ajaxProductSearch(form, categoryOverride) {
+        const q = document.getElementById('product-search-input').value.trim();
+        const url = new URL(form.action, window.location.origin);
+        url.searchParams.set('q', q);
+
+        const activeBadge = document.querySelector('.cat-filter[data-active="true"]');
+        const category = categoryOverride !== undefined
+            ? categoryOverride
+            : (activeBadge ? activeBadge.dataset.category : '');
+
+        if (category) {
+            url.searchParams.set('category', category);
+        } else {
+            url.searchParams.delete('category');
+        }
+
+        window.history.replaceState(null, '', url.toString());
+
+        let response;
+        try {
+            response = await fetch(url.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+        } catch (_) {
+            form.submit();
+            return;
+        }
+
+        if (!response.ok) { form.submit(); return; }
+
+        const payload = await response.json();
+        if (!payload.ok) { form.submit(); return; }
+
+        const matrix = document.getElementById('product-matrix');
+        matrix.innerHTML = payload.products_html;
+
+        delegateCartEvents(matrix);
+    }
+
+    function delegateCartEvents(root) {
+        root.querySelectorAll('form[data-ajax-cart]').forEach(function (form) {
+            if (form.dataset.ajaxBound) return;
+            form.dataset.ajaxBound = 'true';
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                ajaxCartSubmit(form);
+            });
+
+            const qtyInput = form.querySelector('.qty-input');
+            if (qtyInput) {
+                qtyInput.addEventListener('change', function () {
+                    if (form.checkValidity()) {
+                        ajaxCartSubmit(form);
+                    }
+                });
+            }
+        });
+    }
+
+    
+    function initCategoryFilters(searchForm) {
+        document.querySelectorAll('.cat-filter').forEach(function (badge) {
+            badge.addEventListener('click', function () {
+                document.querySelectorAll('.cat-filter').forEach(function (b) {
+                    b.removeAttribute('data-active');
+                });
+                badge.setAttribute('data-active', 'true');
+                ajaxProductSearch(searchForm, badge.dataset.category);
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        delegateCartEvents(document);
+
+        const searchForm = document.getElementById('product-search-form');
+        const searchInput = document.getElementById('product-search-input');
+        const skuForm = document.querySelector('form[action*="cart_add"]');
+        const skuInput = document.querySelector('input[name="sku"]');
+
+        if (searchForm) {
+            searchForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                ajaxProductSearch(searchForm);
+            });
+
+            initCategoryFilters(searchForm);
+        }
+
+        if (searchInput && searchForm) {
+            searchInput.addEventListener('input', debounce(function () {
+                ajaxProductSearch(searchForm);
+            }, 300));
+        }
+
+        if (skuInput && skuForm) {
+            skuInput.addEventListener('input', debounce(function () {
+                if (skuInput.value.trim().length >= 4) {
+                    ajaxCartSubmit(skuForm);
+                }
+            }, 400));
+        }
+    });
+}());
+</script>
+{% endblock %}
