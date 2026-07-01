@@ -1,0 +1,68 @@
+{% extends 'users/base.html' %}
+{% block extra_head %}
+    <style>
+        .payment-card {
+            max-width: 600px;
+            margin: 4rem auto;
+            padding: 2rem;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 04px 6px -1px rgba(0,0,0,0.05);
+        }
+
+        .payment-mode {
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .payment-mode h2{
+            margin: 0;
+            color: #111827;
+        }
+        .payment-mode p{
+            margin: 0.25rem 0 0 0;
+            color: #6b7280;    
+        }
+        .payment-wrapper{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+    <div class="payment-card">
+        <div class="payment-mode">
+            <div>
+                <h2>Select Payment Mode</h2>
+                <p>Choose how the client is paying.</p>
+            </div>
+            <div style="text-align: right;">
+                <span style="font-size: 0.85rem; color: #6b7280; display: block;">Total Due:</span>
+                <strong style="font-size: 1.5rem; color: #2563eb;">KSH {{total_amount}}</strong>
+            </div>
+        </div>
+        <div class="payment-wrapper">
+            <form method="POST" action="{% url 'process_payment' %}">
+                {% csrf_token %}
+                <input type="hidden" name="payment_method" value="cash">
+                <button type="submit" style="width: 100%; height: 140px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;" onmouseover="this.style.borderColor='#10b981'; this.style.background='#f0fdf4';" onmouseout="this.style.borderColor='#e5e7eb'; this,style.background='#f9fafb';"><span style="font-weight: bold; font-size: 1.1rem; color: #111827;">Cash Payments</span></button>
+             </form>
+            <form method="POST" action="{% url 'process_payment' %}">
+                {% csrf_token %}
+                <input type="hidden" name="payment_method" value="mpesa">
+                <button type="submit" style="width: 100%; height: 140px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;" onmouseover="this.style.borderColor='#2563eb'; this.style.background='#eff6ff';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='#f9fafb';">
+                <span style="font-weight: bold; font-size: 1.1rem; color: #111827;">M-Pesa STK Push</span>
+            </button>
+        </form>
+        </div>
+        <div style="text-align: center;">
+            <a href="{% url 'pos_terminal' %}" style="color: #6b7280; text-decoration: none; font-size: 0.95rem;">&larr; Cancel and return to terminal workspace</a>
+        </div>
+    </div>
+{% endblock %}
