@@ -96,15 +96,21 @@
             </div>
         {% endif %}
     </div>
-
+ 
     <div class="cart-totals-footer">
         <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; margin-bottom: 1.5rem;">
             <span>Subtotal Baseline:</span>
             <span style="color: #2563eb;">KSH {{ cart.get_total_price|default:"0.00" }}</span>
         </div>
 
-        <button type="button" disabled style="width: 100%; background: #10b981; color: white; border: none; padding: 1rem; font-size: 1.1rem; font-weight: bold; border-radius: 6px; cursor: not-allowed; opacity: 0.6;">
-            Proceed to Payment Stages &rarr;
-        </button>
+        {% if cart.total_items > 0 %}
+            <a href="{% url 'payment_select' %}" style="display: block; text-align: center; text-decoration: none; background: #10b981; color: white; padding: 1rem; font-size: 1.1rem; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background 0.2s;">
+                Proceed to Payment Stages &rarr;
+            </a>
+        {% else %}
+            <button type="button" disabled style="width: 100%; background: #9ca3af; color: white; border: none; padding: 1rem; font-size: 1.1rem; font-weight: bold; border-radius: 6px; cursor: not-allowed; opacity: 0.6;">
+                Add items to proceed
+            </button>
+        {% endif %}
     </div>
 </div>

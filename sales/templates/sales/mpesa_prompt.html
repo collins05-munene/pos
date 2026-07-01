@@ -1,0 +1,158 @@
+{% extends 'users/base.html' %}
+
+{% block content %}
+<div style="max-width: 450px; margin: 4rem auto; padding: 2rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+    
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0; color: #111827;">M-Pesa Express Checkout</h2>
+        <p style="margin: 0.25rem 0 0 0; color: #6b7280;">Initiate an automated STK toolkit popup</p>
+    </div>
+
+    <div id="alert-box" style="display: none; padding: 0.75rem; margin-bottom: 1.25rem; border-radius: 6px; font-size: 0.95rem; text-align: center;"></div>
+
+    <form id="mpesa-form" method="POST" action="{% url 'mpesa-stk-push' %}">
+        {% csrf_token %}
+        <div style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #4b5563; margin-bottom: 0.4rem;">Transaction Value (KES)</label>
+            <input type="text" value="KSH {{ total_amount }}" disabled style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; background: #f3f4f6; border-radius: 6px; font-size: 1.25rem; font-weight: bold; color: #1f2937; text-align: center;">
+        </div>
+        <div style="margin-bottom: 1.75rem;">
+            <label for="phone_number" style="display: block; font-size: 0.85rem; font-weight: 600; color: #4b5563; margin-bottom: 0.4rem;">Customer Phone Number</label>
+            <input type="text" name="phone_number" id="phone_number" placeholder="e.g. 0712345678 or 254..." required autofocus autocomplete="off" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1.1rem; box-sizing: border-box;">
+            <small style="color: #9ca3af; display:block; margin-top:0.25rem;">The customer will see a SIM Pin prompt immediately.</small>
+        </div>
+
+        <button id="submit-btn" type="submit" style="width: 100%; background: #2563eb; color: white; border: none; padding: 0.85rem; font-size: 1.1rem; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 1rem;">
+            Send Push Prompt &rarr;
+        </button>
+    </form>
+
+    <div style="text-align: center;">
+        <a href="{% url 'payment_select' %}" style="color: #6b7280; text-decoration: none; font-size: 0.95rem;">&larr; Go Back</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('mpesa-form').addEventListener('submit', async function(e) {
+    e.preventDefault(); // Stop standard page redirection
+
+    const form = this;
+    const submitBtn = document.getElementById('submit-btn');
+    const alertBox = document.getElementById('alert-box');
+    const formData = new FormData(form);
+
+    // Disable button and show loading state
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Processing... Check Phone";
+    submitBtn.style.background = "#9ca3af";
+
+    // Hide previous alerts
+    alertBox.style.display = 'none';
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        const data = await response.json();
+
+        alertBox.style.display = 'block';
+
+        if (response.ok && data.status === 'success') {
+           
+            alertBox.style.background = '#def7ec';
+            alertBox.style.color = '#03543f';
+            alertBox.innerHTML = `<strong>Success!</strong> ${data.message}`;
+            
+            const checkoutRequestId = data.checkout_request_id;
+            pollTransactionStatus(checkoutRequestId);
+
+            form.reset();
+        } else {
+            alertBox.style.background = '#fde8e8';
+            alertBox.style.color = '#9b1c1c';
+            alertBox.innerHTML = `<strong>Error:</strong> ${data.message || 'STK Push failed.'}`;
+            
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Send Push Prompt →";
+            submitBtn.style.background = "#2563eb";
+        }
+
+    } catch (error) {
+        // Actual browser/network level failures fall here
+        console.error("Fetch error details:", error);
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#fde8e8';
+        alertBox.style.color = '#9b1c1c';
+        alertBox.innerHTML = `<strong>Network Error:</strong> Unable to process request.`;
+        
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Send Push Prompt →";
+        submitBtn.style.background = "#2563eb";
+    }
+});
+
+function pollTransactionStatus(checkoutRequestId) {
+    const alertBox = document.getElementById('alert-box');
+    const submitBtn = document.getElementById('submit-btn');
+
+    const intervalID = setInterval(async () => {
+        try {
+            const res = await fetch(`/payments/mpesa/check-status/${checkoutRequestId}/`);
+            const data = await res.json();
+
+            if (data.status == 'SUCCESS') {
+                clearInterval(intervalID);
+                alertBox.style.background = '#def7ec';
+                alertBox.style.color = '#03543f';
+                alertBox.innerHTML = `<strong>Payment Approved</strong> Transaction completed successfully.`;
+
+                submitBtn.innerText = "Transaction Completed";
+
+                fetch('/payments/cart/clear/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                }).then(() => {
+                    setTimeout(() => {
+                        window.location.href = '/pos/terminal/';
+                    }, 2000)
+                })
+                .catch(err => console.error("Error clearing cart session", err))
+
+            } else if (data.status == 'FAILED') {
+                clearInterval(intervalID);
+                alertBox.style.background = '#fde8e8';
+                alertBox.style.color = '#9b1c1c';
+                alertBox.innerHTML = `<strong>Transaction Failed</strong> ${data.message}`;
+
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Send Push Prompt";
+                submitBtn.style.background = '#2563eb';
+            }
+        } catch(err) {
+            console.error("Error polling status:", err)
+        }
+    }, 3000)
+
+    setTimeout(() => {
+        clearInterval(intervalID);
+        if (alertBox.innerHTML.includes("Prompt Sent!")) {
+            alertBox.style.background = '#fde8e8';
+            alertBox.style.color = '#9b1c1c';
+            alertBox.innerHTML = `<strong>Timeout:</strong> No response received from handset. Please try again.`;
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Send Push Prompt →";
+            submitBtn.style.background = "#2563eb";
+        }
+    }, 60000);
+}
+</script>
+{% endblock %}

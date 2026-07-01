@@ -12,10 +12,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env()
+
+env_file = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_file):
+    environ.Env.read_env(env_file)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -144,3 +150,10 @@ AUTHENTICATION_BACKENDS = [
 MEDIA_URL = '/media/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+MPESA_ENVIRONMENT=env('DARAJA_ENVIRONMENT', default='sandbox')
+MPESA_CONSUMER_KEY=env('MPESA_CONSUMER_KEY')
+MPESA_CONSUMER_SECRET=env('MPESA_CONSUMER_SECRET')
+MPESA_SHORTCODE=env('MPESA_SHORTCODE')
+MPESA_PASSKEY=env('MPESA_PASSKEY')
+MPESA_CALLBACK_URL=env('MPESA_CALLBACK_URL')

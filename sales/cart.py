@@ -3,7 +3,6 @@ from django.conf import settings
 from products.models import ProductVariant
 
 class CartItem:
-    """Wrapper class ensuring unified property syntax across templates."""
     def __init__(self, variant_id, name, sku, price, quantity):
         self.variant_id = int(variant_id)
         self.name = name
@@ -31,7 +30,6 @@ class POSCart:
         except ProductVariant.DoesNotExist:
             return False
 
-        # Build display designation logic cleanly
         info = f" - {variant.size}" if variant.size else ""
         info += f" / {variant.color}" if variant.color else ""
         display_name = f"{variant.product.name}{info}"
@@ -66,7 +64,6 @@ class POSCart:
         self.session.modified = True
 
     def __iter__(self):
-        """Yields instantiated CartItem wrappers."""
         for item in self.cart.values():
             yield CartItem(**item)
 
