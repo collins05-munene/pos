@@ -4,6 +4,7 @@ from django.db import models
 class MpesaTransaction(models.Model):
     checkout_request_id = models.CharField(max_length=100, unique=True)
     merchant_request_id = models.CharField(max_length=100)
+    order = models.OneToOneField('sales.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='mpesa_transaction')
     phone_number = models.CharField(max_length=15)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, default='PENDING')

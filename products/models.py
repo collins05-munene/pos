@@ -59,7 +59,7 @@ class ProductVariant(models.Model):
     color = models.CharField(max_length=50, blank=True)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2)
     retail_price = models.DecimalField(max_digits=12, decimal_places=2)
-    low_stock_threshold = models.PositiveBigIntegerField(default=10, help_text='Alert point for low stock')
+    low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, default=10.000)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):

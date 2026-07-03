@@ -33,6 +33,13 @@ class UnitOfMeasureForm(forms.ModelForm):
         }
 
 class ProductForm(forms.ModelForm):
+    initial_stock = forms.DecimalField(
+        max_digits=12, 
+        decimal_places=3, 
+        required=False, 
+        initial=0.000,
+        help_text="Enter initial wholesale stock quantity received at the Main Branch"
+    )
     class Meta:
         model = Product
         fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure', 'description', 'has_variations']

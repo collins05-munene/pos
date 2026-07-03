@@ -1,0 +1,207 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Sales Dashboard {% endblock %}
+
+{% block extra_head %}
+    <style>
+        .dashboard-container {
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-title {
+            margin: 0;
+            font-size: 1.75rem;
+            color: #111827;
+        }
+
+        .dashboard-subtitle {
+            margin: 0.25rem 0 0 0;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        .data-badge {
+            background: #f3f4f5;
+            color: #374151;
+            padding: 0.5rem 1rem;
+            border-radius: 2px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .metric-card h3{
+            margin: 0;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+            color: #6b7280;
+        }
+
+        .metric-card .value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin: 0.75rem 0 0.5rem 0;
+        }
+
+        .card-footer {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+      
+        .card-blue .value {
+                color: #2563eb;
+            }
+
+       
+
+        .data-split-container {
+            display: grid;
+            grid-template-columns:  1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+        @media (max-width: 900px) {
+            .data-split-container {grid-template-columns: 1fr;}
+        }
+
+        .section-title {
+            margin: 0 0 1.25rem 0;
+            font-size: 1.15rem;
+            color: #1f2937;
+        }
+
+        .table-responsive{
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        th {
+            padding: 0.75rem;
+            border-bottom: 2px solid #f3f4f6;
+            color: #4b5563;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #f3f4f6;
+            color: #374151;
+        }
+
+        .text-green {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            padding: 2rem 0;
+        }
+     
+
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <div>
+                <h1 class="dashboard-title">Performance Analytics</h1>
+                <p class="dashboard-subtitle">Real time revenue tracking and profit & loss summary</p>
+            </div>
+            <span class="date-badge">MTD {{timestamp|date:"F Y"}}</span>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="card metric-card card-blue">
+                <h3>Gross Revenue</h3>
+                <div class="value">KSH {{metrics.revenue|floatformat:2}}</div>
+                <p class="card-footer">Total value generated from sales.</p>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Cost of Goods Sold</h3>
+                <div class="value">KSH {{metrics.cogs|floatformat:2}}</div>
+                <p class="card-footer">Purchasing price of sold items.</p>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Net Gross Profit</h3>
+                <div class="value">KSH {{metrics.profit|floatformat:2}}</div>
+                <p class="card-footer">Gross revenue minus asset cost.</p>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Profit Margin</h3>
+                <div class="value">KSH {{metrics.margin}}</div>
+                <p class="card-footer">Overall efficiency percentage.</p>
+            </div>
+        </div>
+        <div class="data-split-container">
+            <div class="card table-card">
+                <h2 class="section-title">Recent Transactions</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Invoice</th>
+                                <th>Branch</th>
+                                <th>Payment</th>
+                                <th>Revenue</th>
+                                <th>Profit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                                <tr>
+                                    <td><strong>{{order.invoice_number}}</strong></td>
+                                    <td>{{order.branch.name}}</td>
+                                    <td>
+                                            {{order.get_payment_method_display}}
+                                        
+                                    </td>
+                                    <td>KSH {{order.total_revenue}}</td>
+                                    <td class="text-green">KSH {{order.total_profit}}</td>
+                                </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="empty-state">No sales transaction logged this month yet</td>
+                                    </tr>
+                                {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+{% endblock %}
