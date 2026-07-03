@@ -50,7 +50,7 @@
                     
                     <td class="brand-actions">
                         <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
-                        <a href="#" class="action-link delete-link">Delete</a>
+                        <a href="{% url 'product-delete' product.id %}" class="action-link delete-link">Delete</a>
                         <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
                         
                     </td>

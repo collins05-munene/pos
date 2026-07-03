@@ -6,7 +6,8 @@ from django.utils.text import slugify
 
 from users.views import AdminRequiredMixin, LoginRequiredMixin
 
-from .models import Category, Brand, UnitOfMeasure, Product
+from .models import Category, Brand, UnitOfMeasure, Product, ProductVariant
+from inventory.models import Branch
 from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet, ProductImageFormSet
 
 # Create your views here.
@@ -106,9 +107,8 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
             data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
             data['variants'] = ProductVariantFormSet(instance=self.object)
-
             images_formset = ProductImageFormSet(instance=self.object)
-            images_formset.extra=4
+            images_formset.extra = 4
             data['images'] = images_formset
         return data
     
@@ -119,14 +119,42 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
 
         with transaction.atomic():
             if form.is_valid() and variants.is_valid() and images.is_valid():
+                # 1. Save the core product
                 self.object = form.save()
+                
+                # 2. Save the variants and images
                 variants.instance = self.object
-                variants.save()
+                saved_variants = variants.save()
+                
                 images.instance = self.object
                 images.save()
 
+                # 3. Handle Initial Stock Assignment
+                initial_qty = form.cleaned_data.get('initial_stock', 0)
+                if initial_qty > 0:
+                    # Fetch your main tracking branch
+                    main_branch, _ = Branch.objects.get_or_create(
+                        name="Main Branch",
+                        defaults={"location": "Headquarters", "is_active": True}
+                    )
+                    
+                    # Allocate this quantity across all variants created right now
+                    for variant in variants.cleaned_data:
+                        # Skip variants marked for deletion in the formset
+                        if variant.get('DELETE'):
+                            continue
+                            
+                        # Grab the actual database instance of the created variant
+                        variant_instance = variant.get('id') or ProductVariant.objects.get(sku=variant.get('sku'))
+                        
+                        from inventory.models import StockLevel
+                        StockLevel.objects.update_or_create(
+                            branch=main_branch,
+                            variant=variant_instance,
+                            defaults={'quantity': initial_qty}
+                        )
+
                 return super().form_valid(form)
-            
             else:
                 return self.form_invalid(form)
             

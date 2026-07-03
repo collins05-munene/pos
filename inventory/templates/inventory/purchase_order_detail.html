@@ -1,0 +1,113 @@
+{% extends 'users/base.html' %}
+
+{% block title %} {{po.po_number}} - Purchase Order {% endblock %}
+
+{% block extra_head %}
+    <style>
+        .back-link { display: inline-block; margin-bottom: 20px; color: #2563eb; text-decoration: none; font-weight: 500; }
+        .back-link:hover { text-decoration: underline; }
+        .po-container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .po-header { border-bottom: 2px solid #f3f4f6; padding-bottom: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .po-title h1 { margin: 0 0 0.5rem 0; color: #111827; }
+        .po-title p { margin: 0; color: #6b7280; }
+        .po-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; background: #f9fafb; padding: 20px; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .meta-item strong { display: block; color: #4b5563; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .meta-item span { font-size: 1rem; color: #1f2937; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; }
+        th { background-color: #f3f4f6; color: #374151; font-weight: 600; }
+        tr:nth-child(even) { background-color: #f9fafb; }
+        .badge { display: inline-block; padding: 2px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 9999px; }
+        .badge-ordered { background: #dbeafe; color: #1e40af; }
+        .badge-partial { background: #fef3c7; color: #92400e; }
+        .badge-received { background: #d1fae5; color: #065f46; }
+        .badge-cancelled { background: #e5e7eb; color: #374151; }
+    </style>
+{% endblock %} 
+
+{% block content %}
+    <a href="{% url 'purchase-order-list' %}" class="back-link">&larr; Back to Purchase Orders</a>
+
+    <div class="po-container">
+        <div class="po-header">
+            <div class="po-title">
+                <h1>{{po.po_number}}</h1>
+                <p>Supplier: {{po.supplier.company_name}}</p>
+            </div>
+            <div>
+                {% if po.status == 'RECEIVED' %}
+                    <span class="badge badhe-received" style="font-size: 0.87rem; padding: 6px 12px;">Fully Received</span>
+                {% elif po.status == 'PARTIAL' %}
+                    <span class="badge badge-partial" style="font-size: 0.875rem; padding: 6px 12px;">Partially Received</span>
+                {% elif po.status == 'CANCELLED' %}
+                    <span class="badge badge-cancelled" style="font-size: 0.875rem; padding: 6px 12px">Cancelled</span>
+                {% else %}
+                    <span class="badge badge-ordered" style="font-size: 0.875rem; padding: 6px 12px;">{{po.get_status_display}}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="po-meta">
+            <div class="meta-item">
+                <strong>Destination Branch</strong>
+                <span>{{po.branch.name}}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Created By</strong>
+                <span>{{po.created_by}}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Created At</strong>
+                <span>{{po.created_at|date|"d M Y, H:i"}}</span>
+            </div>
+            {% if po.notes %}
+                <div class="meta-item" style="grid-column: span 2;">
+                    <strong>Notes</strong>
+                    <span>{{po.notes|linebreaksbr}}</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <h3 style="color: #111827; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem;">
+            Order Line Items
+        </h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th>Ordered</th>
+                    <th>Received</th>
+                    <th>Unit Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item po.items.all %}
+                    <tr>
+                        <td>
+                            <code style="font-family: monospace;">{{item.variant.sku}}</code>
+                        </td>
+                        <td>{{item.variant.product.name}}</td>
+                        <td>{{item.quantity_ordered}}</td>
+                        <td>
+                            {{item.quantity_received}}
+                            {% if item.quantity_received < item.quantity_ordered %}
+                                <span style="color: #b45309; font-size: 0.8rem;">(pending)</span>
+                            {% endif %}
+                        </td>
+                        <td>KSH {{item.unit_cost}}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #6b7280; padding: 2rem;">No line items on this order.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if po.status != 'RECEIVED' and po.status != 'CANCELLED' %}
+            <div style="margin-top: 2rem; text-align: right;">
+                <a href="{% url 'purchase-order-receive' po.id %}" class="btn btn-primary">Receive Stock</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

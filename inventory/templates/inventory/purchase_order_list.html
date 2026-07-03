@@ -1,0 +1,66 @@
+{% extends 'users/base.html' %}
+
+{% block title %}Purchase Orders{% endblock %}
+
+{% block content %}
+    <div class="directory-container">
+        <div class="page-header">
+            <div class="header-text">
+                <h2>Purchase Orders</h2>
+                <p>Track Stock on order and receive incoming deliveries.</p>
+            </div>
+            <a href="{% url 'purchase-order-create' %}" class="btn btn-primary">New Purchase Order</a>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Purchase Order Number</th>
+                        <th scope="col">Supplier</th>
+                        <th scope="col">Branch</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in purchase_orders %}
+                        <tr>
+                            <td class="brand-name"><strong>{{po.po_number}}</strong></td>
+                            <td class="brand-name">{{po.supplier.company.name}}</td>
+                            <td class="brand-name">{{po.branch.name}}</td>
+                            <td class="brand-name">
+                                {% if po.status == 'RECEIVED' %}
+                                    <span style="color: #166534; font-weight: 600;">{{po.get_status_display}}</span>
+                                {% elif po.status == 'PARTIAL' %}
+                                    <span style="color: #b45309; font-weight: 600;">{{po.get_status_display}}</span>
+                                {% elif po.status == 'CANCELLED' %}
+                                    <span style="color: #6b7280; font-weight: 600;">{{po.get_status_display}}</span>
+                                {% else %}
+                                    <span style="color: #1e40af; font-weight: 600;">{{po.get_status_display}}</span>
+                                {% endif %}
+                            </td>
+                            <td class="brand-name">{{po.created_at|date:"d M Y"}}</td>
+                            <td class="brand-name">
+                                <a href="{% url 'purchae-order-detail' %}" class="action-link edit-link">View</a>
+                                {% if po.status != 'RECEIVED' and po.status != 'CANCELLED' %}
+                                    <a hrfe="{% url 'purchase-order-receive' po.id %}" class="action-link edit-link">Receive</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="empty-state-row">
+                                <div class="empty-state">
+                                    <h3>No Purchase Orders Yet.</h3>
+                                    <p>Create a Purchase order to start tracking incoming stock from your suppliers.</p>
+                                    <a href="{% url 'purchase-order-create' %}" class="btn btn-secondary">Create one now</a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

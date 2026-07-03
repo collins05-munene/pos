@@ -8,13 +8,13 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from decimal import Decimal
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib import messages
 
-
 from sales.cart import POSCart
-from.models import MpesaTransaction
+from sales.exceptions import InsufficientStockError
+from .models import MpesaTransaction
+from sales.utils import complete_pos_sale
 
 # Create your views here.
 @require_GET
@@ -40,7 +40,13 @@ def process_payment(map_request):
     total_amount = cart.get_total_price
 
     if payment_method == 'cash':
-        cart.session['pos_cart'] = {}
+        complete_pos_sale(
+            cart=cart,
+            payment_method='CASH',
+            cashier=map_request.user
+        )
+        map_request.session['pos_cart'] = {}
+        map_request.session.modified = True
         cart.save()
         messages.success(map_request, f'Cash Sale Completed! Collected KSH {total_amount}')
         return redirect('pos_terminal')
@@ -72,6 +78,8 @@ class MpesaSTKPushView(View):
         if response.status_code == 200:
             return response.json().get('access_token')
         raise Exception('Failed to Fetch Access Token')
+    
+   
     
     def post(self, request, *args, **kwargs):
         cart = POSCart(request)
@@ -135,6 +143,7 @@ class MpesaSTKPushView(View):
             "AccountReference": "POS_Order",
             "TransactionDesc": "POS Cart Checkout"
         }
+        
 
         api_url = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
 
@@ -208,12 +217,63 @@ class CheckMpesaStatusView(View):
                 'message': 'Transaction record missing.'
             }, status=400)
         
-
+        
 class ClearPOSCartView(View):
     def post(self, request, *args, **kwargs):
-        if 'pos_cart' in request.session:
-            request.session['pos_cart'] = {}
-            request.session.modified = True
-        return JsonResponse({
-            'status': 'cleared'
-        })
+        checkout_request_id = request.POST.get('checkout_request_id')
+        cart = POSCart(request)
+        
+        if cart.total_items == 0:
+            return JsonResponse({'status': 'already_empty'}, status=400)
+
+        if checkout_request_id:
+            try:
+                transaction_record = MpesaTransaction.objects.get(
+                    checkout_request_id=checkout_request_id
+                )
+            except MpesaTransaction.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No matching transaction found.'
+                }, status=400)
+
+            # Change this from a hard 400 error to a 'pending' state response
+            if transaction_record.status == 'PENDING':
+                return JsonResponse({
+                    'status': 'pending',
+                    'message': 'Waiting for client to enter PIN...'
+                }, status=200) # Keep it 200 so JS knows it's a valid poll state
+
+            if transaction_record.status == 'FAILED':
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Payment was cancelled or failed.'
+                }, status=400)
+
+            # If an order is already linked, just clear and complete
+            if getattr(transaction_record, 'order', None):
+                request.session['pos_cart'] = {}
+                request.session.modified = True
+                return JsonResponse({'status': 'already_completed'})
+
+        # If transaction_record.status == 'SUCCESS', we proceed to complete the sale
+        try:
+            order = complete_pos_sale(
+                cart=cart,
+                payment_method='MPESA',
+                cashier=request.user
+            )
+        except InsufficientStockError as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Payment received but sale could not be completed: {e}' 
+            }, status=409)
+
+        if checkout_request_id:
+            transaction_record.order = order
+            transaction_record.save(update_fields=['order'])
+             
+        # Clear the cart now that payment is confirmed and sale is complete
+        request.session['pos_cart'] = {}
+        request.session.modified = True
+        return JsonResponse({'status': 'cleared'})

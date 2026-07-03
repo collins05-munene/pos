@@ -4,9 +4,20 @@ from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q
+from django.views.generic import TemplateView
+from django.utils import timezone
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.contrib import messages
+from decimal import Decimal
+import logging
 from products.models import ProductVariant, Category
 from .cart import POSCart
+from .models import Order, OrderItem
+from .exceptions import InsufficientStockError
 
+
+
+logger = logging.getLogger(__name__)
 
 @require_GET
 def pos_terminal(request):
@@ -54,8 +65,8 @@ def pos_terminal(request):
         'active_category': active_category,
     }
     return render(request, 'sales/terminal.html', context)
+
 def _cart_json_response(request):
-    """Render cart_contents partial and return as JSON payload."""
     cart = POSCart(request)
     html = render_to_string(
         'sales/cart_contents.html',
@@ -67,6 +78,29 @@ def _cart_json_response(request):
         'cart_html': html,
         'total_items': cart.total_items,
     })
+
+def _stock_error_response(request, error):
+    message = (
+        f"Only {error.available} of {error.variant.sku} left in stock (you tried to have {error.requested})"
+    )
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        cart = POSCart(request)
+        html = render_to_string(
+            'sales/cart_contents.html',
+            {'cart': cart},
+            request=request
+        )
+
+        return JsonResponse({
+            'ok': False,
+            'error': message,
+            'cart_html': html,
+            'total_items': cart.total_items
+        }, status=400)
+    
+    messages.error(request, message)
+    return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 
 @require_POST
@@ -96,8 +130,11 @@ def cart_update(request):
     variant_id = request.POST.get('variant_id')
     quantity = request.POST.get('quantity', 1)
 
-    if variant_id:
-        cart.update_quantity(variant_id=variant_id, quantity=quantity)
+    try:        
+        if variant_id:
+            cart.update_quantity(variant_id=variant_id, quantity=quantity)
+    except InsufficientStockError as e:
+        return _stock_error_response(request, e)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return _cart_json_response(request)
@@ -117,3 +154,48 @@ def cart_remove(request):
         return _cart_json_response(request)
 
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
+
+
+class SalesDashboardView(TemplateView):
+    template_name = 'sales/dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        today = timezone.now()
+        start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        orders = Order.objects.all()
+        monthly_orders = orders.filter(created_at__gte=start_of_month)
+
+        totals = monthly_orders.aggregate(
+            revenue=Sum('total_revenue'),
+            cogs=Sum('total_cogs'),
+            profit=Sum('total_profit')
+        )
+
+        revenue = totals['revenue'] or 0.00
+        cogs = totals['cogs'] or 0.00
+        profit = totals['profit'] or 0.00
+
+        profit_margin = 0.0
+        if revenue > 0:
+            profit_margin = round((float(profit) / float(revenue)) * 100, 2)
+        
+        context['metrics'] = {
+            'revenue': revenue,
+            'cogs': cogs,
+            'profit': profit,
+            'margin': profit_margin,
+            'total_sales_count': monthly_orders.count()
+        }
+        
+        payment_breakdown = monthly_orders.values('payment_method').annotate(
+            method_revenue=Sum('total_revenue'),
+            method_profit=Sum('total_profit')
+        )
+        context['payment_data'] = payment_breakdown
+
+        context['recent_orders'] = orders.order_by('-created_at')[:10]
+
+        return context

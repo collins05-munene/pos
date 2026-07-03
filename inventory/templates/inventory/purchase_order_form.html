@@ -1,0 +1,89 @@
+{% extends 'users/base.html' %}
+
+{% block title %}
+    {% if object %}
+        Edit Purchase Prder: {{object.po_number}}
+    {% else %}
+        New Purchase Order
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    <div class="form-page-container">
+        <div class="form-card">
+            <div class="form-card-header">
+                <h3 class="form-title">
+                    {% if object %}
+                        Update Purchase Order
+                    {% else %}
+                        Create Purchase Order
+                    {% endif %}
+                </h3>
+                <p class="fomr-subtitle">Fill out the order details and line items below.</p>
+            </div>
+
+            <form method="POST" novalidate class="styled-form">
+                {% csrf_token %}
+                <div class="form-fields-stack">
+                    {% for fields in form %}
+                        <div class="form-field-group {% if field.errors %} has-errors {% endif %}" >
+                            <label for="{{field.id_for_label}}" class="field-label">
+                                {{field.label}}
+                                {% if field.field.required %}
+                                    <span class="required-asterisk">*</span>
+                                {% endif %}
+                            </label>
+                            <div class="field-widget-container">{{field}}</div>
+                            {% if field.help_text %}
+                                <div class="field-help-text">{{field.help_text|safe}}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="field-error-message">{{error}}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <hr class="form-divider">
+
+                <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
+                    <h3 class="form-title">Line Items</h3>
+                    <p class="form-subtitle">Variants being ordered from this supplier, and thiser agreed cost price</p>
+                </div>
+                {{items.management_form}}
+                <div class="form-fields-stack">
+                    {% for item_form in items %}
+                        <div class="product-link-row" style="background: #f9fafb; padding:1.25rem; border-radius: 6px; border: 1px solid #e5e7eb; margin-bottom: 1rem;" >
+                            {{item_form.id}}
+                            <div style="display: grid; grid-gap: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
+                                {% for field in item_form.visible_fields %}
+                                    {% if field.name == 'DELETE' %}
+                                        <div class="field-widget-container" style="color: #991b1b; display: flex; align-items: center; gap: 0.25rem; padding-bottom: 0.5rem;">
+                                            {{field}} {{field.label_tag}}
+                                        </div>
+                                    {% else %}
+                                    <div class="field-widget-container">
+                                        <label for="{{field.id_for_label}}" style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem;">{{field.label}}</label>
+                                        {{field}}
+                                        {% for error in field.errors %}
+                                            <span style="color: #dc3545; font-size: 0.75rem;">{{error}}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="form-actions">
+                    <a href="{% url 'purchase-order-list' %}" class="btn-link cancel-btn">Cancel</a>
+                    <button type="submit" class="btn btn-submit">
+                        {% if object %}
+                            Save changes
+                        {% else %}
+                            Create Purchase
+                        {% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

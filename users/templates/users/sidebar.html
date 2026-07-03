@@ -18,11 +18,12 @@
         <li><a href="{% url 'category-list' %}">Categories</a></li>
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
         <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
+        <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
         <li class="menu-title">Finance</li>
         <li><a href="#">Cash Drawer</a></li>
         <li><a href="#">Expenses</a></li>
         <li class="menu-title">Reports</li>
-        <li><a href="#">Sales Report</a></li>
+        <li><a href="{% url 'sales-dashboard' %}">Sales Report</a></li>
         <li><a href="#">Profit Report</a></li>
         <li class="menu-title">System</li>
         <li><a href="{% url 'activity_logs' %}">Audit Logs</a></li>

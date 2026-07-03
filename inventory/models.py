@@ -20,10 +20,11 @@ class Branch(models.Model):
 class StockLevel(models.Model):
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stock_levels')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
-    quantity = models.IntegerField(default=0)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     class Meta:
         unique_together = ('branch', 'variant')
+        ordering = ['-branch']
 
     @property
     def is_low_stock(self):
@@ -41,7 +42,7 @@ class StockAdjustment(models.Model):
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='adjustments')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='adjustments')
     adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPES)
-    quantity_changed = models.IntegerField(help_text="Can be negative (for damage/loss) or positive (for corrections).")
+    quantity_changed = models.DecimalField(max_digits=12, decimal_places=3, help_text="Can be negative (for damage/loss) or positive (for corrections).")
     reason = models.TextField(blank=True, help_text="Detailed notes on why the adjustment occurred.")
     user = models.ForeignKey(User, on_delete=models.PROTECT, help_text="The staff member who logged the adjustment.")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -74,10 +75,15 @@ class PurchaseOrder(models.Model):
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='po_items')
-    quantity_ordered = models.PositiveIntegerField()
-    quantity_received = models.PositiveIntegerField(default=0)
+    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3)
+    quantity_received = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2, help_text='Cost price locked in at time of order')
 
+    @property
+    def quantity_remaining(self):
+        return self.quantity_ordered - self.quantity_received
+
+        
     def __str__(self):
         return f"{self.variant.sku} * {self.quantity_ordered}"
     
