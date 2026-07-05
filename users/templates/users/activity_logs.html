@@ -1,16 +1,75 @@
 {% extends 'users/base.html' %}
 
 {% block title %} System Activity Logs {% endblock %}
-
+{% block extra_head %}
+    <style>
+        .dashboard-container {
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .dashboard-title {
+            margin: 0;
+            font-size: 1.75rem;
+            color: #111827;
+        }
+        .dashboard-subtitle {
+            margin: 0.25rem 0 0 0;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+        .data-split-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+        @media (max-width: 900px) {
+            .data-split-container { grid-template-columns: 1fr; }
+        }
+        .section-title {
+            margin: 0 0 1.25rem 0;
+            font-size: 1.15rem;
+            color: #1f2937;
+        }
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        th {
+            padding: 0.75rem;
+            border-bottom: 2px solid #f3f4f6;
+            color: #4b5563;
+            font-weight: 600;
+        }
+        td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #f3f4f6;
+            color: #374151;
+        }
+    </style>
+{% endblock %}
 {% block content %}
-    <div>
-        <div>
-            <div>
-                <h2>Security & Operational Audit Log</h2>
-                <p>Track Authentication flow records and terminal event timelines.</p>
+    <div class="dashboard-container">
+        <div class="data-header">
+            <div >
+                <h2 class="dashboard-title">Security & Operational Audit Log</h2>
+                <p class="dashboard-subtitle">Track Authentication flow records and terminal event timelines.</p>
             </div>
         </div>
-        <div>
+        <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
@@ -18,7 +77,6 @@
                         <th>User</th>
                         <th>Role</th>
                         <th>Action Event</th>
-                        <th>Log Details</th>
                         <th>IP Address</th>
                     </tr>
                 </thead>
@@ -34,7 +92,7 @@
                                     -
                                 {% endif %}
                             </td>
-                            <td>{{log.details}}</td>
+                            <td>{{log.action}}</td>
                             <td>{{log.ip_address|default:"localhost"}}</td>
 
                         </tr>

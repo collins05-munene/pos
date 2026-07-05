@@ -63,20 +63,18 @@ class POSCart:
         info += f" / {variant.color}" if variant.color else ""
         display_name = f"{variant.product.name}{info}"
 
-        # 1. Initialize structure if it's a new item
+        
         if variant_id not in self.cart:
             self.cart[variant_id] = {
                 'variant_id': int(variant_id),
                 'name': display_name,
                 'sku': variant.sku,
                 'price': str(variant.retail_price),
-                'quantity': 0  # Starts at 0, updated below
+                'quantity': 0 
             }
 
-        # 2. ALWAYS update the quantity with the calculated total here
         self.cart[variant_id]['quantity'] = new_total_qty
 
-        # 3. Save to session and return
         self.save()
         return True
 

@@ -78,7 +78,7 @@ class ReceivePurchaseOrderView(LoginRequiredMixin, View):
             PurchaseOrder.objects.prefetch_related('items__variant'), pk=pk
         )
         if po.status in ('RECEIVED', 'CANCELLED'):
-            messages.warming(request, f"Purchase Order {po.po_number} is already {po.get_status_display()}.")
+            messages.warning(request, f"Purchase Order {po.po_number} is already {po.get_status_display()}.")
             return redirect('purchase-order-detail', pk=po.pk)
     
         with transaction.atomic():
@@ -86,7 +86,7 @@ class ReceivePurchaseOrderView(LoginRequiredMixin, View):
                 PurchaseOrderItem.objects.select_for_update().filter(purchase_order=po).select_related('variant')
                 )
             any_received = False
-            full_received = True
+            fully_received = True
 
             for item in items:
                 raw_value = request.POST.get(f'Receive_{item.id}', '').strip()

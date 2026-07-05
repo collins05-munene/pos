@@ -4,6 +4,8 @@ from django.views.generic import ListView, CreateView, UpdateView, DeleteView, D
 from django.db import transaction
 
 from users.views import AdminRequiredMixin
+from users.mixins import AuditLogMixin
+from users.utils import log_action, AuditAction
 from .models import Supplier
 from .forms import SupplierForm, SupplierProductFormset
 
@@ -74,6 +76,12 @@ class SupplierUpdateView(AdminRequiredMixin, UpdateView):
                 self.object = form.save()
                 products.instace = self.object
                 products.save()
+                log_action(
+                    self.request.user,
+                    AuditAction.RECORD_UPDATE,
+                    f"Product created: {self.object.name}",
+                    self.request
+                )
                 return super().form_valid(form)
             else:
                 return self.form_invalid(form)

@@ -5,6 +5,8 @@ from django.db import transaction
 from django.utils.text import slugify
 
 from users.views import AdminRequiredMixin, LoginRequiredMixin
+from users.mixins import AuditLogMixin
+from users.utils import log_action, AuditAction
 
 from .models import Category, Brand, UnitOfMeasure, Product, ProductVariant
 from inventory.models import Branch
@@ -17,7 +19,7 @@ class CategoryListView(LoginRequiredMixin, ListView):
     context_object_name = 'categories'
     paginate_by = 20
 
-class CategoryCreateView(AdminRequiredMixin, CreateView):
+class CategoryCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
     model = Category
     form_class = CategoryForm
     template_name = 'products/category_form.html'
@@ -29,13 +31,13 @@ class CategoryCreateView(AdminRequiredMixin, CreateView):
         category.save()
         return super().form_valid(form)
 
-class CategoryUpdateView(AdminRequiredMixin, UpdateView):
+class CategoryUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
     model = Category
     form_class = CategoryForm
     template_name = 'products/category_form.html'
     success_url = reverse_lazy('category-list')
 
-class CategoryDeleteView(AdminRequiredMixin, DeleteView):
+class CategoryDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Category
     template_name = 'products/category_confirm_delete.html'
     success_url = reverse_lazy('category-list')
@@ -46,19 +48,19 @@ class BrandListView(LoginRequiredMixin, ListView):
     context_object_name = 'brands'
     paginate_by = 10
 
-class BrandCreateView(AdminRequiredMixin, CreateView):
+class BrandCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
     model = Brand
     template_name = 'products/brand_form.html'
     form_class = BrandForm
     success_url = reverse_lazy('brand-list')
 
-class BrandUpdateView(AdminRequiredMixin, UpdateView):
+class BrandUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
     model = Brand
     template_name = 'products/brand_form.html'
     form_class = BrandForm
     success_url = reverse_lazy('brand-list')
 
-class BrandDeleteView(AdminRequiredMixin, DeleteView):
+class BrandDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Brand
     template_name = 'products/brand_confirm_delete.html'
     success_url = reverse_lazy('brand-list')
@@ -69,19 +71,19 @@ class UoMListView(LoginRequiredMixin, ListView):
     template_name = 'products/uom_list.html'
     paginate_by = 5
 
-class UoMCreateView(AdminRequiredMixin, CreateView):
+class UoMCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
     success_url = reverse_lazy('uom-list')
     
-class UoMUpdateView(AdminRequiredMixin, UpdateView):
+class UoMUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
     success_url = reverse_lazy('uom-list')
 
-class UoMDeleteView(AdminRequiredMixin, DeleteView):
+class UoMDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = UnitOfMeasure
     template_name = 'products/uom_confirm_delete.html'
     success_url = reverse_lazy('uom-list')
@@ -119,32 +121,26 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
 
         with transaction.atomic():
             if form.is_valid() and variants.is_valid() and images.is_valid():
-                # 1. Save the core product
+            
                 self.object = form.save()
-                
-                # 2. Save the variants and images
+        
                 variants.instance = self.object
                 saved_variants = variants.save()
                 
                 images.instance = self.object
                 images.save()
 
-                # 3. Handle Initial Stock Assignment
                 initial_qty = form.cleaned_data.get('initial_stock', 0)
                 if initial_qty > 0:
-                    # Fetch your main tracking branch
                     main_branch, _ = Branch.objects.get_or_create(
                         name="Main Branch",
                         defaults={"location": "Headquarters", "is_active": True}
                     )
                     
-                    # Allocate this quantity across all variants created right now
                     for variant in variants.cleaned_data:
-                        # Skip variants marked for deletion in the formset
                         if variant.get('DELETE'):
                             continue
                             
-                        # Grab the actual database instance of the created variant
                         variant_instance = variant.get('id') or ProductVariant.objects.get(sku=variant.get('sku'))
                         
                         from inventory.models import StockLevel
@@ -153,7 +149,13 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
                             variant=variant_instance,
                             defaults={'quantity': initial_qty}
                         )
-
+                log_action(
+                    self.request.user,
+                    AuditAction.RECORD_CREATE,
+                    f"Product created: {self.object.name} (variants={len(saved_variants)}, initial_stock={initial_qty})",
+                    self.request
+                )
+                
                 return super().form_valid(form)
             else:
                 return self.form_invalid(form)
@@ -199,7 +201,14 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
                 variants.save()
                 images.instance = self.object
                 images.save()
+                log_action(
+                    self.request.user,
+                    AuditAction.RECORD_UPDATE,
+                    f"Product updated: {self.object.name}",
+                    self.request
+                )
                 return super().form_valid(form)
+                
             else:
                 return self.form_invalid(form)
             

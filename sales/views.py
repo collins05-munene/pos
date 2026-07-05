@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, DetailView
 from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.contrib import messages
@@ -109,14 +109,23 @@ def cart_add(request):
     variant_id = request.POST.get('variant_id')
     sku = request.POST.get('sku')
 
-    if sku:
-        variant = ProductVariant.objects.filter(
-            sku__iexact=sku.strip(), is_active=True
-        ).first()
-        if variant:
-            cart.add(variant_id=variant.id, quantity=1)
-    elif variant_id:
-        cart.add(variant_id=variant_id, quantity=1)
+    try:
+        if sku:
+            variant = ProductVariant.objects.filter(
+                sku__iexact=sku.strip(), is_active=True
+            ).first()
+            if variant:
+                cart.add(variant_id=variant.id, quantity=1)
+        elif variant_id:
+            cart.add(variant_id=variant_id, quantity=1)
+            
+    except InsufficientStockError as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return _stock_error_response(request, e)
+        
+        from django.contrib import messages
+        messages.error(request, str(e))
+        return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return _cart_json_response(request)
@@ -197,5 +206,25 @@ class SalesDashboardView(TemplateView):
         context['payment_data'] = payment_breakdown
 
         context['recent_orders'] = orders.order_by('-created_at')[:10]
+
+        return context
+
+class OrderDetailView(DetailView):
+    model = Order
+    template_name = "sales/order_detail.html"
+    context_object_name = "order"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['line_items'] = self.object.items.select_related('variant__product').all()
+
+        total_items_count = sum(item.quantity for item in context['line_items'])
+        context['total_items_count'] = total_items_count
+
+        order_margin = 0.0
+        if self.object.total_revenue > 0:
+            order_margin - round((float(self.object.total_profit) / float(self.object.total_revenue)) * 100, 2)
+        context['order_margin'] = order_margin
 
         return context
