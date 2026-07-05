@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.views import View
-from django.views.generic import FormView, ListView
+from django.views.generic import FormView, ListView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib.auth import login, logout, authenticate
 from django.shortcuts import redirect, render
@@ -8,12 +8,10 @@ from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 
 from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
+from .utils import log_action, AuditAction
+from .dashboard import build_dashboard_context
 
 # Create your views here.
-def log_action(user, action, details="", request=None):
-    ip = request.META.get('REMOTE_ADDR') if request else None
-    ActivityLog.objects.create(user=user, action=action, details=details, ip_address=ip)
-
 
 class StandardLoginView(FormView):
     template_name = 'users/login.html'
@@ -43,9 +41,10 @@ class CashierPINLoginView(FormView):
 
         if user is not None:
             login(self.request, user)
-            log_action(user, "PIN Login", f"Logged in to POS terminal via PIN: used{pin}", self.request)
+            log_action(user, AuditAction.LOGIN_PIN, f"Logged in to POS terminal via pin.", self.request)
             return super().form_valid(form)
         else:
+            log_action(None, "PIN_LOGIN_FAILED", f"Failed PIN login attempt for username: {username}")
             form.add_error(None, "Invalid Username or PIN")
             return self.form_invalid(form)
 
@@ -73,9 +72,14 @@ class ActivityLogListView(AdminRequiredMixin, ListView):
     context_object_name = 'logs'
     paginate_by = 50
 
-class AdminDashboardView(ListView):
-    model = User
+
+class AdminDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'users/admin-dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(build_dashboard_context())
+        return context
 
 
 class CashierDashboardView(ListView):

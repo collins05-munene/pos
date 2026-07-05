@@ -7,11 +7,9 @@
 
     <ul class="menu">
         <li class="menu-title">Dashboard</li>
-        <li><a href="#">Overview</a></li>
+        <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a href="#">Receipts</a></li>
-        <li><a href="#">Returns</a></li>
         <li class="menu-title">Inventory</li>
         <li><a href="{% url 'product-list' %}">Products</a></li>
         <li><a href="{% url 'brand-list' %}">Brands</a></li>
@@ -19,14 +17,10 @@
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
         <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
         <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
-        <li class="menu-title">Finance</li>
-        <li><a href="#">Cash Drawer</a></li>
-        <li><a href="#">Expenses</a></li>
         <li class="menu-title">Reports</li>
         <li><a href="{% url 'sales-dashboard' %}">Sales Report</a></li>
-        <li><a href="#">Profit Report</a></li>
         <li class="menu-title">System</li>
-        <li><a href="{% url 'activity_logs' %}">Audit Logs</a></li>
+        <li><a href="{% url 'activity-logs' %}">Audit Logs</a></li>
     </ul>
     <div class="sidebar-footer">
         <strong>{{ user.username }}</strong>

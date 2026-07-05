@@ -237,12 +237,11 @@ class ClearPOSCartView(View):
                     'message': 'No matching transaction found.'
                 }, status=400)
 
-            # Change this from a hard 400 error to a 'pending' state response
             if transaction_record.status == 'PENDING':
                 return JsonResponse({
                     'status': 'pending',
                     'message': 'Waiting for client to enter PIN...'
-                }, status=200) # Keep it 200 so JS knows it's a valid poll state
+                }, status=200) 
 
             if transaction_record.status == 'FAILED':
                 return JsonResponse({
@@ -250,13 +249,13 @@ class ClearPOSCartView(View):
                     'message': 'Payment was cancelled or failed.'
                 }, status=400)
 
-            # If an order is already linked, just clear and complete
+           
             if getattr(transaction_record, 'order', None):
                 request.session['pos_cart'] = {}
                 request.session.modified = True
                 return JsonResponse({'status': 'already_completed'})
 
-        # If transaction_record.status == 'SUCCESS', we proceed to complete the sale
+       
         try:
             order = complete_pos_sale(
                 cart=cart,
@@ -273,7 +272,7 @@ class ClearPOSCartView(View):
             transaction_record.order = order
             transaction_record.save(update_fields=['order'])
              
-        # Clear the cart now that payment is confirmed and sale is complete
+        
         request.session['pos_cart'] = {}
         request.session.modified = True
         return JsonResponse({'status': 'cleared'})

@@ -1,0 +1,198 @@
+{% extends 'users/base.html' %}
+
+{% block extra_head %}
+    <style>
+        .detail-container {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #4b5563;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 1.25rem;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            color: #111827;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 1.5rem;
+        }
+
+
+        .header-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .invoice-title {
+            margin: 0.5rem 0 0.25rem 0;
+            font-size: 1.8rem;
+            color: #111827;
+            letter-spacing: -0.02rem;
+        }
+
+        .meta-subtext {
+            margin: 0;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+        .header-aggregates {
+            text-align: right;
+        }
+
+        .agg-block {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .agg-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+            color: #6b7280;
+        }
+        .agg-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        }
+
+        .financials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem;
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-top: 0.5rem;
+        }
+
+        .table-title {
+            margin: 0 0 1.25rem 0;
+            font-size: 1.15rem;
+            color: #1f2937;
+        }
+
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+        th { padding: 0.75rem 1rem; border-bottom: 2px solid #f3f4f6; color: #4b5563; font-weight: 600; }
+        td { padding: 0.9rem 1rem; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+
+        .product-meta { display: flex; flex-direction: column; }
+        .product-name { font-weight: 600; color: #1f2937; }
+        .product-sku { font-size: 0.75rem; color: #6b7280; margin-top: 0.15rem; }
+
+        .text-green { color: #16a34a; }
+        .text-orange { color: #ea580c; }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="detail-container">
+        <a href="{% url 'sales-dashboard' %}" class="back-link">Back to Dashboard</a>
+        <div class="card meta-card-header">
+            <div class="header-main">
+                <div>
+                    <span>{{order.get_payment_method_display}}</span>
+                    <h1 class="invoice-title">{{order.invoice_number}}</h1>
+                    <p class="meta-subtext">Processed on {{order.created_at|date:"F d, Y @ h:i A"}} <strong>{{order.cashier.username}}</strong></p>
+                </div>
+                <div class="header-aggregates">
+                    <div class="agg-block">
+                        <span class="agg-label">Net Profit</span>
+                        <span class="agg-value text-green">KSH {{order.total_profit|floatformat:2}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="financials-grid">
+            <div class="card metric-card card-blue">
+                <h3>Total Items Sold</h3>
+                <div class="value">{{total_items_count}} units</div>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Gross Revenue Sold</h3>
+                <div class="value">KSH {{order.total_revenue|floatformat:2}}</div>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Total Cost (COGS)</h3>
+                <div class="value">KSH {{order.total_cogs|floatformat:2}} </div>
+            </div>
+            <div class="card metric-card card-blue">
+                <h3>Order Margin</h3>
+                <div class="value">{{order_margin}}%</div>
+            </div>
+         
+        </div>
+        <div class="card table-card">
+        <h2 class="table-title">Itemized Line Breakdown</h2>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product SKU / Variant</th>
+                        <th>Qty</th>
+                        <th>Unit Cost</th>
+                        <th>Unit Retail</th>
+                        <th>Line Revenue</th>
+                        <th>Line Cost</th>
+                        <th>Line Profit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in line_items %}
+                    <tr>
+                        <td>
+                            <div class="product-meta">
+                                <span class="product-name">{{ item.variant.product.name }}</span>
+                                <span class="product-sku">{{ item.variant.sku }}</span>
+                            </div>
+                        </td>
+                        <td>{{ item.quantity }}</td>
+                        <td>KSH {{ item.cost_price|floatformat:2 }}</td>
+                        <td>KSH {{ item.retail_price|floatformat:2 }}</td>
+                        <td>KSH {{ item.revenue_line|floatformat:2 }}</td>
+                        <td class="text-orange">KSH {{ item.cogs_line|floatformat:2 }}</td>
+                        <td class="text-green"><strong>+KSH {{ item.profit_line|floatformat:2 }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+{% endblock %}
