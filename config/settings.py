@@ -35,7 +35,8 @@ DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
-    '.ngrok-free.app'
+    '.ngrok-free.app',
+    'pos-7ibj.onrender.com'
 ]
 
 CSRF_TRUSTED_ORIGINS = [
