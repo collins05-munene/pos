@@ -41,7 +41,7 @@
                     <td class="brand-name">{{ product.unit_of_measure.name }}</td>
                     <td class="brand-name">{{ product.brand.name }}</td>
                     <td>
-                        {% if has_variations %}
+                        {% if product.has_variations %}
                             True
                         {% else %}
                             False

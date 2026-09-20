@@ -120,6 +120,7 @@
 {% endblock %}
 
 {% block content %}
+{% if user.get_role_display == 'Admin' %}
 <div class="dashboard-container">
   <div class="dashboard-header">
     <div>
@@ -190,4 +191,45 @@
     </div>
   </div>
 </div>
+
+{% else %}
+    <div class="data-split-container">
+      <div class="card table-card">
+        <h2 class="section-title">Recent Transactions</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Branch</th>
+                <th>Payment</th>
+                <th>Revenue</th>
+                <th>Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for order in recent_orders %}
+              <tr>
+                <td>
+                  <a href="{% url 'order-detail' order.pk %}" class="invoice-link">
+                    <strong>{{ order.invoice_number }}</strong>
+                  </a>
+                </td>
+                <td>{{ order.branch.name }}</td>
+                <td>{{ order.get_payment_method_display }}</td>
+                <td>KSH {{ order.total_revenue }}</td>
+                <td class="text-green">KSH {{ order.total_profit }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="empty-state">No sales transaction logged this month yet</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}

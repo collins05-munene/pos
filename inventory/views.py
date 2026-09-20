@@ -144,7 +144,7 @@ class StockAdjustmentCreateView(LoginRequiredMixin, CreateView):
             if new_quantity < 0:
                 form.add_error(
                     'quantity_changed',
-                    f'This would take stock negative (currenlty {stock_level.quantity})'
+                    f'This would take stock negative (currently {stock_level.quantity})'
                 )
                 return self.form_invalid(form)
             

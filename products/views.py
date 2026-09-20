@@ -1,15 +1,18 @@
-from django.shortcuts import render
+from decimal import Decimal
+
+from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView
 from django.db import transaction
 from django.utils.text import slugify
+from django.contrib import messages
 
 from users.views import AdminRequiredMixin, LoginRequiredMixin
 from users.mixins import AuditLogMixin
 from users.utils import log_action, AuditAction
 
-from .models import Category, Brand, UnitOfMeasure, Product, ProductVariant
-from inventory.models import Branch
+from .models import Category, Brand, UnitOfMeasure, Product
+from inventory.models import Branch, StockLevel
 from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet, ProductImageFormSet
 
 # Create your views here.
@@ -95,8 +98,8 @@ class ProductListView(LoginRequiredMixin, ListView):
     context_object_name = 'products'
     paginate_by = 15
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure').prefetch_related('images')
-
-class ProductCreateView(AdminRequiredMixin, CreateView):
+    
+class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product
     form_class = ProductForm
     template_name = 'products/product_form.html'
@@ -109,57 +112,89 @@ class ProductCreateView(AdminRequiredMixin, CreateView):
             data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
             data['variants'] = ProductVariantFormSet(instance=self.object)
-            images_formset = ProductImageFormSet(instance=self.object)
-            images_formset.extra = 4
-            data['images'] = images_formset
+            data['images'] = ProductImageFormSet(instance=self.object)
         return data
-    
-    def form_valid(self, form):
+
+    def post(self, request, *args, **kwargs):
+        self.object = None
+        form = self.get_form()
         context = self.get_context_data()
         variants = context['variants']
         images = context['images']
 
-        with transaction.atomic():
-            if form.is_valid() and variants.is_valid() and images.is_valid():
-            
-                self.object = form.save()
-        
-                variants.instance = self.object
-                saved_variants = variants.save()
-                
-                images.instance = self.object
-                images.save()
+        if form.is_valid() and variants.is_valid() and images.is_valid():
+            return self.form_valid(form, variants, images)
+        return self.form_invalid(form, variants, images)
 
-                initial_qty = form.cleaned_data.get('initial_stock', 0)
-                if initial_qty > 0:
-                    main_branch, _ = Branch.objects.get_or_create(
-                        name="Main Branch",
-                        defaults={"location": "Headquarters", "is_active": True}
-                    )
-                    
-                    for variant in variants.cleaned_data:
-                        if variant.get('DELETE'):
-                            continue
-                            
-                        variant_instance = variant.get('id') or ProductVariant.objects.get(sku=variant.get('sku'))
-                        
-                        from inventory.models import StockLevel
-                        StockLevel.objects.update_or_create(
-                            branch=main_branch,
-                            variant=variant_instance,
-                            defaults={'quantity': initial_qty}
-                        )
-                log_action(
-                    self.request.user,
-                    AuditAction.RECORD_CREATE,
-                    f"Product created: {self.object.name} (variants={len(saved_variants)}, initial_stock={initial_qty})",
-                    self.request
-                )
-                
-                return super().form_valid(form)
-            else:
-                return self.form_invalid(form)
+    def form_valid(self, form, variants, images):
+        with transaction.atomic():
+            # 1. Save main Product instance (force is_active = True)
+            self.object = form.save(commit=False)
+            self.object.is_active = True
+            self.object.save()
+            form.save_m2m()
+
+            # 2. Save Variants with individual commit to capture returned instances
+            variants.instance = self.object
+            saved_variants = variants.save(commit=False)
             
+            for variant_instance in saved_variants:
+                variant_instance.is_active = True
+                variant_instance.save()
+            
+            variants.save_m2m()
+
+            # 3. Save Product Images
+            images.instance = self.object
+            images.save()
+
+            # 4. Fetch or create default branch for initial stock allocation
+            main_branch, _ = Branch.objects.get_or_create(
+                name="Main Branch",
+                defaults={"location": "Headquarters", "is_active": True}
+            )
+
+            has_variations = form.cleaned_data.get('has_variations', False)
+
+            if not has_variations:
+                # Single-variant mode: use top-level form's initial_stock field for all saved variants
+                global_initial_qty = form.cleaned_data.get('initial_stock') or 0
+                for variant_instance in saved_variants:
+                    StockLevel.objects.update_or_create(
+                        branch=main_branch,
+                        variant=variant_instance,
+                        defaults={'quantity': global_initial_qty}
+                    )
+            else:
+                # Multi-variant mode: extract initial_stock directly from each variant form
+                for variant_form in variants.forms:
+                    if variant_form.cleaned_data and not variant_form.cleaned_data.get('DELETE', False):
+                        variant_instance = variant_form.instance
+                        
+                        # Only assign stock if the variant has been persisted with a primary key
+                        if variant_instance.pk:
+                            variant_qty = variant_form.cleaned_data.get('initial_stock') or 0
+                            StockLevel.objects.update_or_create(
+                                branch=main_branch,
+                                variant=variant_instance,
+                                defaults={'quantity': variant_qty}
+                            )
+
+            # Audit logging
+            log_action(
+                self.request.user,
+                AuditAction.RECORD_CREATE,
+                f"Product created: {self.object.name} ({len(saved_variants)} variant(s))",
+                self.request
+            )
+
+        return redirect(self.get_success_url())
+
+    def form_invalid(self, form, variants, images):
+        return self.render_to_response(
+            self.get_context_data(form=form, variants=variants, images=images)
+        )
+
 class ProductUpdateView(LoginRequiredMixin, UpdateView):
     model = Product
     form_class = ProductForm
@@ -169,50 +204,67 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         
-        has_variants = self.object.variants.exists() if self.object else False
+        # Prevent extra blank variant/image rows during update
+        ProductVariantFormSet.extra = 0
+        ProductImageFormSet.extra = 0
 
         if self.request.POST:
             data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object)
             data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
-            variants_formset = ProductVariantFormSet(instance=self.object)
-            if has_variants:
-                variants_formset.extra = 0
-            data['variants'] = variants_formset
-
-
-            images_formset = ProductImageFormSet(instance=self.object)
-
-            current_image_count = self.object.images.count() if self.object else 0
-           
-            images_formset.extra = max(0, 4 - current_image_count)
-            data['images'] = images_formset
+            data['variants'] = ProductVariantFormSet(instance=self.object)
+            data['images'] = ProductImageFormSet(instance=self.object)
         return data
-    
-    def form_valid(self,form):
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        form = self.get_form()
         context = self.get_context_data()
         variants = context['variants']
         images = context['images']
 
-        with transaction.atomic():
-            if form.is_valid() and variants.is_valid() and images.is_valid():
-                self.object = form.save()
-                variants.instance = self.object
-                variants.save()
-                images.instance = self.object
-                images.save()
-                log_action(
-                    self.request.user,
-                    AuditAction.RECORD_UPDATE,
-                    f"Product updated: {self.object.name}",
-                    self.request
-                )
-                return super().form_valid(form)
-                
-            else:
-                return self.form_invalid(form)
-            
+        if form.is_valid() and variants.is_valid() and images.is_valid():
+            return self.form_valid(form, variants, images)
+        return self.form_invalid(form, variants, images)
 
+    def form_valid(self, form, variants, images):
+        with transaction.atomic():
+            # 1. Update Product with is_active = True
+            self.object = form.save(commit=False)
+            self.object.is_active = True
+            self.object.save()
+            form.save_m2m()
+
+            # 2. Update Variants with is_active = True
+            variants.instance = self.object
+            saved_variants = variants.save(commit=False)
+            for variant in saved_variants:
+                variant.is_active = True
+                variant.save()
+            variants.save_m2m()
+
+            # Ensure all previously existing active variants remain active
+            self.object.variants.all().update(is_active=True)
+
+            # 3. Save Product Images
+            images.instance = self.object
+            images.save()
+
+            log_action(
+                self.request.user,
+                AuditAction.RECORD_UPDATE,
+                f"Product updated: {self.object.name}",
+                self.request
+            )
+
+        return redirect(self.get_success_url())
+
+    def form_invalid(self, form, variants, images):
+        return self.render_to_response(
+            self.get_context_data(form=form, variants=variants, images=images)
+        )
+
+        
 class ProductDeleteView(LoginRequiredMixin,DeleteView):
     model = Product
     template_name = 'products/product_confirm_delete.html'

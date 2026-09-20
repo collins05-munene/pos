@@ -276,3 +276,4 @@ class ClearPOSCartView(View):
         request.session['pos_cart'] = {}
         request.session.modified = True
         return JsonResponse({'status': 'cleared'})
+
