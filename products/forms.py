@@ -1,7 +1,7 @@
 
 from django import forms
 
-from .models import Category, Brand, Product,UnitOfMeasure, ProductVariant, ProductImage
+from .models import Category, Brand, Product,UnitOfMeasure, ProductVariant
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -87,16 +87,3 @@ ProductVariantFormSet = forms.inlineformset_factory(
 )
 
 
-ProductImageFormSet = forms.inlineformset_factory(
-    Product,
-    ProductImage,
-    fields=['image', 'variant', 'is_primary'],
-    extra=1,
-    max_num=4,
-    can_delete=True,
-    widgets={
-        'image': forms.FileInput(attrs={'class': 'form-file'}),
-        'variant': forms.Select(attrs={'class': 'form-select'}),
-        'is_primary': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
-    }
-)

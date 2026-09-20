@@ -13,7 +13,7 @@ from users.utils import log_action, AuditAction
 
 from .models import Category, Brand, UnitOfMeasure, Product
 from inventory.models import Branch, StockLevel
-from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet, ProductImageFormSet
+from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet
 
 # Create your views here.
 class CategoryListView(LoginRequiredMixin, ListView):
@@ -109,10 +109,9 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
         data = super().get_context_data(**kwargs)
         if self.request.POST:
             data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object)
-            data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
             data['variants'] = ProductVariantFormSet(instance=self.object)
-            data['images'] = ProductImageFormSet(instance=self.object)
+
         return data
 
     def post(self, request, *args, **kwargs):
@@ -120,13 +119,12 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
         form = self.get_form()
         context = self.get_context_data()
         variants = context['variants']
-        images = context['images']
 
-        if form.is_valid() and variants.is_valid() and images.is_valid():
-            return self.form_valid(form, variants, images)
-        return self.form_invalid(form, variants, images)
+        if form.is_valid() and variants.is_valid():
+            return self.form_valid(form, variants)
+        return self.form_invalid(form, variants)
 
-    def form_valid(self, form, variants, images):
+    def form_valid(self, form, variants):
         with transaction.atomic():
             # 1. Save main Product instance (force is_active = True)
             self.object = form.save(commit=False)
@@ -144,9 +142,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
             
             variants.save_m2m()
 
-            # 3. Save Product Images
-            images.instance = self.object
-            images.save()
+           
 
             # 4. Fetch or create default branch for initial stock allocation
             main_branch, _ = Branch.objects.get_or_create(
@@ -157,7 +153,6 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
             has_variations = form.cleaned_data.get('has_variations', False)
 
             if not has_variations:
-                # Single-variant mode: use top-level form's initial_stock field for all saved variants
                 global_initial_qty = form.cleaned_data.get('initial_stock') or 0
                 for variant_instance in saved_variants:
                     StockLevel.objects.update_or_create(
@@ -166,12 +161,10 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
                         defaults={'quantity': global_initial_qty}
                     )
             else:
-                # Multi-variant mode: extract initial_stock directly from each variant form
                 for variant_form in variants.forms:
                     if variant_form.cleaned_data and not variant_form.cleaned_data.get('DELETE', False):
                         variant_instance = variant_form.instance
                         
-                        # Only assign stock if the variant has been persisted with a primary key
                         if variant_instance.pk:
                             variant_qty = variant_form.cleaned_data.get('initial_stock') or 0
                             StockLevel.objects.update_or_create(
@@ -180,7 +173,6 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
                                 defaults={'quantity': variant_qty}
                             )
 
-            # Audit logging
             log_action(
                 self.request.user,
                 AuditAction.RECORD_CREATE,
@@ -190,9 +182,9 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
 
         return redirect(self.get_success_url())
 
-    def form_invalid(self, form, variants, images):
+    def form_invalid(self, form, variants):
         return self.render_to_response(
-            self.get_context_data(form=form, variants=variants, images=images)
+            self.get_context_data(form=form, variants=variants)
         )
 
 class ProductUpdateView(LoginRequiredMixin, UpdateView):
@@ -204,16 +196,13 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         
-        # Prevent extra blank variant/image rows during update
         ProductVariantFormSet.extra = 0
-        ProductImageFormSet.extra = 0
 
         if self.request.POST:
-            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object)
-            data['images'] = ProductImageFormSet(self.request.POST, self.request.FILES, instance=self.object)
+            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object, prefix='variants')
         else:
-            data['variants'] = ProductVariantFormSet(instance=self.object)
-            data['images'] = ProductImageFormSet(instance=self.object)
+            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants')
+            
         return data
 
     def post(self, request, *args, **kwargs):
@@ -221,21 +210,19 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
         form = self.get_form()
         context = self.get_context_data()
         variants = context['variants']
-        images = context['images']
+       
 
-        if form.is_valid() and variants.is_valid() and images.is_valid():
-            return self.form_valid(form, variants, images)
-        return self.form_invalid(form, variants, images)
+        if form.is_valid() and variants.is_valid():
+            return self.form_valid(form, variants)
+        return self.form_invalid(form, variants)
 
-    def form_valid(self, form, variants, images):
+    def form_valid(self, form, variants):
         with transaction.atomic():
-            # 1. Update Product with is_active = True
             self.object = form.save(commit=False)
             self.object.is_active = True
             self.object.save()
             form.save_m2m()
 
-            # 2. Update Variants with is_active = True
             variants.instance = self.object
             saved_variants = variants.save(commit=False)
             for variant in saved_variants:
@@ -243,12 +230,8 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
                 variant.save()
             variants.save_m2m()
 
-            # Ensure all previously existing active variants remain active
             self.object.variants.all().update(is_active=True)
 
-            # 3. Save Product Images
-            images.instance = self.object
-            images.save()
 
             log_action(
                 self.request.user,
@@ -259,9 +242,9 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
 
         return redirect(self.get_success_url())
 
-    def form_invalid(self, form, variants, images):
+    def form_invalid(self, form, variants):
         return self.render_to_response(
-            self.get_context_data(form=form, variants=variants, images=images)
+            self.get_context_data(form=form, variants=variants)
         )
 
         

@@ -28,7 +28,6 @@
     <form method="POST" enctype="multipart/form-data" novalidate id="product-form">
         {% csrf_token %}
 
-        <!-- General Product Information -->
         <div class="form-section">
             <h3 class="form-section-title">{% if object %}Update Product{% else %}General Information{% endif %}</h3>
             <p class="form-section-sub">Base details about the product line.</p>
@@ -93,7 +92,6 @@
         </div>
         {% endif %}
 
-        <!-- Variant Table Section -->
         <div class="form-section" id="variants-section">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
@@ -160,45 +158,6 @@
             </tr>
         </table>
 
-        <!-- Product Images -->
-        <div class="form-section">
-            <h3 class="form-section-title">Product Media</h3>
-            <p class="form-section-sub">Upload primary and variant photos.</p>
-            
-            {{ images.management_form }}
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
-                {% for image_form in images %}
-                    <div style="background: #f9fafb; padding: 1rem; border-radius: 6px; border: 1px solid #e5e7eb;">
-                        {{ image_form.id }}
-                        {% if image_form.instance.image %}
-                            <img src="{{ image_form.instance.image.url }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;" alt="preview">
-                        {% endif %}
-                        <div class="form-group" style="margin-bottom: 0.5rem;">
-                            <label>Image File</label>
-                            {{ image_form.image }}
-                        </div>
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label>Link Variant</label>
-                                {{ image_form.variant }}
-                            </div>
-                            <div class="form-group" style="justify-content: flex-end;">
-                                <label style="display: flex; align-items: center; gap: 0.35rem;">
-                                    {{ image_form.is_primary }} Primary
-                                </label>
-                            </div>
-                        </div>
-                        {% if images.can_delete and image_form.instance.pk %}
-                            <div style="margin-top: 0.5rem; color: #dc2626; font-size: 0.8rem;">
-                                {{ image_form.DELETE }} Remove Image
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Form Actions -->
         <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
             <a href="{% url 'product-list' %}" class="btn-action btn-secondary">Cancel</a>
             <button type="submit" class="btn-action btn-primary">Save Product</button>
@@ -216,7 +175,7 @@
         const totalFormsInput = document.querySelector('#id_variants-TOTAL_FORMS');
         const emptyRowTemplate = document.querySelector('.empty-form-row');
 
-        // 1. Toggle UI view based on "Has Variations" checkbox
+        
         function toggleVariationView() {
             const isMultiVariant = hasVariationsCheckbox.checked;
 
@@ -224,10 +183,9 @@
                 singleStockSection.style.display = isMultiVariant ? 'none' : 'block';
             }
 
-            // Show/Hide "+ Add Another Variant" button
+            
             addVariantBtn.style.display = isMultiVariant ? 'inline-block' : 'none';
 
-            // Hide/Show secondary rows if user switches back to single-variant mode
             const rows = variantTbody.querySelectorAll('.variant-row');
             rows.forEach((row, index) => {
                 if (index > 0 && !isMultiVariant) {
@@ -242,47 +200,40 @@
             });
         }
 
-        // 2. Add New Dynamic Variant Row
+       
         addVariantBtn.addEventListener('click', function() {
             const formCount = parseInt(totalFormsInput.value, 10);
             
-            // Clone empty form template
             const newRow = emptyRowTemplate.cloneNode(true);
             newRow.classList.remove('empty-form-row');
             
-            // Replace __prefix__ in template attributes with the current form count index
+            
             newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formCount);
             
-            // Generate auto-suggested SKU for new row
             const prefixVal = skuPrefixInput ? skuPrefixInput.value.toUpperCase() : 'ITEM';
             const skuInput = newRow.querySelector('input[name$="-sku"]');
             if (skuInput) {
                 skuInput.value = `${prefixVal}-VAR-${formCount + 1}`;
             }
 
-            // Append row and update Django formset management counter
             variantTbody.appendChild(newRow);
             totalFormsInput.value = formCount + 1;
         });
 
-        // 3. Delete/Remove Variant Row
         variantTbody.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('remove-variant-btn')) {
                 const row = e.target.closest('.variant-row');
                 const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
 
                 if (deleteCheckbox) {
-                    // Existing model object: mark DELETE checkbox so Django deletes it on save
                     deleteCheckbox.checked = true;
                     row.style.display = 'none';
                 } else {
-                    // Newly added row: simply remove from DOM
                     row.remove();
                 }
             }
         });
 
-        // 4. Auto-fill SKU on first variant row when typing SKU Prefix
         if (skuPrefixInput) {
             skuPrefixInput.addEventListener('input', function() {
                 const firstSkuInput = variantTbody.querySelector('.variant-row input[name$="-sku"]');
@@ -292,7 +243,6 @@
             });
         }
 
-        // Initialize listener
         if (hasVariationsCheckbox) {
             hasVariationsCheckbox.addEventListener('change', toggleVariationView);
             toggleVariationView();

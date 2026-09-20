@@ -67,10 +67,3 @@ class ProductVariant(models.Model):
         variant_info = f" - {self.size} " if self.size else ""
         variant_info += f" / {self.color}" if self.color else ""
         return f"{self.product.name}{variant_info} ({self.sku})"
-    
-class ProductImage(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True, help_text="Optional: linkimage to specific variant color")
-    image = models.ImageField(upload_to='products/')
-    is_primary = models.BooleanField(default=False)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
