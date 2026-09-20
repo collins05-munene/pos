@@ -14,7 +14,7 @@ class Branch(models.Model):
     class Meta:
         verbose_name_plural = "Branches"
     
-    def __Str__(self):
+    def __str__(self):
         return self.name
     
 class StockLevel(models.Model):

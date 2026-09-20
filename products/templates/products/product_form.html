@@ -1,172 +1,302 @@
 {% extends 'users/base.html' %}
 
 {% block title %}
-    {% if object %}
-        Modify Product: {{ object.name }}
-    {% else %}
-        Register Product
-    {% endif %}
+    {% if object %}Modify Product: {{ object.name }}{% else %}Register Product{% endif %}
 {% endblock %}
 
 {% block content %}
-<div class="form-page-container">
-    <div class="form-card">
-        <div class="form-card-header">
-            <h3 class="form-title">
-                {% if object %}
-                    Update Products Profile
-                {% else %}
-                    Create Products Profile
-                {% endif %}
-            </h3>
-            <p class="form-subtitle">Fill out the form fields down below.</p>
-        </div>
+<style>
+    .form-section { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .form-section-title { font-size: 1.125rem; font-weight: 600; color: #111827; margin-bottom: 0.25rem; }
+    .form-section-sub { font-size: 0.875rem; color: #6b7280; margin-bottom: 1.25rem; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.875rem; font-weight: 500; color: #374151; }
+    .form-input, .form-select, .form-textarea { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; width: 100%; }
+    .variant-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    .variant-table th, .variant-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+    .variant-table th { background-color: #f9fafb; font-size: 0.75rem; text-transform: uppercase; color: #4b5563; }
+    .btn-action { padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; border-radius: 6px; cursor: pointer; text-decoration: none; }
+    .btn-primary { background-color: #2563eb; color: #ffffff; border: none; }
+    .btn-secondary { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+    .btn-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 4px; padding: 0.35rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
+    .empty-form-template { display: none; }
+</style>
 
-        <form method="POST" enctype="multipart/form-data" novalidate class="styled-form">
-            {% csrf_token %}
-         
-            <div class="form-fields-stack">
-                {% for field in form %}
-                    <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
-                        <label for="{{ field.id_for_label }}" class="field-label">
-                            {{ field.label }}
-                            {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
-                        </label>
-                        
-                        <div class="field-widget-container">
-                            {{ field }}
-                        </div>
-                        
-                        {% if field.help_text %}
-                            <div class="field-help-text">{{ field.help_text|safe }}</div>
-                        {% endif %}
-                      
-                        {% for error in field.errors %}
-                            <div class="field-error-message">
-                                {{ error }}
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endfor %}
-            </div>
+<div class="form-page-container" style="max-width: 1000px; margin: 0 auto; padding: 2rem 1rem;">
+    <form method="POST" enctype="multipart/form-data" novalidate id="product-form">
+        {% csrf_token %}
 
-            <hr class="form-divider">
-            <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
-                <h3 class="form-title">Product Variants</h3>
-                <p class="form-subtitle">Manage combinations, SKUs, and stock rules.</p>
-            </div>
-            
-            {{ variants.management_form }}
-            <div class="form-fields-stack">
-                {% for variant_form in variants %}
-                    <div class="variant-form-row" style="background: #f9fafb; padding: 1.5rem; border-radius: 6px; border: 1px solid #e5e7eb;">
-                        {{ variant_form.id }}
-                        
-                        <div class="form-fields-stack" style="gap: 1rem;">
-                            {% for field in variant_form.visible_fields %}
-                                <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
-                                    <label for="{{ field.id_for_label }}" class="field-label">
-                                        {{ field.label }}
-                                        {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
-                                    </label>
-                                    <div class="field-widget-container">
-                                        {{ field }}
-                                    </div>
-                                    {% if field.help_text %}
-                                        <div class="field-help-text">{{ field.help_text|safe }}</div>
-                                    {% endif %}
-                                    {% for error in field.errors %}
-                                        <div class="field-error-message">{{ error }}</div>
-                                    {% endfor %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                        
-                        {% if variant_form.errors and not variant_form.visible_fields.errors %}
-                            <div class="field-error-message" style="margin-top: 0.5rem;">
-                                {{ variant_form.non_field_errors }}
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+        <!-- General Product Information -->
+        <div class="form-section">
+            <h3 class="form-section-title">{% if object %}Update Product{% else %}General Information{% endif %}</h3>
+            <p class="form-section-sub">Base details about the product line.</p>
 
-            <hr class="form-divider">
-
-<div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
-    <h3 class="form-title">Product Images</h3>
-    <p class="form-subtitle">Upload media displays and set your baseline primary asset (Max 4 images).</p>
-</div>
-
-{% if images.non_form_errors %}
-    <div class="formset-global-error" style="color: #dc3545; background: #fdf2f2; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid #fde8e8; font-weight: 500;">
-        {{ images.non_form_errors }}
-    </div>
-{% endif %}
-{{ images.management_form }}
-<div class="form-fields-stack">
-    {% for image_form in images %}
-        <div class="image-form-row" style="background: #f9fafb; padding: 1.5rem; border-radius: 6px; border: 1px solid #e5e7eb; margin-bottom: 1rem; position: relative;">
-            {{ image_form.id }}
-            
-            <div class="form-fields-stack" style="gap: 1rem;">
-                {% for field in image_form.visible_fields %}
-                    {% if field.name == 'DELETE' %}
-                        <div class="form-delete-container" style="margin-top: 0.5rem; background: #fef2f2; padding: 0.5rem 1rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.5rem; color: #991b1b;">
-                            {{ field }}
-                            <label for="{{ field.id_for_label }}" style="font-size: 0.875rem; font-weight: 500; cursor: pointer;">
-                                Remove this image asset
-                            </label>
-                        </div>
-                    {% else %}
-                        <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
-                            <label for="{{ field.id_for_label }}" class="field-label">
-                                {{ field.label }}
-                                {% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
-                            </label>
-                            
-                            {% if field.name == 'image' and image_form.instance.image %}
-                                <div class="current-image-preview" style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 1rem;">
-                                    <img src="{{ image_form.instance.image.url }}" style="width: 65px; height: 65px; object-fit: cover; border-radius: 4px; border: 1px solid #d1d5db;" alt="Saved asset">
-                                    <span style="font-size: 0.825rem; color: #4b5563;">
-                                        Current asset saved. Leave file input empty to preserve it, or select a new file to replace it.
-                                    </span>
-                                </div>
-                            {% endif %}
-
-                            <div class="field-widget-container">
-                                {{ field }}
-                            </div>
-                            
-                            {% if field.help_text %}
-                                <div class="field-help-text">{{ field.help_text|safe }}</div>
-                            {% endif %}
-                            
-                            {% for error in field.errors %}
-                                <div class="field-error-message" style="color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem;">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-
-            {% if image_form.non_field_errors %}
-                <div class="field-error-message" style="margin-top: 0.5rem; color: #dc3545; font-weight: 500;">
-                    {{ image_form.non_field_errors }}
+            <div class="grid-2" style="margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label>Product Name *</label>
+                    {{ form.name }}
+                    {{ form.name.errors }}
                 </div>
-            {% endif %}
-        </div>
-    {% endfor %}
-</div>
+                <div class="form-group">
+                    <label>Base SKU Prefix *</label>
+                    {{ form.sku_prefix }}
+                    {{ form.sku_prefix.errors }}
+                </div>
+            </div>
 
-            <hr class="form-divider">
-            <div class="form-actions">
-                <a href="{% url 'product-list' %}" class="btn-link cancel-btn">Cancel</a>
-                <button type="submit" class="btn btn-submit">
-                    {% if object %}Save Adjustments{% else %}Save{% endif %}
+            <div class="grid-3" style="margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label>Category *</label>
+                    {{ form.category }}
+                    {{ form.category.errors }}
+                </div>
+                <div class="form-group">
+                    <label>Brand</label>
+                    {{ form.brand }}
+                    {{ form.brand.errors }}
+                </div>
+                <div class="form-group">
+                    <label>Unit of Measure *</label>
+                    {{ form.unit_of_measure }}
+                    {{ form.unit_of_measure.errors }}
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label>Description</label>
+                {{ form.description }}
+            </div>
+
+            <div style="display: flex; gap: 2rem; align-items: center; background: #f9fafb; padding: 0.75rem 1rem; border-radius: 6px;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    {{ form.has_variations }}
+                    <span style="font-weight: 600;">This product has multiple variants (e.g. Sizes, Colors)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    {{ form.is_active }}
+                    <span>Active in POS</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Single Product Stock (Hides when Has Variations is checked) -->
+        {% if not object %}
+        <div class="form-section" id="single-stock-section">
+            <h3 class="form-section-title">Initial Inventory</h3>
+            <p class="form-section-sub">Opening stock quantity at Main Branch for single items.</p>
+            <div class="form-group" style="max-width: 250px;">
+                <label>Starting Quantity</label>
+                {{ form.initial_stock }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Variant Table Section -->
+        <div class="form-section" id="variants-section">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 class="form-section-title">Product Variants</h3>
+                    <p class="form-section-sub">Define SKUs, pricing, and variant options.</p>
+                </div>
+                <button type="button" id="add-variant-btn" class="btn-action btn-secondary" style="display: none;">
+                    + Add Another Variant
                 </button>
             </div>
-        </form>
-    </div>
+
+            {{ variants.management_form }}
+            <table class="variant-table">
+                <thead>
+                    <tr>
+                        <th style="width: 22%;">SKU *</th>
+                        <th style="width: 15%;">Size</th>
+                        <th style="width: 15%;">Color</th>
+                        <th style="width: 15%;">Cost Price *</th>
+                        <th style="width: 15%;">Retail Price *</th>
+                        <th style="width: 10%;">Min Stock</th>
+                        <th style="width: 8%;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="variant-tbody">
+                    {% for variant_form in variants %}
+                        <tr class="variant-row">
+                            {{ variant_form.id }}
+                            <td>
+                                {{ variant_form.sku }}
+                                {{ variant_form.sku.errors }}
+                            </td>
+                            <td>{{ variant_form.size }}</td>
+                            <td>{{ variant_form.color }}</td>
+                            <td>{{ variant_form.cost_price }}</td>
+                            <td>{{ variant_form.retail_price }}</td>
+                            <td>{{ variant_form.low_stock_threshold }}</td>
+                            <td style="text-align: center;">
+                                {% if variants.can_delete %}
+                                    <div style="display:none;">{{ variant_form.DELETE }}</div>
+                                {% endif %}
+                                <button type="button" class="btn-danger remove-variant-btn">Delete</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Hidden Template used by JS to clone new rows -->
+        <table class="empty-form-template">
+            <tr class="variant-row empty-form-row">
+                {{ variants.empty_form.id }}
+                <td>{{ variants.empty_form.sku }}</td>
+                <td>{{ variants.empty_form.size }}</td>
+                <td>{{ variants.empty_form.color }}</td>
+                <td>{{ variants.empty_form.cost_price }}</td>
+                <td>{{ variants.empty_form.retail_price }}</td>
+                <td>{{ variants.empty_form.low_stock_threshold }}</td>
+                <td style="text-align: center;">
+                    <div style="display:none;">{{ variants.empty_form.DELETE }}</div>
+                    <button type="button" class="btn-danger remove-variant-btn">Delete</button>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Product Images -->
+        <div class="form-section">
+            <h3 class="form-section-title">Product Media</h3>
+            <p class="form-section-sub">Upload primary and variant photos.</p>
+            
+            {{ images.management_form }}
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                {% for image_form in images %}
+                    <div style="background: #f9fafb; padding: 1rem; border-radius: 6px; border: 1px solid #e5e7eb;">
+                        {{ image_form.id }}
+                        {% if image_form.instance.image %}
+                            <img src="{{ image_form.instance.image.url }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;" alt="preview">
+                        {% endif %}
+                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                            <label>Image File</label>
+                            {{ image_form.image }}
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Link Variant</label>
+                                {{ image_form.variant }}
+                            </div>
+                            <div class="form-group" style="justify-content: flex-end;">
+                                <label style="display: flex; align-items: center; gap: 0.35rem;">
+                                    {{ image_form.is_primary }} Primary
+                                </label>
+                            </div>
+                        </div>
+                        {% if images.can_delete and image_form.instance.pk %}
+                            <div style="margin-top: 0.5rem; color: #dc2626; font-size: 0.8rem;">
+                                {{ image_form.DELETE }} Remove Image
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+            <a href="{% url 'product-list' %}" class="btn-action btn-secondary">Cancel</a>
+            <button type="submit" class="btn-action btn-primary">Save Product</button>
+        </div>
+    </form>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const skuPrefixInput = document.querySelector('input[name="sku_prefix"]');
+        const hasVariationsCheckbox = document.querySelector('#toggle-variations');
+        const singleStockSection = document.querySelector('#single-stock-section');
+        const addVariantBtn = document.querySelector('#add-variant-btn');
+        const variantTbody = document.querySelector('#variant-tbody');
+        const totalFormsInput = document.querySelector('#id_variants-TOTAL_FORMS');
+        const emptyRowTemplate = document.querySelector('.empty-form-row');
+
+        // 1. Toggle UI view based on "Has Variations" checkbox
+        function toggleVariationView() {
+            const isMultiVariant = hasVariationsCheckbox.checked;
+
+            if (singleStockSection) {
+                singleStockSection.style.display = isMultiVariant ? 'none' : 'block';
+            }
+
+            // Show/Hide "+ Add Another Variant" button
+            addVariantBtn.style.display = isMultiVariant ? 'inline-block' : 'none';
+
+            // Hide/Show secondary rows if user switches back to single-variant mode
+            const rows = variantTbody.querySelectorAll('.variant-row');
+            rows.forEach((row, index) => {
+                if (index > 0 && !isMultiVariant) {
+                    row.style.display = 'none';
+                    const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+                    if (deleteCheckbox) deleteCheckbox.checked = true;
+                } else {
+                    row.style.display = '';
+                    const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+                    if (deleteCheckbox) deleteCheckbox.checked = false;
+                }
+            });
+        }
+
+        // 2. Add New Dynamic Variant Row
+        addVariantBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalFormsInput.value, 10);
+            
+            // Clone empty form template
+            const newRow = emptyRowTemplate.cloneNode(true);
+            newRow.classList.remove('empty-form-row');
+            
+            // Replace __prefix__ in template attributes with the current form count index
+            newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formCount);
+            
+            // Generate auto-suggested SKU for new row
+            const prefixVal = skuPrefixInput ? skuPrefixInput.value.toUpperCase() : 'ITEM';
+            const skuInput = newRow.querySelector('input[name$="-sku"]');
+            if (skuInput) {
+                skuInput.value = `${prefixVal}-VAR-${formCount + 1}`;
+            }
+
+            // Append row and update Django formset management counter
+            variantTbody.appendChild(newRow);
+            totalFormsInput.value = formCount + 1;
+        });
+
+        // 3. Delete/Remove Variant Row
+        variantTbody.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-variant-btn')) {
+                const row = e.target.closest('.variant-row');
+                const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+
+                if (deleteCheckbox) {
+                    // Existing model object: mark DELETE checkbox so Django deletes it on save
+                    deleteCheckbox.checked = true;
+                    row.style.display = 'none';
+                } else {
+                    // Newly added row: simply remove from DOM
+                    row.remove();
+                }
+            }
+        });
+
+        // 4. Auto-fill SKU on first variant row when typing SKU Prefix
+        if (skuPrefixInput) {
+            skuPrefixInput.addEventListener('input', function() {
+                const firstSkuInput = variantTbody.querySelector('.variant-row input[name$="-sku"]');
+                if (firstSkuInput && (!firstSkuInput.value || firstSkuInput.value.includes('-DEFAULT'))) {
+                    firstSkuInput.value = skuPrefixInput.value ? `${skuPrefixInput.value.toUpperCase()}-DEFAULT` : '';
+                }
+            });
+        }
+
+        // Initialize listener
+        if (hasVariationsCheckbox) {
+            hasVariationsCheckbox.addEventListener('change', toggleVariationView);
+            toggleVariationView();
+        }
+    });
+</script>
 {% endblock %}
