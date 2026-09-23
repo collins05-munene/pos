@@ -32,7 +32,13 @@ class CategoryCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
         category = form.save(commit=False)
         category.slug = slugify(category.name)
         category.save()
+        
+        self.object = category
+        
+   
         return super().form_valid(form)
+
+   
 
 class CategoryUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
     model = Category

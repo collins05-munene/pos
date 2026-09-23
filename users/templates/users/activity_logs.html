@@ -59,6 +59,13 @@
             border-bottom: 1px solid #f3f4f6;
             color: #374151;
         }
+        tbody tr.clickable-row {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        tbody tr.clickable-row:hover {
+            background-color: #f1f1f1 !important;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -82,7 +89,7 @@
                 </thead>
                 <tbody>
                     {% for log in logs %}
-                        <tr>
+                        <tr class="clickable-row" data-href="{% url 'activity-log-detail' log.pk %}">
                             <td>{{log.timestamp|date:"Y-m-d H:i:s"}}</td>
                             <td><strong>{{log.user.username|default:"System / Anonymous"}}</strong></td>
                             <td>
@@ -123,4 +130,17 @@
             </div>
         {% endif %}
     </div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const rows = document.querySelectorAll(".clickable-row");
+    rows.forEach(row => {
+      row.addEventListener("click", function() {
+        window.location.href = this.dataset.href;
+      });
+    });
+  });
+</script>
 {% endblock %}

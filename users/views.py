@@ -3,7 +3,7 @@ from django.views import View
 from django.views.generic import FormView, ListView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib.auth import login, logout, authenticate
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 
 from .models import ActivityLog, User
@@ -12,6 +12,9 @@ from .utils import log_action, AuditAction
 from .dashboard import build_dashboard_context
 
 # Create your views here.
+def activity_log_detail(request, pk):
+    log = get_object_or_404(ActivityLog, pk=pk)
+    return render(request, 'users/audit_detail_page.html', {'log': log})
 
 class StandardLoginView(FormView):
     template_name = 'users/login.html'
