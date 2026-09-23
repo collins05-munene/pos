@@ -33,9 +33,9 @@ class StockLevel(models.Model):
 
 class StockAdjustment(models.Model):
     ADJUSTMENT_TYPES = (
-        ('COUNT', 'Stcok Count / Audit'),
+        ('COUNT', 'Stock Count / Audit'),
         ('DAMAGE', 'Damaged Items Written Off'),
-        ('THEFT', 'Stolen Missing'),
+        ('THEFT', 'Stolen / Missing'),
         ('EXPIRY', 'Expired Items'),
         ('CORRECTION', 'Data Entry Correction')
     )

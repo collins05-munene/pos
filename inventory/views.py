@@ -123,32 +123,58 @@ class ReceivePurchaseOrderView(LoginRequiredMixin, View):
         messages.success(request, f"Stock updated for Purchase Order {po.po_number}.")
         return redirect('purchase_order-detail', po=po.pk)
     
+
 class StockAdjustmentCreateView(LoginRequiredMixin, CreateView):
     model = StockAdjustment
     form_class = StockAdjustmentForm
     template_name = 'inventory/adjustment_form.html'
     success_url = reverse_lazy('stock-level-list')
 
+    SUBTRACTION_TYPES = {'DAMAGE', 'THEFT', 'EXPIRY'}
+
+    def get_initial(self):
+        initial = super().get_initial()
+        variant_id = self.request.GET.get('variant')
+        branch_id = self.request.GET.get('branch')
+        
+        if variant_id:
+            initial['variant'] = variant_id
+        if branch_id:
+            initial['branch'] = branch_id
+            
+        return initial
+
     def form_valid(self, form):
         with transaction.atomic():
             adjustment = form.save(commit=False)
             adjustment.user = self.request.user
 
-            stock_level, _ =StockLevel.objects.select_for_update().get_or_create(
+            # 1. Normalize quantity for loss/waste adjustment types
+            adj_type = getattr(adjustment, 'adjustment_type', getattr(adjustment, 'reason', None))
+            
+            if adj_type in self.SUBTRACTION_TYPES:
+                adjustment.quantity_changed = -abs(adjustment.quantity_changed)
+
+            # 2. Get or initialize stock level record
+            stock_level, _ = StockLevel.objects.select_for_update().get_or_create(
                 branch=adjustment.branch,
                 variant=adjustment.variant,
                 defaults={'quantity': 0}
             )
+
+            # 3. Calculate target stock balance
             new_quantity = stock_level.quantity + adjustment.quantity_changed
 
+            # 4. Prevent negative inventory balance
             if new_quantity < 0:
                 form.add_error(
                     'quantity_changed',
-                    f'This would take stock negative (currently {stock_level.quantity})'
+                    f'This adjustment would reduce stock below zero (current level: {stock_level.quantity}).'
                 )
                 return self.form_invalid(form)
-            
+
             stock_level.quantity = new_quantity
             stock_level.save(update_fields=['quantity'])
             adjustment.save()
+
         return super().form_valid(form)
