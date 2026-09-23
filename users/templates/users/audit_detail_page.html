@@ -1,0 +1,92 @@
+{% extends 'users/base.html' %}
+
+{% block title %} Activity Log #{{ log.id }} - Details {% endblock %}
+
+{% block extra_head %}
+    <style>
+        .log-container {
+            margin-top: 20px;
+        }
+        .log-header {
+            margin-bottom: 20px;
+        }
+        .log-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .meta-item {
+            background: #fff;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .meta-item strong {
+            display: block;
+            color: #555;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .details-box {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.95em;
+            color: #333;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <a href="{% url 'activity-logs' %}" class="back-link">&larr; Back to Activity Logs</a>
+
+    <div class="log-container">
+        <div class="log-header">
+            <h1>Action: {{ log.action }}</h1>
+            <p style="color: #666;">Logged on {{ log.timestamp|date:"Y-m-d H:i:s" }}</p>
+        </div>
+
+        <div class="log-meta">
+            <div class="meta-item">
+                <strong>User</strong>
+                {% if log.user %}
+                    {{ log.user.username }}
+                {% else %}
+                    <em>System / Anonymous</em>
+                {% endif %}
+            </div>
+            <div class="meta-item">
+                <strong>User Role</strong>
+                {% if log.user %}
+                    {{ log.user.get_role_display|default:"-" }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+            <div class="meta-item">
+                <strong>IP Address</strong>
+                {{ log.ip_address|default:"localhost" }}
+            </div>
+            <div class="meta-item">
+                <strong>Log ID</strong>
+                #{{ log.id }}
+            </div>
+        </div>
+
+        <h3>Additional Details</h3>
+        <div class="details-box">
+            {% if log.details %}
+                {{ log.details }}
+            {% else %}
+                <i>No extra details recorded for this activity.</i>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
