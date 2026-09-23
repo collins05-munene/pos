@@ -20,17 +20,18 @@
                         <th scope="col">Branch</th>
                         <th scope="col">Quantity</th>
                         <th scope="col">Status</th>
+                        <th scope="col">Action</th>  
                     </tr>
                 </thead>
                 <tbody>
                     {% for level in stock_levels %}
                         <tr>
-                            <td class="brand-name">{{level.variant.product.name}}</td>
+                            <td class="brand-name">{{ level.variant.product.name }}</td>
                             <td class="brand-name">
-                                <code style="font-family: monospace;">{{level.variant.sku}}</code>
+                                <code style="font-family: monospace;">{{ level.variant.sku }}</code>
                             </td>
-                            <td class="brand-name">{{level.branch.name}}</td>
-                            <td class="brand-name">{{level.quantity}}</td>
+                            <td class="brand-name">{{ level.branch.name }}</td>
+                            <td class="brand-name">{{ level.quantity }}</td>
                             <td class="brand-name">
                                 {% if level.quantity <= 0 %}
                                     <span style="color: #991b1b; font-weight: 600;">Out of stock</span>
@@ -40,10 +41,16 @@
                                     <span style="color: #166534; font-weight: 600;">In Stock</span>
                                 {% endif %}
                             </td>
+                            <td class="brand-name">
+                                <a href="{% url 'stock-adjust' %}?variant={{ level.variant.id }}&branch={{ level.branch.id }}" 
+                                class="action-link edit-link">
+                                    Adjust
+                                </a>
+                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="5" class="empty-state-row">
+                            <td colspan="6" class="empty-state-row">  
                                 <div class="empty-state">
                                     <h3>No Stock Records Yet.</h3>
                                     <p>Stock levels are created automatically when purchase orders are received, or manually via adjustments.</p>

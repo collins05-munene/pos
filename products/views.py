@@ -97,7 +97,7 @@ class ProductListView(LoginRequiredMixin, ListView):
     template_name = 'products/product_list.html'
     context_object_name = 'products'
     paginate_by = 15
-    queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure').prefetch_related('images')
+    queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure')
     
 class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product
@@ -260,4 +260,4 @@ class ProductDetailView(AdminRequiredMixin, DeleteView):
     context_object_name = 'product'
 
     def get_queryset(self):
-        return super().get_queryset().prefetch_related('variants', 'images')
+        return super().get_queryset().prefetch_related('variants')
