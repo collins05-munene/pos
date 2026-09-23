@@ -55,20 +55,6 @@
         
         </div>
 
-        {% if product.images.all %}
-            <h3>Product Images</h3>
-            <div class="image-gallery">
-                {% for img in product.images.all %}
-                    <div class="image-card">
-                        {% if img.is_primary %}
-                            <span class="badge">Primary</span>
-                        {% endif %}
-                        <img src="{{ img.image.url }}" alt="{{ product.name }}">
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-
         <h3>Available Variants</h3>
         <table>
             <thead>
@@ -88,8 +74,8 @@
                         <td><strong>{{ variant.sku }}</strong></td>
                         <td>{{ variant.size|default:"-" }}</td>
                         <td>{{ variant.color|default:"-" }}</td>
-                        <td>${{ variant.cost_price }}</td>
-                        <td>${{ variant.retail_price }}</td>
+                        <td>kshs {{ variant.cost_price }}</td>
+                        <td>kshs {{ variant.retail_price }}</td>
                         <td>{{ variant.low_stock_threshold }} units</td>
                         <td>
                             {% if variant.is_active %}

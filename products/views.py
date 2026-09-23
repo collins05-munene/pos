@@ -97,7 +97,7 @@ class ProductListView(LoginRequiredMixin, ListView):
     template_name = 'products/product_list.html'
     context_object_name = 'products'
     paginate_by = 15
-    queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure')
+    queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
     
 class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product

@@ -2,6 +2,7 @@
 from django import forms
 
 from .models import Category, Brand, Product,UnitOfMeasure, ProductVariant
+from supplier.models import Supplier
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -31,6 +32,7 @@ class UnitOfMeasureForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Kilograms'}),
             'short_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. kg'})
         }
+
 class ProductForm(forms.ModelForm):
     initial_stock = forms.IntegerField(
         required=False,
@@ -42,17 +44,26 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure', 'description', 'has_variations', 'is_active']
+        fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure', 'description', 'has_variations', 'is_active', 'supplier']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Wireless Mouse'}),
             'sku_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. WM-100'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'brand': forms.Select(attrs={'class': 'form-select'}),
+            'supplier': forms.Select(attrs={'class': 'form-select',}),
             'unit_of_measure': forms.Select(attrs={'class': 'form-select'}),
             'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
             'has_variations': forms.CheckboxInput(attrs={'class': 'form-checkbox', 'id': 'toggle-variations'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['supplier'].queryset = Supplier.objects.filter(
+            is_active=True
+        )
+        self.fields['supplier'].required = False
+        self.fields['supplier'].empty_label = "Select Supplier (Optional)"
 
 
 class ProductVariantForm(forms.ModelForm):
