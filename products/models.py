@@ -39,6 +39,7 @@ class Product(models.Model):
     sku_prefix = models.CharField(max_length=50, unique=True, help_text="Base SKU prefix for this product line")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    supplier = models.ForeignKey('supplier.Supplier', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     unit_of_measure = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT,  verbose_name="Unit of Measure")
     description = models.TextField(blank=True)
     has_variations = models.BooleanField(default=False)

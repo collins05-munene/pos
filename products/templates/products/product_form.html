@@ -45,16 +45,21 @@
                 </div>
             </div>
 
-            <div class="grid-3" style="margin-bottom: 1rem;">
+            <div class="grid-2" style="margin-bottom: 1rem;">
                 <div class="form-group">
                     <label>Category *</label>
                     {{ form.category }}
                     {{ form.category.errors }}
                 </div>
                 <div class="form-group">
-                    <label>Brand</label>
+                    <label>Brand *</label>
                     {{ form.brand }}
                     {{ form.brand.errors }}
+                </div>
+                <div class="form-group">
+                    <label>Supplier</label>
+                    {{ form.supplier }}
+                    {{ form.supplier.errors }}
                 </div>
                 <div class="form-group">
                     <label>Unit of Measure *</label>

@@ -31,7 +31,7 @@ class StandardLoginView(FormView):
 class CashierPINLoginView(FormView):
     template_name = 'users/pin_login.html'
     form_class = CashierPinLoginForm
-    success_url = reverse_lazy('cashier-dashboard')
+    success_url = reverse_lazy('pos_terminal')
 
     def form_valid(self, form):
         username = form.cleaned_data.get('username')
