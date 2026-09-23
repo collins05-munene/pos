@@ -1,21 +1,18 @@
 from django.shortcuts import render
 from django.views import View
-from django.views.generic import FormView, ListView, TemplateView
+from django.views.generic import FormView, ListView, TemplateView, DetailView
 from django.urls import reverse_lazy
 from django.contrib.auth import login, logout, authenticate
 from django.shortcuts import redirect, render, get_object_or_404
-from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
+from django.contrib.auth.mixins import UserPassesTestMixin
 
 from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
 from .utils import log_action, AuditAction
 from .dashboard import build_dashboard_context
+from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 
 # Create your views here.
-def activity_log_detail(request, pk):
-    log = get_object_or_404(ActivityLog, pk=pk)
-    return render(request, 'users/audit_detail_page.html', {'log': log})
-
 class StandardLoginView(FormView):
     template_name = 'users/login.html'
     form_class = StandardLoginForm
@@ -59,22 +56,17 @@ class LogoutView(View):
         return redirect('pin_login')
     
 
-class AdminRequiredMixin(UserPassesTestMixin):
-    def test_func(self):
-        return self.request.user.is_authenticated and self.request.user.is_admin
-    
-
-class ManagerRequiredMixin(UserPassesTestMixin):
-    def test_func(self):
-        return self.request.user.is_authenticated and self.request.user.is_manager
-    
-
 class ActivityLogListView(AdminRequiredMixin, ListView):
     model = ActivityLog
     template_name = 'users/activity_logs.html'
     context_object_name = 'logs'
-    paginate_by = 50
+    paginate_by = 10
 
+
+class ActivityLogDetailView(AdminRequiredMixin, DetailView):
+    model = ActivityLog
+    template_name = 'users/audit_detail_page.html'
+    context_object_name = 'log'
 
 class AdminDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'users/admin-dashboard.html'
@@ -85,6 +77,6 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
         return context
 
 
-class CashierDashboardView(ListView):
+class CashierDashboardView(CashierRequiredMixin, ListView):
     model = User
     template_name = 'users/cashier_dashboard.html'

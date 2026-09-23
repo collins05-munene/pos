@@ -9,62 +9,61 @@ from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.contrib import messages
 from decimal import Decimal
+from django.views import View
 import logging
+
 from products.models import ProductVariant, Category
 from .cart import POSCart
 from .models import Order, OrderItem
 from .exceptions import InsufficientStockError
+from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 
 
 
 logger = logging.getLogger(__name__)
-
-@require_GET
-def pos_terminal(request):
-    q = request.GET.get('q', '').strip().lower()
-    category_id = request.GET.get('category', '').strip()
-
-    categories = Category.objects.filter(parent=None)
-    products = ProductVariant.objects.select_related(
-        'product', 'product__unit_of_measure'
-    ).filter(is_active=True, product__is_active=True)
-
-    active_category = None
-    if category_id:
-        try:
+class PosTerminalView(CashierRequiredMixin, View): 
+    
+    def get(self, request, *args, **kwargs):
+        q = request.GET.get('q', '').strip().lower()
+        category_id = request.GET.get('category', '').strip()
+        
+        categories = Category.objects.filter(parent=None)
+        products = ProductVariant.objects.select_related(
+            'product', 'product__unit_of_measure'
+        ).filter(is_active=True, product__is_active=True)
+        
+        active_category = None
+        if category_id:
+            try:
+                products = products.filter(
+                    Q(product__category_id=category_id) | Q(product__category__parent_id=category_id)
+                )
+                active_category = int(category_id)
+            except (ValueError, TypeError):
+                pass
+                
+        if q:
             products = products.filter(
-                Q(product__category_id=category_id) |
-                Q(product__category__parent_id=category_id)
+                Q(sku__icontains=q) | Q(product__name__icontains=q)
             )
-            active_category = int(category_id)
-        except (ValueError, TypeError):
-            pass
-
-    if q:
-        products = products.filter(
-            Q(sku__icontains=q) |
-            Q(product__name__icontains=q)
-        )
-    else:
-        products = products[:24]
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string(
-            'sales/product_list.html',
-            {'products': products},
-            request=request,
-        )
-        return JsonResponse({'ok': True, 'products_html': html})
-
-    cart = POSCart(request)
-    context = {
-        'categories': categories,
-        'products': products,
-        'cart': cart,
-        'search_query': q,
-        'active_category': active_category,
-    }
-    return render(request, 'sales/terminal.html', context)
+        else:
+            products = products[:24]
+            
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            html = render_to_string(
+                'sales/product_list.html', {'products': products}, request=request
+            )
+            return JsonResponse({'ok': True, 'products_html': html})
+            
+        cart = POSCart(request)
+        context = {
+            'categories': categories,
+            'products': products,
+            'cart': cart,
+            'search_query': q,
+            'active_category': active_category,
+        }
+        return render(request, 'sales/terminal.html', context)
 
 def _cart_json_response(request):
     cart = POSCart(request)
@@ -165,7 +164,7 @@ def cart_remove(request):
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 
-class SalesDashboardView(TemplateView):
+class SalesDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'sales/dashboard.html'
 
     def get_context_data(self, **kwargs):
@@ -209,7 +208,7 @@ class SalesDashboardView(TemplateView):
 
         return context
 
-class OrderDetailView(DetailView):
+class OrderDetailView(AdminRequiredMixin, DetailView):
     model = Order
     template_name = "sales/order_detail.html"
     context_object_name = "order"

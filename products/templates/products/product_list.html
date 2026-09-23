@@ -49,10 +49,14 @@
                     </td>
                     
                     <td class="brand-actions">
-                        <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
-                        <a href="{% url 'product-delete' product.id %}" class="action-link delete-link">Delete</a>
-                        <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
-                        
+                        {% if user.role == 'ADMIN' %}
+                            <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
+                            <a href="{% url 'product-delete' product.id %}" class="action-link delete-link">Delete</a>
+                            <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
+                        {% elif user.role == 'CASHIER' %}
+                            <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
+                            <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}

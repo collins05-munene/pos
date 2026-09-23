@@ -1,4 +1,6 @@
 from django.views.generic import CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import AccessMixin
+from django.core.exceptions import PermissionDenied
 
 from .utils import log_action, AuditAction
 
@@ -71,3 +73,39 @@ class AuditLogMixin:
         )
 
         return response
+
+
+class AdminRequiredMixin(AccessMixin):
+    """
+    CBV mixin that verifies the current user is authenticated AND has the 'ADMIN' role.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        # Check role attribute or method (supports user.role == 'ADMIN' or user.is_admin)
+        user_role = getattr(request.user, 'role', None)
+        is_admin_flag = getattr(request.user, 'is_admin', False)
+
+        if user_role == 'ADMIN' or is_admin_flag or request.user.is_superuser:
+            return super().dispatch(request, *args, **kwargs)
+
+        raise PermissionDenied("You do not have administrative permission to access this page.")
+
+
+class CashierRequiredMixin(AccessMixin):
+    """
+    CBV mixin that verifies the current user is authenticated AND has either 'CASHIER' or 'ADMIN' role.
+    (Admins are typically permitted to access cashier functions as well).
+    """
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        user_role = getattr(request.user, 'role', None)
+
+        # Allow CASHIERs or ADMINs / Superusers
+        if user_role in ['CASHIER', 'ADMIN'] or request.user.is_superuser:
+            return super().dispatch(request, *args, **kwargs)
+
+        raise PermissionDenied("You do not have cashier permissions to access this page.")
