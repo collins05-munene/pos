@@ -6,27 +6,27 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import ListView, CreateView, DetailView
 
-from users.views import LoginRequiredMixin, AdminRequiredMixin
+from users.mixins import  AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 
 from .models import PurchaseOrder, PurchaseOrderItem, StockLevel, StockAdjustment
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, StockAdjustmentForm
 
 # Create your views here.
-class StockLevelListView(LoginRequiredMixin, ListView):
+class StockLevelListView(CashierRequiredMixin, ListView):
     model = StockLevel
     template_name = 'inventory/stocklevel_list.html'
     context_object_name = 'stock_levels'
     paginate_by = 25
     queryset = StockLevel.objects.select_related('branch', 'variant', 'variant__product')
 
-class PurchaseOrderListView(LoginRequiredMixin, ListView):
+class PurchaseOrderListView(AdminRequiredMixin, ListView):
     model = PurchaseOrder
     template_name = 'inventory/purchase_order_list.html'
     context_object_name = 'purchase_orders'
     paginate_by = 20
     queryset = PurchaseOrder.objects.select_related('supplier', 'branch')
 
-class PurchaseOrderCreateView(LoginRequiredMixin, CreateView):
+class PurchaseOrderCreateView(AdminRequiredMixin, CreateView):
     model = PurchaseOrder
     form_class = PurchaseOrderForm
     template_name = 'inventory/purchase_order_form.html'
@@ -54,7 +54,7 @@ class PurchaseOrderCreateView(LoginRequiredMixin, CreateView):
             else:
                 return self.form_invalid(form)
             
-class PurchaseOrderDetailView(LoginRequiredMixin, DetailView):
+class PurchaseOrderDetailView(AdminRequiredMixin, DetailView):
     model = PurchaseOrder
     template_name = 'inventory/purchase_order_detail.html'
     context_object_name = 'purchase_order'
@@ -63,7 +63,7 @@ class PurchaseOrderDetailView(LoginRequiredMixin, DetailView):
         return super().get_queryset().select_related('supplier', 'branch').prefetch_related('items__variant')
     
 
-class ReceivePurchaseOrderView(LoginRequiredMixin, View):
+class ReceivePurchaseOrderView(AdminRequiredMixin, View):
     def get(self, request, pk):
         po = get_object_or_404(
             PurchaseOrder.objects.prefetch_related('items__variant'), pk=pk
@@ -124,7 +124,7 @@ class ReceivePurchaseOrderView(LoginRequiredMixin, View):
         return redirect('purchase_order-detail', po=po.pk)
     
 
-class StockAdjustmentCreateView(LoginRequiredMixin, CreateView):
+class StockAdjustmentCreateView(CashierRequiredMixin, CreateView):
     model = StockAdjustment
     form_class = StockAdjustmentForm
     template_name = 'inventory/adjustment_form.html'

@@ -7,8 +7,8 @@ from django.db import transaction
 from django.utils.text import slugify
 from django.contrib import messages
 
-from users.views import AdminRequiredMixin, LoginRequiredMixin
-from users.mixins import AuditLogMixin
+
+from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from users.utils import log_action, AuditAction
 
 from .models import Category, Brand, UnitOfMeasure, Product
@@ -16,13 +16,13 @@ from inventory.models import Branch, StockLevel
 from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet
 
 # Create your views here.
-class CategoryListView(LoginRequiredMixin, ListView):
+class CategoryListView(CashierRequiredMixin, ListView):
     model = Category
     template_name = 'products/category_list.html'
     context_object_name = 'categories'
     paginate_by = 20
 
-class CategoryCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
+class CategoryCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = Category
     form_class = CategoryForm
     template_name = 'products/category_form.html'
@@ -40,7 +40,7 @@ class CategoryCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
 
    
 
-class CategoryUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
+class CategoryUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Category
     form_class = CategoryForm
     template_name = 'products/category_form.html'
@@ -51,19 +51,19 @@ class CategoryDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     template_name = 'products/category_confirm_delete.html'
     success_url = reverse_lazy('category-list')
 
-class BrandListView(LoginRequiredMixin, ListView):
+class BrandListView(CashierRequiredMixin, ListView):
     model = Brand
     template_name = 'products/brand_list.html'
     context_object_name = 'brands'
     paginate_by = 10
 
-class BrandCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
+class BrandCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = Brand
     template_name = 'products/brand_form.html'
     form_class = BrandForm
     success_url = reverse_lazy('brand-list')
 
-class BrandUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
+class BrandUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Brand
     template_name = 'products/brand_form.html'
     form_class = BrandForm
@@ -74,19 +74,19 @@ class BrandDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     template_name = 'products/brand_confirm_delete.html'
     success_url = reverse_lazy('brand-list')
 
-class UoMListView(LoginRequiredMixin, ListView):
+class UoMListView(CashierRequiredMixin, ListView):
     model = UnitOfMeasure
     context_object_name = 'uoms'
     template_name = 'products/uom_list.html'
     paginate_by = 5
 
-class UoMCreateView(AuditLogMixin, AdminRequiredMixin, CreateView):
+class UoMCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
     success_url = reverse_lazy('uom-list')
     
-class UoMUpdateView(AuditLogMixin, AdminRequiredMixin, UpdateView):
+class UoMUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
@@ -98,14 +98,14 @@ class UoMDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     success_url = reverse_lazy('uom-list')
 
 
-class ProductListView(LoginRequiredMixin, ListView):
+class ProductListView(CashierRequiredMixin, ListView):
     model = Product
     template_name = 'products/product_list.html'
     context_object_name = 'products'
     paginate_by = 15
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
     
-class ProductCreateView(LoginRequiredMixin, CreateView):
+class ProductCreateView(CashierRequiredMixin, CreateView):
     model = Product
     form_class = ProductForm
     template_name = 'products/product_form.html'
@@ -193,7 +193,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
             self.get_context_data(form=form, variants=variants)
         )
 
-class ProductUpdateView(LoginRequiredMixin, UpdateView):
+class ProductUpdateView(CashierRequiredMixin, UpdateView):
     model = Product
     form_class = ProductForm
     template_name = 'products/product_form.html'
@@ -254,13 +254,13 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
         )
 
         
-class ProductDeleteView(LoginRequiredMixin,DeleteView):
+class ProductDeleteView(AdminRequiredMixin, DeleteView):
     model = Product
     template_name = 'products/product_confirm_delete.html'
     success_url = reverse_lazy('product-list')
 
 
-class ProductDetailView(AdminRequiredMixin, DeleteView):
+class ProductDetailView(CashierRequiredMixin, DeleteView):
     model = Product
     template_name = 'products/product_detail.html'
     context_object_name = 'product'
