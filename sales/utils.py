@@ -7,7 +7,8 @@ from inventory.models import StockLevel, Branch
 from products.models import ProductVariant
 from .exceptions import InsufficientStockError
 
-def complete_pos_sale(cart, payment_method, cashier):
+
+def complete_pos_sale(cart, payment_method, cashier, cash_session=None):
     with transaction.atomic():
         global_branch, _ = Branch.objects.get_or_create(
             name="Main Branch",
@@ -16,11 +17,13 @@ def complete_pos_sale(cart, payment_method, cashier):
 
         invoice_id = f"INV-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         
+        # Link cash_session to the order if the field exists on the Order model
         order = Order.objects.create(
             invoice_number=invoice_id,
             branch=global_branch, 
             cashier=cashier,
-            payment_method=payment_method
+            payment_method=payment_method,
+            cash_session=cash_session  # <-- Added here
         )
         
         running_revenue = Decimal('0.00')
@@ -63,7 +66,6 @@ def complete_pos_sale(cart, payment_method, cashier):
             stock_record.quantity -= quantity_sold
             stock_record.save()
             
-            # Save line item values (OrderItem's custom save handles its internal metrics)
             order_item = OrderItem(
                 order=order,
                 variant=variant,
@@ -73,11 +75,9 @@ def complete_pos_sale(cart, payment_method, cashier):
             )
             order_item.save() 
             
-            # Aggregate totals accurately using local variables
             running_revenue += retail_price * quantity_sold
             running_cogs += cost_price * quantity_sold
             
-        # FIX 3: Commit structural totals safely back into the parent Order
         order.total_revenue = running_revenue
         order.total_cogs = running_cogs
         order.total_profit = running_revenue - running_cogs

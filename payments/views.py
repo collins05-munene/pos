@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.contrib import messages
 
 from sales.cart import POSCart
+from sales.models import CashRegisterSession
 from sales.exceptions import InsufficientStockError
 from .models import MpesaTransaction
 from sales.utils import complete_pos_sale
@@ -39,17 +40,24 @@ def process_payment(map_request):
     payment_method = map_request.POST.get('payment_method')
     total_amount = cart.get_total_price
 
+    session = CashRegisterSession.get_active_session(map_request.user)
+    if not session:
+        messages.error(map_request, "Cannot process payment: No active cash register session.")
+        return redirect('open_register')
+
     if payment_method == 'cash':
         complete_pos_sale(
             cart=cart,
             payment_method='CASH',
-            cashier=map_request.user
+            cashier=map_request.user,
+            cash_session=session  
         )
         map_request.session['pos_cart'] = {}
         map_request.session.modified = True
         cart.save()
         messages.success(map_request, f'Cash Sale Completed! Collected KSH {total_amount}')
         return redirect('pos_terminal')
+        
     elif payment_method == 'mpesa':
         return redirect('mpesa_prompt')
     

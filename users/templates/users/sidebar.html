@@ -1,3 +1,89 @@
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: #fff;
+        width: 100%;
+        max-width: 450px;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 10px;
+    }
+
+    .close-btn {
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #94a3b8;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+
+    .form-control:focus {
+        border-color: #2563eb;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .btn-action {
+        padding: 8px 16px;
+        background-color: #475569;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .btn-save {
+        padding: 10px 18px;
+        background-color: #16a34a;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .btn-cancel {
+        padding: 10px 18px;
+        background-color: #e2e8f0;
+        color: #475569;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+</style>
 {% if user.get_role_display == 'Admin' %}
 <aside class="sidebar" id="mainSidebar">
     <div class="logo">
@@ -10,6 +96,7 @@
         <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
+        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In / Out</a></li>
         <li class="menu-title">Inventory</li>
         <li><a href="{% url 'product-list' %}">Products</a></li>
         <li><a href="{% url 'brand-list' %}">Brands</a></li>
@@ -17,6 +104,9 @@
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
         <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
         <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
+        <li class="menu-title">Register</li>
+        <li><a href="{% url 'open_register' %}">Open Register</a></li>
+        <li><a href="{% url 'close_register' %}">Close Register</a></li>
         <li class="menu-title">Reports</li>
         <li><a href="{% url 'sales-dashboard' %}">Sales Report</a></li>
         <li class="menu-title">System</li>
@@ -37,14 +127,18 @@
     <ul class="menu">
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a href="{% url 'sales-dashboard' %}">Receipts</a></li>
-        <li><a href="#">Returns</a></li>
+        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In / Out</a></li>
+        <li><a href="{% url 'record-cash-out' %}">Cash Out</a></li>
         <li class="menu-title">Inventory</li>
         <li><a href="{% url 'product-list' %}">Products</a></li>
         <li><a href="{% url 'category-list' %}">Categories</a></li>
         <li><a href="{% url 'brand-list' %}">Brands</a></li>
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
         <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
+        <li class="menu-title">Register</li>
+        <li><a href="{% url 'open_register' %}">Open Register</a></li>
+        <li><a href="{% url 'close_register' %}">Close Register</a></li>
+        
     </ul>
     <div class="sidebar-footer">
         <strong>{{ user.first_name }} {{user.last_name}}</strong>
@@ -55,6 +149,44 @@
 {% endif %}
 
 <button id="sidebarToggle" aria-label="Toggle Sidebar" aria-expanded="true" aria-controls="mainSidebar">☰</button>
+
+
+<div id="cashModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Record Cash Transaction</h3>
+            <span class="close-btn" onclick="document.getElementById('cashModal').style.display='none'">&times;</span>
+        </div>
+        <form method="POST" action="{% url 'cash_transaction' %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="transaction_type">Type</label>
+                <select name="transaction_type" id="transaction_type" class="form-control" required>
+                    <option value="CASH_IN">Cash In (Float Addition)</option>
+                    <option value="CASH_OUT">Cash Out (Expense / Payout)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="amount">Amount</label>
+                <div class="input-group">
+                    <span class="input-prefix">KSH</span>
+                    <input type="number" step="0.01" min="0.01" name="amount" required placeholder="0.00">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="reason">Reason / Note</label>
+                <input type="text" name="reason" class="form-control" placeholder="e.g. Buying office milk / Adding Float" required>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('cashModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn-save">Save Transaction</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script>
 (function () {
