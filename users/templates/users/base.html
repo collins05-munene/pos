@@ -12,50 +12,194 @@
         <link rel="stylesheet" href="{% static 'css/form.css' %}">
         <link rel="stylesheet" href="{% static 'css/delete.css' %}">
         <link rel="stylesheet" href="{% static 'css/detail.css' %}">
+        
+        <style>
+            .session-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(2px);
+                z-index: 10000;
+                display: none;
+                align-items: center;
+                justify-content: center;
+            }
+            .session-modal {
+                background: #ffffff;
+                border-radius: 8px;
+                padding: 1.75rem;
+                max-width: 420px;
+                width: 90%;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                text-align: center;
+                font-family: system-ui, -apple-system, sans-serif;
+            }
+            .session-modal h3 {
+                margin-top: 0;
+                color: #1f2937;
+                font-size: 1.25rem;
+            }
+            .session-modal p {
+                color: #4b5563;
+                font-size: 0.95rem;
+                margin: 0.75rem 0 1.5rem;
+            }
+            .session-countdown {
+                font-weight: 700;
+                color: #dc2626;
+                font-size: 1.1rem;
+            }
+            .session-btn {
+                background-color: #2563eb;
+                color: #ffffff;
+                border: none;
+                padding: 0.625rem 1.25rem;
+                border-radius: 6px;
+                font-size: 0.95rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.2s;
+                width: 100%;
+            }
+            .session-btn:hover {
+                background-color: #1d4ed8;
+            }
+        </style>
+        
         {% block extra_head %} {% endblock %}
     </head>
     <body>
         <div class="app-container">
             {% include 'users/sidebar.html' %}
-            <div class="main-content"> {% include 'users/topbar.html' %} 
+            <div class="main-content"> 
+                {% include 'users/topbar.html' %} 
                 <div class="page-content">
                     {% block content %} {% endblock %}
                 </div>
             </div>
-            {% if messages %}
-            <div style="position: fixed; top: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem; max-width: 400px; width: 100%;">
-                {% for message in messages %}
-                <div class="django-toast-alert" 
-                    style="padding: 1rem 1.25rem; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; font-weight: 500; font-family: system-ui, sans-serif; font-size: 0.95rem;
-                        ">
-                    
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        {% if message.tags == 'success' %}<span>✅</span>{% elif message.tags == 'error' %}<span>⚠️</span>{% else %}<span>ℹ️</span>{% endif %}
-                        <span>{{ message }}</span>
-                    </div>
-                    
-                    <button type="button" onclick="this.parentElement.style.opacity='0'; setTimeout(() => this.parentElement.remove(), 300);" 
-                            style="background: none; border: none; color: inherit; font-size: 1.25rem; cursor: pointer; opacity: 0.6; padding: 0 0 0 1rem;">
-                        &times;
-                    </button>
+        </div>
+
+        {% if messages %}
+        <div style="position: fixed; top: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem; max-width: 400px; width: 100%;">
+            {% for message in messages %}
+            <div class="django-toast-alert" 
+                style="padding: 1rem 1.25rem; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; font-weight: 500; font-family: system-ui, sans-serif; font-size: 0.95rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    {% if message.tags == 'success' %}<span>✅</span>{% elif message.tags == 'error' %}<span>⚠️</span>{% else %}<span>ℹ️</span>{% endif %}
+                    <span>{{ message }}</span>
                 </div>
-                {% endfor %}
+                <button type="button" onclick="this.parentElement.style.opacity='0'; setTimeout(() => this.parentElement.remove(), 300);" 
+                        style="background: none; border: none; color: inherit; font-size: 1.25rem; cursor: pointer; opacity: 0.6; padding: 0 0 0 1rem;">
+                    &times;
+                </button>
             </div>
-       
-            <script>
-                document.addEventListener("DOMContentLoaded", function() {
-                    const toasts = document.querySelectorAll('.django-toast-alert');
-                    toasts.forEach(toast => {
-                        setTimeout(() => {
-                            toast.style.opacity = '0';
-                            toast.style.transform = 'translateY(-10px)';
-                            setTimeout(() => toast.remove(), 300);
-                        }, 4500);
-                    });
+            {% endfor %}
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const toasts = document.querySelectorAll('.django-toast-alert');
+                toasts.forEach(toast => {
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        toast.style.transform = 'translateY(-10px)';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 4500);
                 });
-            </script>
-            {% endif %}
-        
+            });
+        </script>
+        {% endif %}
+
+        <div id="sessionModalOverlay" class="session-modal-overlay">
+            <div class="session-modal">
+                <h3>Session Timeout Warning</h3>
+                <p>You have been inactive for a while. You will be logged out in <span id="sessionCountdown" class="session-countdown">30</span> seconds.</p>
+                <button id="stayLoggedInBtn" class="session-btn">I'm still here</button>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                const INACTIVITY_LIMIT = 29.5 * 60 * 1000; 
+                const WARNING_DURATION = 30; 
+                const LOGIN_URL = "{% url 'pin_login' %}"; 
+
+                let inactivityTimer = null;
+                let warningInterval = null;
+                let countdownSeconds = WARNING_DURATION;
+                let isWarningVisible = false;
+                let lastActivityTime = Date.now();
+
+                const modalOverlay = document.getElementById("sessionModalOverlay");
+                const countdownDisplay = document.getElementById("sessionCountdown");
+                const stayLoggedInBtn = document.getElementById("stayLoggedInBtn");
+
+                function handleUserActivity() {
+                    const now = Date.now();
+                    if (now - lastActivityTime < 1000) return;
+                    lastActivityTime = now;
+
+                    if (!isWarningVisible) {
+                        resetInactivityTimer();
+                    }
+                }
+
+                function resetInactivityTimer() {
+                    clearTimeout(inactivityTimer);
+                    inactivityTimer = setTimeout(showWarningModal, INACTIVITY_LIMIT);
+                }
+
+                function showWarningModal() {
+                    isWarningVisible = true;
+                    countdownSeconds = WARNING_DURATION;
+                    countdownDisplay.textContent = countdownSeconds;
+                    modalOverlay.style.display = "flex";
+
+                    warningInterval = setInterval(() => {
+                        countdownSeconds--;
+                        countdownDisplay.textContent = countdownSeconds;
+
+                        if (countdownSeconds <= 0) {
+                            clearInterval(warningInterval);
+                            performLogout();
+                        }
+                    }, 1000);
+                }
+
+                function dismissWarningModal() {
+                    modalOverlay.style.display = "none";
+                    clearInterval(warningInterval);
+                    isWarningVisible = false;
+                    resetInactivityTimer();
+                }
+
+                function performLogout() {
+                    localStorage.clear();
+                    sessionStorage.clear();
+
+                    document.cookie.split(";").forEach(cookie => {
+                        const name = cookie.split("=")[0].trim();
+                        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+                    });
+
+                    window.location.href = LOGIN_URL;
+                }
+
+                const activityEvents = ["mousemove", "keydown", "click", "touchstart", "scroll"];
+                activityEvents.forEach(eventType => {
+                    window.addEventListener(eventType, handleUserActivity, { passive: true });
+                });
+
+                stayLoggedInBtn.addEventListener("click", dismissWarningModal);
+
+                
+                resetInactivityTimer();
+            })();
+        </script>
+
         {% block extra_js %} {% endblock %}
     </body>
 </html>
