@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_GET
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery
 from django.views.generic import TemplateView, DetailView
 from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
@@ -22,6 +22,7 @@ from inventory.models import Branch
 
 logger = logging.getLogger(__name__)
 
+# Matches the <select name="reason"> options in sales/record_cash_out.html
 CASH_OUT_REASON_LABELS = {
     'BANK_DEPOSIT': 'Bank Deposit / Skim',
     'RENT': 'Rent Payment',
@@ -79,12 +80,17 @@ class OpenRegisterView(CashierRequiredMixin, View):
         ).order_by('-closed_at').first()
 
         if last_session is None:
+            # First-ever session for this branch: seed the pool once.
             raw_float = request.POST.get('opening_balance', '').strip()
             try:
                 opening_float = Decimal(raw_float) if raw_float != "" else Decimal('0.00')
             except (InvalidOperation, ValueError, TypeError):
                 opening_float = Decimal('0.00')
         else:
+            # Every later opening MUST carry the pool forward as-is —
+            # no manual entry accepted here, so the running balance can
+            # never be silently reset or drift depending on who opens
+            # the register.
             opening_float = CashRegisterSession.get_branch_pool_balance(branch)
 
         CashRegisterSession.objects.create(
@@ -126,6 +132,9 @@ class CloseRegisterView(CashierRequiredMixin, View):
         except (ValueError, TypeError):
             closing_balance = Decimal('0.00')
 
+        # This physically-counted figure becomes the next session's
+        # opening_balance automatically (see OpenRegisterView) — it is
+        # what keeps the pool continuous across the close/open boundary.
         expected_cash = session.get_current_expected_cash()
         discrepancy = closing_balance - expected_cash
         notes = request.POST.get('notes', '').strip()
@@ -181,18 +190,15 @@ class RecordCashOutView(AdminRequiredMixin, View):
     deducted from the OVERALL branch pool (via
     CashRegisterSession.get_current_expected_cash, which nets every
     cash-in/out and sale against the carried-forward balance) rather
-    than treated as belonging only to "this session". 
+    than treated as belonging only to "this session". Matches
+    sales/record_cash_out.html (category dropdown + free-text notes).
     """
 
     def get(self, request):
         branch = resolve_user_branch(request.user)
-        all_sessions = CashRegisterSession.objects.all()
-        active_session = all_sessions.filter(status='OPEN').select_related('branch').first()
-        live_pool_balance = active_session.get_current_expected_cash() if active_session else Decimal('0.00')
         active_session = CashRegisterSession.get_active_session(branch)
-
         return render(request, 'sales/record_cash_out.html', {
-            'active_session': active_session, 'live_pool_balance': live_pool_balance
+            'active_session': active_session,
         })
 
     def post(self, request):
@@ -213,7 +219,11 @@ class RecordCashOutView(AdminRequiredMixin, View):
         if amount <= 0:
             messages.error(request, "Enter a valid amount to withdraw.")
             return redirect('record-cash-out')
-        
+
+        # get_current_expected_cash() is the live, cumulative pool
+        # balance (carried-forward + all sales/cash-in/cash-out to
+        # date) — not just what moved through this session — so this
+        # check protects the whole pool, not a per-session slice of it.
         available_cash = session.get_current_expected_cash()
         if amount > available_cash:
             messages.error(
@@ -425,11 +435,44 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             payment_method='CASH'
         ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
 
+        # --- "Total Cash Verified" bug fix -----------------------------
+        # closing_balance is a CUMULATIVE pool total (it always includes
+        # the carried-forward balance from every prior session), not a
+        # fresh amount for that session alone. Summing it across every
+        # closed session ever therefore re-counts the same carried-
+        # forward cash again each time the register is closed and
+        # reopened, wildly inflating the figure.
+        #
+        # What "verified cash" should mean here is: the most recent
+        # physically-counted balance per branch (there can be more than
+        # one branch, each with its own pool/chain of sessions) — not a
+        # sum across history.
+        latest_closed_session_id_per_branch = (
+            CashRegisterSession.objects.filter(
+                branch=OuterRef('branch'), status='CLOSED'
+            ).order_by('-closed_at').values('id')[:1]
+        )
+        latest_closed_sessions = closed_sessions.filter(
+            id=Subquery(latest_closed_session_id_per_branch)
+        )
+
+        total_counted_cash = latest_closed_sessions.aggregate(
+            Sum('closing_balance')
+        )['closing_balance__sum'] or Decimal('0.00')
+        # -----------------------------------------------------------------
+
+        # opening_balance/closing_balance summed across ALL closed
+        # sessions (not just the latest) is fine ONLY as a matched pair
+        # here: because each session's opening_balance is exactly the
+        # prior session's closing_balance, sum(closing) - sum(opening)
+        # telescopes down to (latest closing - first-ever opening) per
+        # branch — i.e. net cash generated since the pool was first
+        # seeded. That's a genuine flow, unlike total_counted_cash above.
         total_opening_floats = closed_sessions.aggregate(
             Sum('opening_balance')
         )['opening_balance__sum'] or Decimal('0.00')
 
-        total_counted_cash = closed_sessions.aggregate(
+        all_time_closing_sum = closed_sessions.aggregate(
             Sum('closing_balance')
         )['closing_balance__sum'] or Decimal('0.00')
 
@@ -437,7 +480,6 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             Sum('discrepancy')
         )['discrepancy__sum'] or Decimal('0.00')
 
-      
         active_session = all_sessions.filter(status='OPEN').select_related('branch').first()
         live_pool_balance = active_session.get_current_expected_cash() if active_session else Decimal('0.00')
 
@@ -446,7 +488,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'total_counted_cash': total_counted_cash,
             'total_discrepancy': total_discrepancy,
             'live_pool_balance': live_pool_balance,
-            'total_vault_cash': total_counted_cash - total_opening_floats,
+            'total_vault_cash': all_time_closing_sum - total_opening_floats,
         }
 
         monthly_cash_txns = CashTransaction.objects.filter(created_at__gte=start_of_month)
