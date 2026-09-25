@@ -1,0 +1,245 @@
+{% extends 'users/base.html' %}
+{% block title %}Record Cash Out / Bank Drop{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cashout-container {
+    max-width: 640px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+  .card-header {
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #f3f4f6;
+    padding-bottom: 1rem;
+  }
+  .card-title {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #111827;
+  }
+  .card-subtitle {
+    margin: 0.35rem 0 0 0;
+    color: #6b7280;
+    font-size: 0.875rem;
+  }
+  .drawer-info-box {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .drawer-info-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+  }
+  .drawer-info-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+  .form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+  }
+  .form-control, .form-select, .form-textarea {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    color: #1f2937;
+    background-color: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease-in-out;
+  }
+  .form-control:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+  .preset-btns {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .preset-btn {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #4b5563;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover {
+    background: #e5e7eb;
+    color: #111827;
+  }
+  .alert-box {
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    margin-bottom: 1.25rem;
+  }
+  .alert-warning {
+    background-color: #fefce8;
+    border: 1px solid #fef08a;
+    color: #854d0e;
+  }
+  .alert-danger {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+  }
+  .btn-submit {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: #dc2626;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .btn-submit:hover {
+    background-color: #b91c1c;
+  }
+  .btn-cancel {
+    display: block;
+    text-align: center;
+    margin-top: 0.75rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+  .btn-cancel:hover {
+    text-decoration: underline;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cashout-container">
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert-box {% if message.tags == 'error' %}alert-danger{% else %}alert-warning{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header">
+      <h1 class="card-title">Record Cash Out</h1>
+      <p class="card-subtitle">Safely log cash removals for bank deposits, rent, or petty expenses.</p>
+    </div>
+
+    {% if active_session %}
+      <div class="drawer-info-box">
+        <div>
+          <div class="drawer-info-label">Active Cashier / Register</div>
+          <div class="drawer-info-value">{{ active_session.opened_by.get_full_name|default:active_session.opened_by.username }}</div>
+        </div>
+        <div style="text-align: right;">
+          <div class="drawer-info-label">Current Estimated Drawer Cash</div>
+          <div class="drawer-info-value" style="color: #16a34a;">
+            KSH {{ live_pool_balance|floatformat:2 }}
+          </div>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'record-cash-out' %}" id="cashOutForm">
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label class="form-label" for="reason">Category / Reason</label>
+          <select name="reason" id="reason" class="form-select" required>
+            <option value="BANK_DEPOSIT" selected>Bank Deposit / Skim</option>
+            <option value="RENT">Rent Payment</option>
+            <option value="PETTY_CASH">Petty Cash Expense</option>
+            <option value="SUPPLIER_PAYMENT">Direct Cash Supplier Payment</option>
+            <option value="OTHER">Other Cash Outflow</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="amount">Amount to Remove (KSH)</label>
+          <input 
+            type="number" 
+            step="0.01" 
+            min="0.01" 
+            name="amount" 
+            id="amount" 
+            class="form-control" 
+            placeholder="0.00" 
+            required 
+          />
+          <div class="preset-btns">
+            <button type="button" class="preset-btn" onclick="setAmount(500)">+ 500</button>
+            <button type="button" class="preset-btn" onclick="setAmount(1000)">+ 1,000</button>
+            <button type="button" class="preset-btn" onclick="setAmount(2000)">+ 2,000</button>
+            <button type="button" class="preset-btn" onclick="setAmount(5000)">+ 5,000</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="notes">Notes / Reference (Optional)</label>
+          <textarea 
+            name="notes" 
+            id="notes" 
+            rows="3" 
+            class="form-textarea" 
+            placeholder="E.g. Bank slip #104928 or paid cash for emergency cleaning supplies..."
+          ></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit">Confirm & Record Cash Removal</button>
+        <a href="{% url 'sales-dashboard' %}" class="btn-cancel">Cancel & Go Back</a>
+      </form>
+
+    {% else %}
+      <div class="alert-box alert-danger">
+        <strong>No active open register found!</strong> You must have an open register session before you can record cash out transactions.
+      </div>
+      <a href="{% url 'sales-dashboard' %}" class="btn-submit" style="display: block; text-align: center; text-decoration: none;">
+        Return to Sales Dashboard
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  function setAmount(val) {
+    const input = document.getElementById('amount');
+    const currentVal = parseFloat(input.value) || 0;
+    input.value = (currentVal + val).toFixed(2);
+  }
+</script>
+{% endblock %}
