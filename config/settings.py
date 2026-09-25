@@ -31,13 +31,13 @@ if os.path.exists(env_file):
 SECRET_KEY  = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG')
+DEBUG = False
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
     '.ngrok-free.app'
 ]
-
+BUG')
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
     ALLOWED_HOSTS.append(os.environ.get('RENDER_EXTERNAL_HOSTNAME'))
 
