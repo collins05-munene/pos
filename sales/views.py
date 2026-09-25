@@ -22,7 +22,6 @@ from inventory.models import Branch
 
 logger = logging.getLogger(__name__)
 
-# Matches the <select name="reason"> options in sales/record_cash_out.html
 CASH_OUT_REASON_LABELS = {
     'BANK_DEPOSIT': 'Bank Deposit / Skim',
     'RENT': 'Rent Payment',
@@ -80,17 +79,12 @@ class OpenRegisterView(CashierRequiredMixin, View):
         ).order_by('-closed_at').first()
 
         if last_session is None:
-            # First-ever session for this branch: seed the pool once.
             raw_float = request.POST.get('opening_balance', '').strip()
             try:
                 opening_float = Decimal(raw_float) if raw_float != "" else Decimal('0.00')
             except (InvalidOperation, ValueError, TypeError):
                 opening_float = Decimal('0.00')
         else:
-            # Every later opening MUST carry the pool forward as-is —
-            # no manual entry accepted here, so the running balance can
-            # never be silently reset or drift depending on who opens
-            # the register.
             opening_float = CashRegisterSession.get_branch_pool_balance(branch)
 
         CashRegisterSession.objects.create(
@@ -132,9 +126,6 @@ class CloseRegisterView(CashierRequiredMixin, View):
         except (ValueError, TypeError):
             closing_balance = Decimal('0.00')
 
-        # This physically-counted figure becomes the next session's
-        # opening_balance automatically (see OpenRegisterView) — it is
-        # what keeps the pool continuous across the close/open boundary.
         expected_cash = session.get_current_expected_cash()
         discrepancy = closing_balance - expected_cash
         notes = request.POST.get('notes', '').strip()
@@ -220,10 +211,6 @@ class RecordCashOutView(AdminRequiredMixin, View):
             messages.error(request, "Enter a valid amount to withdraw.")
             return redirect('record-cash-out')
 
-        # get_current_expected_cash() is the live, cumulative pool
-        # balance (carried-forward + all sales/cash-in/cash-out to
-        # date) — not just what moved through this session — so this
-        # check protects the whole pool, not a per-session slice of it.
         available_cash = session.get_current_expected_cash()
         if amount > available_cash:
             messages.error(
@@ -435,18 +422,6 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             payment_method='CASH'
         ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
 
-        # --- "Total Cash Verified" bug fix -----------------------------
-        # closing_balance is a CUMULATIVE pool total (it always includes
-        # the carried-forward balance from every prior session), not a
-        # fresh amount for that session alone. Summing it across every
-        # closed session ever therefore re-counts the same carried-
-        # forward cash again each time the register is closed and
-        # reopened, wildly inflating the figure.
-        #
-        # What "verified cash" should mean here is: the most recent
-        # physically-counted balance per branch (there can be more than
-        # one branch, each with its own pool/chain of sessions) — not a
-        # sum across history.
         latest_closed_session_id_per_branch = (
             CashRegisterSession.objects.filter(
                 branch=OuterRef('branch'), status='CLOSED'
@@ -459,15 +434,6 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         total_counted_cash = latest_closed_sessions.aggregate(
             Sum('closing_balance')
         )['closing_balance__sum'] or Decimal('0.00')
-        # -----------------------------------------------------------------
-
-        # opening_balance/closing_balance summed across ALL closed
-        # sessions (not just the latest) is fine ONLY as a matched pair
-        # here: because each session's opening_balance is exactly the
-        # prior session's closing_balance, sum(closing) - sum(opening)
-        # telescopes down to (latest closing - first-ever opening) per
-        # branch — i.e. net cash generated since the pool was first
-        # seeded. That's a genuine flow, unlike total_counted_cash above.
         total_opening_floats = closed_sessions.aggregate(
             Sum('opening_balance')
         )['opening_balance__sum'] or Decimal('0.00')
