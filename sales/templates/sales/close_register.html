@@ -1,25 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Close Cash Register</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
+{% extends 'users/base.html' %} 
+{% block title %} Close Cash Register {% endblock %} 
 
-        body {
-            background-color: #f4f6f8;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
+{% block extra_head %}
+    <style>
 
         .card {
             background: #ffffff;
@@ -29,6 +12,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             border: 1px solid #e1e4e8;
+            margin:  auto;
         }
 
         .card-title {
@@ -157,43 +141,64 @@
             color: #0f172a;
         }
     </style>
-</head>
-<body>
+{% endblock %}
 
-    <div class="card">
-        <h2 class="card-title">Close Cash Register</h2>
-        <p class="card-subtitle">Session opened at {{ session.opened_at|date:"M d, Y H:i" }}</p>
+{% block content %}
+<div class="card">
+    <h2 class="card-title">Close Cash Register</h2>
+    <p class="card-subtitle">Reconciling the shared cash pool for this branch's shift.</p>
 
-        <div class="summary-box">
-            <div class="summary-row">
-                <span>Opening Float:</span>
-                <span>KSH {{ session.opening_balance }}</span>
-            </div>
-            <div class="summary-row">
-                <span>Expected Cash Total:</span>
-                <span>KSH {{ expected_cash }}</span>
+    <div class="summary-box">
+        <div class="summary-row">
+            <span>Opening Float:</span>
+            <span>KSH {{ session.opening_balance }}</span>
+        </div>
+
+        <div class="summary-row">
+            <span>Shift Cash Sales:</span>
+            <span>+ KSH {{ total_cash_sales }}</span>
+        </div>
+
+        {% if total_cash_in > 0 %}
+        <div class="summary-row">
+            <span>Cash In (Additions):</span>
+            <span>+ KSH {{ total_cash_in }}</span>
+        </div>
+        {% endif %}
+
+        {% if total_cash_out > 0 %}
+        <div class="summary-row">
+            <span>Cash Out (Withdrawals):</span>
+            <span>- KSH {{ total_cash_out }}</span>
+        </div>
+        {% endif %}
+
+        <hr style="margin: 10px 0; border: 0; border-top: 1px dashed #ccc;">
+
+        <div class="summary-row total">
+            <span>Total Amount: </span>
+            <span> <strong> KSH {{ expected_cash|floatformat:2 }}</strong></span>
+        </div>
+    </div>
+
+    <form method="POST" action="{% url 'close_register' %}">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="closing_balance">Actual Cash Counted</label>
+            <div class="input-group">
+                <span class="input-prefix">KSH</span>
+                <input type="number" step="0.01" min="0" name="closing_balance" id="closing_balance" required autofocus placeholder="0.00">
             </div>
         </div>
 
-        <form method="POST" action="{% url 'close_register' %}">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="closing_balance">Actual Cash Counted</label>
-                <div class="input-group">
-                    <span class="input-prefix">KSH</span>
-                    <input type="number" step="0.01" min="0" name="closing_balance" id="closing_balance" required autofocus placeholder="0.00">
-                </div>
-            </div>
+        <div class="form-group">
+            <label for="notes">Closing Notes / Reason for Discrepancy (Optional)</label>
+            <textarea name="notes" id="notes" placeholder="e.g. KSH 50 short due to unrecorded petty cash."></textarea>
+        </div>
 
-            <div class="form-group">
-                <label for="notes">Closing Notes / Reason for Discrepancy (Optional)</label>
-                <textarea name="notes" id="notes" placeholder="e.g. KSH 50 short due to unrecorded petty cash."></textarea>
-            </div>
+        <button type="submit" class="btn-danger">End Session & Close Drawer</button>
+        <a href="{% url 'pos_terminal' %}" class="btn-secondary">Cancel & Back to Terminal</a>
+    </form>
+</div>
 
-            <button type="submit" class="btn-danger">End Session & Close Drawer</button>
-            <a href="{% url 'pos_terminal' %}" class="btn-secondary">Cancel & Back to Terminal</a>
-        </form>
-    </div>
-
-</body>
-</html>
+{% endblock %}

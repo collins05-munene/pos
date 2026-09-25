@@ -13,6 +13,8 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
   .dashboard-title {
     margin: 0;
@@ -24,6 +26,11 @@
     color: #6b7280;
     font-size: 0.95rem;
   }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
   .data-badge {
     background: #f3f4f5;
     color: #374151;
@@ -31,6 +38,18 @@
     border-radius: 4px;
     font-weight: 600;
     font-size: 0.85rem;
+  }
+  .btn-cashout {
+    background: #dc2626;
+    color: #fff;
+    text-decoration: none;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .btn-cashout:hover {
+    background: #b91c1c;
   }
   .section-divider {
     font-size: 1.25rem;
@@ -72,6 +91,11 @@
   .card-green .value { color: #16a34a; }
   .card-red .value { color: #dc2626; }
   .card-purple .value { color: #9333ea; }
+  .card-highlight {
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+  }
+  .card-highlight .value { color: #16a34a; }
 
   .data-split-container {
     display: grid;
@@ -120,7 +144,6 @@
   }
   .invoice-link:hover { text-decoration: underline; }
 
-  /* Status Badges */
   .badge-status {
     padding: 4px 8px;
     border-radius: 4px;
@@ -141,13 +164,17 @@
   <div class="dashboard-header">
     <div>
       <h1 class="dashboard-title">Performance & Cash Analytics</h1>
-      <p class="dashboard-subtitle">Revenue tracking, P&L, and Cash Register Drawer management</p>
+      <p class="dashboard-subtitle">Revenue tracking, P&L, and shared Cash Register Pool management</p>
     </div>
-    <span class="data-badge">MTD {{ timestamp|date:"F Y" }}</span>
+    <div class="header-actions">
+      {% if user.get_role_display == 'Admin' %}
+      <a href="{% url 'record-cash-out' %}" class="btn-cashout">Record Cash Out</a>
+      {% endif %}
+      <span class="data-badge">MTD {{ timestamp|date:"F Y" }}</span>
+    </div>
   </div>
 
   {% if user.get_role_display == 'Admin' %}
-  <!-- SECTION 1: SALES & P&L METRICS -->
   <h2 class="section-divider">Sales & Profitability</h2>
   <div class="metrics-grid">
     <div class="card metric-card card-blue">
@@ -174,6 +201,11 @@
 
   <h2 class="section-divider">Cumulative Cash & Vault Overview</h2>
   <div class="metrics-grid">
+    <div class="card metric-card card-highlight">
+      <h3>Live Branch Cash Pool</h3>
+      <div class="value">KSH {{ cumulative_cash.live_pool_balance|floatformat:2 }}</div>
+      <p class="card-footer">Carried-forward balance + all sales, cash-ins and cash-outs to date.</p>
+    </div>
     <div class="card metric-card card-green">
       <h3>Total Cash Verified</h3>
       <div class="value">KSH {{ cumulative_cash.total_counted_cash|floatformat:2 }}</div>
@@ -201,7 +233,7 @@
     <div class="card metric-card card-purple">
       <h3>Active Registers</h3>
       <div class="value">{{ cash_metrics.active_sessions_count }}</div>
-      <p class="card-footer">Open drawers right now.</p>
+      <p class="card-footer">Branches with an open shared pool right now.</p>
     </div>
     <div class="card metric-card card-green">
       <h3>Total Cash In</h3>
@@ -211,7 +243,7 @@
     <div class="card metric-card card-red">
       <h3>Total Cash Out</h3>
       <div class="value">KSH {{ cash_metrics.cash_out|floatformat:2 }}</div>
-      <p class="card-footer">Petty cash & payouts.</p>
+      <p class="card-footer">Withdrawals (deposits, rent, petty cash, etc.) this month.</p>
     </div>
     <div class="card metric-card {% if cash_metrics.discrepancies < 0 %}card-red{% else %}card-green{% endif %}">
       <h3>Monthly Discrepancy</h3>
@@ -228,7 +260,8 @@
           <thead>
             <tr>
               <th>Status</th>
-              <th>Cashier</th>
+              <th>Branch</th>
+              <th>Opened By</th>
               <th>Opened</th>
               <th>Closed</th>
               <th>Opening Float</th>
@@ -246,7 +279,8 @@
                   {{ session.status }}
                 </span>
               </td>
-              <td>{{ session.cashier.get_full_name|default:session.cashier.username }}</td>
+              <td>{{ session.branch.name|default:"Main" }}</td>
+              <td>{{ session.opened_by.first_name|default:session.opened_by.username }}</td>
               <td>{{ session.opened_at|date:"M d, H:i" }}</td>
               <td>{{ session.closed_at|date:"M d, H:i"|default:"--" }}</td>
               <td>KSH {{ session.opening_balance }}</td>
@@ -263,7 +297,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="9" class="empty-state">No register sessions recorded yet.</td>
+              <td colspan="10" class="empty-state">No register sessions recorded yet.</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -282,7 +316,7 @@
               <th>Type</th>
               <th>Amount</th>
               <th>Reason / Note</th>
-              <th>Cashier</th>
+              <th>Recorded By</th>
               <th>Date & Time</th>
             </tr>
           </thead>
@@ -313,7 +347,6 @@
   </div>
   {% endif %}
 
-  <!-- SECTION 6: RECENT SALES TRANSACTIONS -->
   <div class="data-split-container">
     <div class="card table-card">
       <h2 class="section-title">Recent Sales Transactions</h2>

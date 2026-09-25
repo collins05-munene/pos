@@ -2,36 +2,101 @@
 {% block extra_head %}
     <style>
         .payment-card {
-            max-width: 600px;
+            max-width: 480px;
             margin: 4rem auto;
             padding: 2rem;
             background: #fff;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            box-shadow: 04px 6px -1px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
         }
 
         .payment-mode {
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
             border-bottom: 1px solid #e5e7eb;
             padding-bottom: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .payment-mode h2{
+        .payment-mode h2 {
             margin: 0;
             color: #111827;
         }
-        .payment-mode p{
+        .payment-mode p {
             margin: 0.25rem 0 0 0;
-            color: #6b7280;    
+            color: #6b7280;
         }
-        .payment-wrapper{
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+
+        .field-label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.4rem;
+        }
+        #amount_received {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1.25rem;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 1.25rem;
+        }
+        #amount_received:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .change-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .change-box.insufficient {
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+        .change-box span:first-child {
+            color: #374151;
+            font-weight: 500;
+        }
+        #change-amount {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #16a34a;
+        }
+        .change-box.insufficient #change-amount {
+            color: #dc2626;
+        }
+
+        #insufficient-warning {
+            display: none;
+            color: #dc2626;
+            font-size: 0.85rem;
+            margin: -0.5rem 0 1rem 0;
+        }
+
+        #submit-btn {
+            width: 100%;
+            padding: 0.9rem;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #submit-btn:disabled {
+            background: #93c5fd;
+            cursor: not-allowed;
         }
     </style>
 {% endblock %}
@@ -39,30 +104,91 @@
     <div class="payment-card">
         <div class="payment-mode">
             <div>
-                <h2>Select Payment Mode</h2>
-                <p>Choose how the client is paying.</p>
+                <h2>Cash Payment</h2>
+                <p>Enter the amount received from the customer.</p>
             </div>
             <div style="text-align: right;">
                 <span style="font-size: 0.85rem; color: #6b7280; display: block;">Total Due:</span>
-                <strong style="font-size: 1.5rem; color: #2563eb;">KSH {{total_amount}}</strong>
+                <strong id="total-due" data-amount="{{ total_amount }}" style="font-size: 1.5rem; color: #2563eb;">KSH {{ total_amount }}</strong>
             </div>
         </div>
-        <div class="payment-wrapper">
-            <form method="POST" action="{% url 'process_payment' %}">
-                {% csrf_token %}
-                <input type="hidden" name="payment_method" value="cash">
-                <button type="submit" style="width: 100%; height: 140px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;" onmouseover="this.style.borderColor='#10b981'; this.style.background='#f0fdf4';" onmouseout="this.style.borderColor='#e5e7eb'; this,style.background='#f9fafb';"><span style="font-weight: bold; font-size: 1.1rem; color: #111827;">Cash Payments</span></button>
-             </form>
-            <form method="POST" action="{% url 'process_payment' %}">
-                {% csrf_token %}
-                <input type="hidden" name="payment_method" value="mpesa">
-                <button type="submit" style="width: 100%; height: 140px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;" onmouseover="this.style.borderColor='#2563eb'; this.style.background='#eff6ff';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='#f9fafb';">
-                <span style="font-weight: bold; font-size: 1.1rem; color: #111827;">M-Pesa STK Push</span>
-            </button>
+
+        <form method="POST" action="{% url 'process_payment' %}" id="cash-payment-form">
+            {% csrf_token %}
+            <input type="hidden" name="payment_method" value="cash">
+
+            <label class="field-label" for="amount_received">Amount Received (KSH)</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                inputmode="decimal"
+                name="amount_received"
+                id="amount_received"
+                placeholder="0.00"
+                required
+                autofocus
+            >
+
+            <div class="change-box" id="change-box">
+                <span>Change to Give:</span>
+                <span id="change-amount">KSH 0.00</span>
+            </div>
+            <div id="insufficient-warning">Amount received is less than the total due — cannot complete this sale.</div>
+
+            <button type="submit" id="submit-btn" disabled>Complete Sale</button>
         </form>
-        </div>
-        <div style="text-align: center;">
+
+        <div style="text-align: center; margin-top: 1rem;">
             <a href="{% url 'pos_terminal' %}" style="color: #6b7280; text-decoration: none; font-size: 0.95rem;">&larr; Cancel and return to terminal workspace</a>
         </div>
     </div>
+
+    <script>
+        (function () {
+            const totalDue = parseFloat(document.getElementById('total-due').dataset.amount) || 0;
+            const receivedInput = document.getElementById('amount_received');
+            const changeBox = document.getElementById('change-box');
+            const changeAmountEl = document.getElementById('change-amount');
+            const warningEl = document.getElementById('insufficient-warning');
+            const submitBtn = document.getElementById('submit-btn');
+            const form = document.getElementById('cash-payment-form');
+
+            function updateChange() {
+                const received = parseFloat(receivedInput.value);
+
+                if (isNaN(received) || receivedInput.value.trim() === '') {
+                    changeAmountEl.textContent = 'KSH 0.00';
+                    changeBox.classList.remove('insufficient');
+                    warningEl.style.display = 'none';
+                    submitBtn.disabled = true;
+                    return;
+                }
+
+                const change = received - totalDue;
+
+                if (change < 0) {
+                    changeAmountEl.textContent = 'KSH 0.00';
+                    changeBox.classList.add('insufficient');
+                    warningEl.style.display = 'block';
+                    submitBtn.disabled = true;
+                } else {
+                    changeAmountEl.textContent = 'KSH ' + change.toFixed(2);
+                    changeBox.classList.remove('insufficient');
+                    warningEl.style.display = 'none';
+                    submitBtn.disabled = false;
+                }
+            }
+
+            receivedInput.addEventListener('input', updateChange);
+
+            form.addEventListener('submit', function (e) {
+                const received = parseFloat(receivedInput.value);
+                if (isNaN(received) || received < totalDue) {
+                    e.preventDefault();
+                    updateChange();
+                }
+            });
+        })();
+    </script>
 {% endblock %}

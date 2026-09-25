@@ -1,24 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Cash Register</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
+{% extends 'users/base.html' %} 
+{% block title %} Open  Cash Register {% endblock %} 
 
-        body {
-            background-color: #f4f6f8;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
+{% block extra_head %}
+    <style>
 
         .card {
             background: #ffffff;
@@ -28,6 +12,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             border: 1px solid #e1e4e8;
+            margin: auto;
         }
 
         .card-header {
@@ -91,6 +76,26 @@
             color: #0f172a;
         }
 
+        .pool-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #bbf7d0;
+            background: #f0fdf4;
+            border-radius: 6px;
+            padding: 14px 16px;
+        }
+        .pool-display .amount {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #16a34a;
+        }
+        .pool-note {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 6px;
+        }
+
         .btn-primary {
             width: 100%;
             padding: 12px;
@@ -120,37 +125,59 @@
             color: #991b1b;
             border: 1px solid #fca5a5;
         }
+        .alert-info {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
     </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
 
     <div class="card">
         <div class="card-header">
             <h2 class="card-title">Open Register</h2>
-            <p class="card-subtitle">Enter the starting cash float in the drawer to begin sales.</p>
+            <p class="card-subtitle">
+                {% if is_first_session %}
+                    Set the true starting float for this branch's cash pool.
+                {% else %}
+                    Continuing this branch's shared cash pool.
+                {% endif %}
+            </p>
         </div>
 
         {% if messages %}
             <div class="messages">
                 {% for message in messages %}
-                    <div class="alert">{{ message }}</div>
+                    <div class="alert {% if message.tags == 'info' %}alert-info{% endif %}">{{ message }}</div>
                 {% endfor %}
             </div>
         {% endif %}
 
         <form method="POST" action="{% url 'open_register' %}">
             {% csrf_token %}
-            <div class="form-group">
-                <label for="opening_balance">Opening Cash Float</label>
-                <div class="input-group">
-                    <span class="input-prefix">KSH</span>
-                    <input type="number" step="0.01" min="0" name="opening_balance" id="opening_balance" value="0.00" required autofocus>
+
+            {% if is_first_session %}
+                <div class="form-group">
+                    <label for="opening_balance">Opening Cash Float (one-time setup)</label>
+                    <div class="input-group">
+                        <span class="input-prefix">KSH</span>
+                        <input type="number" step="0.01" min="0" name="opening_balance" id="opening_balance" value="0.00" required autofocus>
+                    </div>
+                    <p class="pool-note">This branch has no prior sessions, so this is the true starting float for its cash pool. Every session after this one carries the pool balance forward automatically — no manual entry.</p>
                 </div>
-            </div>
+            {% else %}
+                <div class="form-group">
+                    <label>Opening Cash Float (carried forward)</label>
+                    <div class="pool-display">
+                        <span>Pool balance from last close</span>
+                        <span class="amount">KSH {{ carried_over_float|floatformat:2 }}</span>
+                    </div>
+                </div>
+            {% endif %}
 
             <button type="submit" class="btn-primary">Start Session</button>
         </form>
     </div>
-
-</body>
-</html>
+{% endblock %}

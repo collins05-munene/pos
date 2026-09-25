@@ -147,7 +147,6 @@
 {% block content %}
 <div class="cashout-container">
 
-  <!-- Flash Messages -->
   {% if messages %}
     {% for message in messages %}
       <div class="alert-box {% if message.tags == 'error' %}alert-danger{% else %}alert-warning{% endif %}">
@@ -158,21 +157,20 @@
 
   <div class="card">
     <div class="card-header">
-      <h1 class="card-title">Record Cash Out / Bank Drop</h1>
-      <p class="card-subtitle">Safely log cash removals for bank deposits, safe drops, or petty expenses.</p>
+      <h1 class="card-title">Record Cash Out</h1>
+      <p class="card-subtitle">Safely log cash removals for bank deposits, rent, or petty expenses.</p>
     </div>
 
     {% if active_session %}
-      <!-- Current Session Summary -->
       <div class="drawer-info-box">
         <div>
           <div class="drawer-info-label">Active Cashier / Register</div>
-          <div class="drawer-info-value">{{ active_session.cashier.get_full_name|default:active_session.cashier.username }}</div>
+          <div class="drawer-info-value">{{ active_session.opened_by.get_full_name|default:active_session.opened_by.username }}</div>
         </div>
         <div style="text-align: right;">
           <div class="drawer-info-label">Current Estimated Drawer Cash</div>
           <div class="drawer-info-value" style="color: #16a34a;">
-            KSH {{ active_session.expected_closing_balance|floatformat:2 }}
+            KSH {{ live_pool_balance|floatformat:2 }}
           </div>
         </div>
       </div>
@@ -180,19 +178,17 @@
       <form method="post" action="{% url 'record-cash-out' %}" id="cashOutForm">
         {% csrf_token %}
 
-        <!-- Reason / Category Choice -->
         <div class="form-group">
           <label class="form-label" for="reason">Category / Reason</label>
           <select name="reason" id="reason" class="form-select" required>
             <option value="BANK_DEPOSIT" selected>Bank Deposit / Skim</option>
-            <option value="SAFE_DROP">Safe Drop (Overnight Vault Transfer)</option>
+            <option value="RENT">Rent Payment</option>
             <option value="PETTY_CASH">Petty Cash Expense</option>
             <option value="SUPPLIER_PAYMENT">Direct Cash Supplier Payment</option>
             <option value="OTHER">Other Cash Outflow</option>
           </select>
         </div>
 
-        <!-- Amount Field -->
         <div class="form-group">
           <label class="form-label" for="amount">Amount to Remove (KSH)</label>
           <input 
@@ -213,7 +209,6 @@
           </div>
         </div>
 
-        <!-- Additional Notes -->
         <div class="form-group">
           <label class="form-label" for="notes">Notes / Reference (Optional)</label>
           <textarea 
@@ -230,7 +225,6 @@
       </form>
 
     {% else %}
-      <!-- State when no active register session exists -->
       <div class="alert-box alert-danger">
         <strong>No active open register found!</strong> You must have an open register session before you can record cash out transactions.
       </div>

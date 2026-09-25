@@ -116,6 +116,7 @@
 
         .text-green { color: #16a34a; }
         .text-orange { color: #ea580c; }
+        .card-purple .value { color: #9333ea; }
 
     </style>
 {% endblock %}
@@ -156,8 +157,23 @@
                 <h3>Order Margin</h3>
                 <div class="value">{{order_margin}}%</div>
             </div>
-         
         </div>
+
+        <div class="financials-grid">
+            <div class="card metric-card card-purple">
+                <h3>Amount Received</h3>
+                <div class="value">
+                    {% if order.amount_received is not None %}KSH {{ order.amount_received|floatformat:2 }}{% else %}&mdash;{% endif %}
+                </div>
+            </div>
+            <div class="card metric-card card-purple">
+                <h3>Change Given</h3>
+                <div class="value">
+                    {% if order.change_given is not None %}KSH {{ order.change_given|floatformat:2 }}{% else %}&mdash;{% endif %}
+                </div>
+            </div>
+        </div>
+
         <div class="card table-card">
         <h2 class="table-title">Itemized Line Breakdown</h2>
         <div class="table-responsive">

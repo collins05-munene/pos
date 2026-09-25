@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.template.loader import render_to_string
@@ -8,7 +8,6 @@ from django.views.generic import TemplateView, DetailView
 from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.contrib import messages
-from decimal import Decimal
 from django.views import View
 import logging
 
@@ -16,138 +15,109 @@ from products.models import ProductVariant, Category
 from .cart import POSCart
 from .models import Order, OrderItem, CashRegisterSession, CashTransaction
 from .exceptions import InsufficientStockError
-from .forms import CashOutForm
+from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 from inventory.models import Branch
 
 
-
 logger = logging.getLogger(__name__)
 
-class RecordCashOutView(CashierRequiredMixin, View):
-    template_name = 'sales/record_cash_out.html'
+CASH_OUT_REASON_LABELS = {
+    'BANK_DEPOSIT': 'Bank Deposit / Skim',
+    'RENT': 'Rent Payment',
+    'PETTY_CASH': 'Petty Cash Expense',
+    'SUPPLIER_PAYMENT': 'Direct Cash Supplier Payment',
+    'OTHER': 'Other Cash Outflow',
+}
 
-    def get_active_session(self, request):
-        """Fetch active open session for the current cashier or branch."""
-        return CashRegisterSession.objects.filter(
-            cashier=request.user, 
-            status='OPEN'
-        ).first()
 
-    def get(self, request, *args, **kwargs):
-        active_session = self.get_active_session(request)
-        form = CashOutForm(session=active_session)
+class OpenRegisterView(CashierRequiredMixin, View):
+    """
+    Opens the ONE shared, continuous cash pool for the cashier's branch.
 
-        return render(request, self.template_name, {
-            'active_session': active_session,
-            'form': form,
-        })
-
-    def post(self, request, *args, **kwargs):
-        active_session = self.get_active_session(request)
-
-        if not active_session:
-            messages.error(request, "Cannot complete transaction: No open register session found.")
-            return redirect('sales-dashboard')
-
-        form = CashOutForm(request.POST, session=active_session)
-
-        if form.is_valid():
-            amount = form.cleaned_data['amount']
-            reason = form.cleaned_data['reason']
-            notes = form.cleaned_data['notes']
-
-            reason_label = dict(form.fields['reason'].choices).get(reason, reason)
-            full_reason = f"{reason_label} - {notes}" if notes else reason_label
-
-            CashTransaction.objects.create(
-                session=active_session,
-                user=request.user,
-                transaction_type='CASH_OUT',
-                amount=amount,
-                reason=full_reason
-            )
-
-            messages.success(
-                request, 
-                f"Successfully recorded Cash Out of KSH {amount:.2f}. New estimated drawer balance: KSH {active_session.expected_closing_balance:.2f}"
-            )
-            return redirect('sales-dashboard')
-
-        for error in form.errors.values():
-            messages.error(request, error[0])
-
-        return render(request, self.template_name, {
-            'active_session': active_session,
-            'form': form,
-        })
-
-class OpenRegisterView(View):
-    def get_user_branch(self, user):
-        if hasattr(user, 'branch') and user.branch:
-            return user.branch
-        if hasattr(user, 'profile') and hasattr(user.profile, 'branch'):
-            return user.profile.branch
-        return Branch.objects.first()
+    The opening float is NOT freely editable: every session after the
+    branch's very first one automatically carries forward the prior
+    session's physically-counted closing_balance, regardless of which
+    cashier opens it. This is what makes the pool continuous rather
+    than a fresh per-session/per-cashier drawer. The only time a human
+    enters a number here is the branch's first-ever session, to seed
+    the pool with its true starting float.
+    """
 
     def get(self, request):
-        branch = self.get_user_branch(request.user)
+        branch = resolve_user_branch(request.user)
+
+        existing_session = CashRegisterSession.get_active_session(branch)
+        if existing_session:
+            messages.info(request, "This branch's cash register is already open.")
+            return redirect('pos_terminal')
+
         last_session = CashRegisterSession.objects.filter(
-            branch=branch, 
+            branch=branch,
             status='CLOSED'
         ).order_by('-closed_at').first()
 
-        carried_over_float = last_session.closing_balance if last_session and last_session.closing_balance else Decimal('0.00')
+        is_first_session = last_session is None
+        carried_over_float = CashRegisterSession.get_branch_pool_balance(branch)
 
         return render(request, 'sales/open_register.html', {
             'branch': branch,
-            'carried_over_float': carried_over_float
+            'carried_over_float': carried_over_float,
+            'is_first_session': is_first_session,
         })
 
     def post(self, request):
-        branch = self.get_user_branch(request.user)
+        branch = resolve_user_branch(request.user)
+
+        existing_session = CashRegisterSession.get_active_session(branch)
+        if existing_session:
+            return redirect('pos_terminal')
+
         last_session = CashRegisterSession.objects.filter(
-            branch=branch, 
+            branch=branch,
             status='CLOSED'
         ).order_by('-closed_at').first()
 
-        carried_over_float = last_session.closing_balance if last_session and last_session.closing_balance else Decimal('0.00')
-
-        raw_float = request.POST.get('opening_balance', '').strip()
-        
-        if raw_float:
+        if last_session is None:
+            raw_float = request.POST.get('opening_balance', '').strip()
             try:
-                opening_float = Decimal(raw_float)
-            except (ValueError, TypeError):
-                opening_float = carried_over_float
+                opening_float = Decimal(raw_float) if raw_float != "" else Decimal('0.00')
+            except (InvalidOperation, ValueError, TypeError):
+                opening_float = Decimal('0.00')
         else:
-            opening_float = carried_over_float
+            opening_float = CashRegisterSession.get_branch_pool_balance(branch)
 
         CashRegisterSession.objects.create(
-            cashier=request.user,
+            opened_by=request.user,
             branch=branch,
             opening_balance=opening_float,
             status='OPEN'
         )
 
         return redirect('pos_terminal')
-    
+
+
 class CloseRegisterView(CashierRequiredMixin, View):
     def get(self, request):
-        session = CashRegisterSession.get_active_session(request.user)
+        branch = resolve_user_branch(request.user)
+        session = CashRegisterSession.get_active_session(branch)
         if not session:
-            messages.warning(request, "No active cash register session found.")
+            messages.warning(request, "No active cash register session found for this branch.")
             return redirect('open_register')
 
-        expected_cash = session.get_current_expected_cash()
         context = {
             'session': session,
-            'expected_cash': expected_cash,
+            'opening_balance': session.opening_balance,
+            'total_cash_sales': session.total_cash_sales,
+            'total_cash_in': session.total_cash_in,
+            'total_cash_out': session.total_cash_out,
+            'expected_cash': session.get_current_expected_cash(),
         }
         return render(request, 'sales/close_register.html', context)
 
     def post(self, request):
-        session = CashRegisterSession.get_active_session(request.user)
+        branch = resolve_user_branch(request.user)
+        session = CashRegisterSession.get_active_session(branch)
         if not session:
             return redirect('open_register')
 
@@ -157,70 +127,131 @@ class CloseRegisterView(CashierRequiredMixin, View):
             closing_balance = Decimal('0.00')
 
         expected_cash = session.get_current_expected_cash()
-        
         discrepancy = closing_balance - expected_cash
         notes = request.POST.get('notes', '').strip()
 
         session.closing_balance = closing_balance
-        session.expected_closing_balance = expected_cash  
+        session.expected_closing_balance = expected_cash
         session.discrepancy = discrepancy
         session.notes = notes
         session.status = 'CLOSED'
+        session.closed_by = request.user
         session.closed_at = timezone.now()
-        
+
         session.save()
 
         messages.success(request, f"Register closed. Discrepancy: KSH {discrepancy:.2f}")
         return redirect('pos_terminal')
-        
 
 
-class CashTransactionView(CashierRequiredMixin, View):
-    """Handles Pay-In / Pay-Out during an active session"""
+class CashTransactionView(AdminRequiredMixin, View):
+    """Handles Cash-In (float top-ups) into the branch's shared cash pool."""
     def post(self, request):
-        session = CashRegisterSession.get_active_session(request.user)
+        branch = resolve_user_branch(request.user)
+        session = CashRegisterSession.get_active_session(branch)
         if not session:
             messages.error(request, "No active session. Please open the register first.")
             return redirect('open_register')
 
-        txn_type = request.POST.get('transaction_type')
         reason = request.POST.get('reason', '').strip()
         try:
             amount = Decimal(request.POST.get('amount', '0.00'))
         except (ValueError, TypeError):
             amount = Decimal('0.00')
 
-        if amount <= 0 or txn_type not in ['CASH_IN', 'CASH_OUT']:
+        if amount <= 0:
             messages.error(request, "Invalid transaction details.")
             return redirect('pos_terminal')
 
         CashTransaction.objects.create(
             session=session,
             user=request.user,
-            transaction_type=txn_type,
+            transaction_type='CASH_IN',
             amount=amount,
             reason=reason
         )
-        messages.success(request, f"{txn_type.replace('_', ' ')} of KSH {amount} recorded.")
+        messages.success(request, f"Cash In of KSH {amount} recorded.")
         return redirect('pos_terminal')
 
+
+class RecordCashOutView(AdminRequiredMixin, View):
+    """
+    Admin-only cash withdrawal from the branch's shared pool — bank
+    deposits, rent, petty cash, supplier payments, etc. The amount is
+    deducted from the OVERALL branch pool (via
+    CashRegisterSession.get_current_expected_cash, which nets every
+    cash-in/out and sale against the carried-forward balance) rather
+    than treated as belonging only to "this session". 
+    """
+
+    def get(self, request):
+        branch = resolve_user_branch(request.user)
+        all_sessions = CashRegisterSession.objects.all()
+        active_session = all_sessions.filter(status='OPEN').select_related('branch').first()
+        live_pool_balance = active_session.get_current_expected_cash() if active_session else Decimal('0.00')
+        active_session = CashRegisterSession.get_active_session(branch)
+
+        return render(request, 'sales/record_cash_out.html', {
+            'active_session': active_session, 'live_pool_balance': live_pool_balance
+        })
+
+    def post(self, request):
+        branch = resolve_user_branch(request.user)
+        session = CashRegisterSession.get_active_session(branch)
+        if not session:
+            messages.error(request, "No active register session — open the register before recording a cash out.")
+            return redirect('sales-dashboard')
+
+        reason_code = request.POST.get('reason', '').strip()
+        notes = request.POST.get('notes', '').strip()
+
+        try:
+            amount = Decimal(request.POST.get('amount', '0.00'))
+        except (InvalidOperation, ValueError, TypeError):
+            amount = Decimal('0.00')
+
+        if amount <= 0:
+            messages.error(request, "Enter a valid amount to withdraw.")
+            return redirect('record-cash-out')
+        
+        available_cash = session.get_current_expected_cash()
+        if amount > available_cash:
+            messages.error(
+                request,
+                f"Cannot withdraw KSH {amount}. Only KSH {available_cash} is currently available in the pool."
+            )
+            return redirect('record-cash-out')
+
+        reason_label = CASH_OUT_REASON_LABELS.get(reason_code, reason_code or 'Cash Out')
+        full_reason = f"{reason_label} — {notes}" if notes else reason_label
+
+        CashTransaction.objects.create(
+            session=session,
+            user=request.user,
+            transaction_type='CASH_OUT',
+            amount=amount,
+            reason=full_reason
+        )
+
+        messages.success(request, f"KSH {amount} recorded as Cash Out ({reason_label}).")
+        return redirect('sales-dashboard')
 
 
 class PosTerminalView(CashierRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        # Redirect to open register if cashier has no active session
-        session = CashRegisterSession.get_active_session(request.user)
+        branch = resolve_user_branch(request.user)
+        session = CashRegisterSession.get_active_session(branch)
         if not session:
             return redirect('open_register')
 
         q = request.GET.get('q', '').strip().lower()
         category_id = request.GET.get('category', '').strip()
-        
+
         categories = Category.objects.filter(parent=None)
         products = ProductVariant.objects.select_related(
             'product', 'product__unit_of_measure'
         ).filter(is_active=True, product__is_active=True)
-        
+
         active_category = None
         if category_id:
             try:
@@ -230,20 +261,20 @@ class PosTerminalView(CashierRequiredMixin, View):
                 active_category = int(category_id)
             except (ValueError, TypeError):
                 pass
-                
+
         if q:
             products = products.filter(
                 Q(sku__icontains=q) | Q(product__name__icontains=q)
             )
         else:
             products = products[:24]
-            
+
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             html = render_to_string(
                 'sales/product_list.html', {'products': products}, request=request
             )
             return JsonResponse({'ok': True, 'products_html': html})
-            
+
         cart = POSCart(request)
         context = {
             'categories': categories,
@@ -255,6 +286,7 @@ class PosTerminalView(CashierRequiredMixin, View):
             'current_expected_cash': session.get_current_expected_cash(),
         }
         return render(request, 'sales/terminal.html', context)
+
 
 def _cart_json_response(request):
     cart = POSCart(request)
@@ -268,6 +300,7 @@ def _cart_json_response(request):
         'cart_html': html,
         'total_items': cart.total_items,
     })
+
 
 def _stock_error_response(request, error):
     message = (
@@ -288,7 +321,7 @@ def _stock_error_response(request, error):
             'cart_html': html,
             'total_items': cart.total_items
         }, status=400)
-    
+
     messages.error(request, message)
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
@@ -308,12 +341,11 @@ def cart_add(request):
                 cart.add(variant_id=variant.id, quantity=1)
         elif variant_id:
             cart.add(variant_id=variant_id, quantity=1)
-            
+
     except InsufficientStockError as e:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return _stock_error_response(request, e)
-        
-        from django.contrib import messages
+
         messages.error(request, str(e))
         return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
@@ -329,7 +361,7 @@ def cart_update(request):
     variant_id = request.POST.get('variant_id')
     quantity = request.POST.get('quantity', 1)
 
-    try:        
+    try:
         if variant_id:
             cart.update_quantity(variant_id=variant_id, quantity=quantity)
     except InsufficientStockError as e:
@@ -354,6 +386,7 @@ def cart_remove(request):
 
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
+
 class SalesDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'sales/dashboard.html'
 
@@ -371,14 +404,14 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
 
         sales_agg = monthly_orders.aggregate(
             total_revenue=Sum('total_revenue'),
-            total_cogs=Sum('total_cogs'),     
-            total_profit=Sum('total_profit') 
+            total_cogs=Sum('total_cogs'),
+            total_profit=Sum('total_profit')
         )
 
         revenue = sales_agg['total_revenue'] or Decimal('0.00')
         cogs = sales_agg['total_cogs'] or Decimal('0.00')
         profit = sales_agg['total_profit'] or (revenue - cogs)
-        
+
         margin = round((profit / revenue * 100), 2) if revenue > Decimal('0.00') else Decimal('0.00')
 
         context['metrics'] = {
@@ -404,23 +437,24 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             Sum('discrepancy')
         )['discrepancy__sum'] or Decimal('0.00')
 
-        active_session = all_sessions.filter(status='OPEN').first()
-        active_drawer_float = active_session.opening_balance if active_session else Decimal('0.00')
+      
+        active_session = all_sessions.filter(status='OPEN').select_related('branch').first()
+        live_pool_balance = active_session.get_current_expected_cash() if active_session else Decimal('0.00')
 
         context['cumulative_cash'] = {
             'total_cash_revenue': total_cash_sales_all_time,
             'total_counted_cash': total_counted_cash,
             'total_discrepancy': total_discrepancy,
-            'active_drawer_float': active_drawer_float,
+            'live_pool_balance': live_pool_balance,
             'total_vault_cash': total_counted_cash - total_opening_floats,
         }
 
         monthly_cash_txns = CashTransaction.objects.filter(created_at__gte=start_of_month)
-        
+
         cash_in = monthly_cash_txns.filter(
             transaction_type='CASH_IN'
         ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
-        
+
         cash_out = monthly_cash_txns.filter(
             transaction_type='CASH_OUT'
         ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
@@ -436,14 +470,14 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'discrepancies': monthly_discrepancy,
         }
 
-        context['recent_sessions'] = all_sessions.select_related('cashier', 'branch').order_by('-opened_at')[:15]
+        context['recent_sessions'] = all_sessions.select_related('opened_by', 'branch').order_by('-opened_at')[:15]
         context['recent_cash_txns'] = monthly_cash_txns.select_related('user').order_by('-created_at')[:10]
         context['recent_orders'] = orders.select_related('branch').order_by('-created_at')[:10]
         context['timestamp'] = today
 
         return context
 
-        
+
 class OrderDetailView(AdminRequiredMixin, DetailView):
     model = Order
     template_name = "sales/order_detail.html"
@@ -459,7 +493,7 @@ class OrderDetailView(AdminRequiredMixin, DetailView):
 
         order_margin = 0.0
         if self.object.total_revenue > 0:
-            order_margin - round((float(self.object.total_profit) / float(self.object.total_revenue)) * 100, 2)
+            order_margin = round((float(self.object.total_profit) / float(self.object.total_revenue)) * 100, 2)
         context['order_margin'] = order_margin
 
         return context

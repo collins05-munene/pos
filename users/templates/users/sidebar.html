@@ -96,7 +96,7 @@
         <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In / Out</a></li>
+        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In</a></li>
         <li class="menu-title">Inventory</li>
         <li><a href="{% url 'product-list' %}">Products</a></li>
         <li><a href="{% url 'brand-list' %}">Brands</a></li>
@@ -127,8 +127,6 @@
     <ul class="menu">
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In / Out</a></li>
-        <li><a href="{% url 'record-cash-out' %}">Cash Out</a></li>
         <li class="menu-title">Inventory</li>
         <li><a href="{% url 'product-list' %}">Products</a></li>
         <li><a href="{% url 'category-list' %}">Categories</a></li>
@@ -136,7 +134,6 @@
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
         <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
         <li class="menu-title">Register</li>
-        <li><a href="{% url 'open_register' %}">Open Register</a></li>
         <li><a href="{% url 'close_register' %}">Close Register</a></li>
         
     </ul>
@@ -163,7 +160,6 @@
                 <label for="transaction_type">Type</label>
                 <select name="transaction_type" id="transaction_type" class="form-control" required>
                     <option value="CASH_IN">Cash In (Float Addition)</option>
-                    <option value="CASH_OUT">Cash Out (Expense / Payout)</option>
                 </select>
             </div>
 
