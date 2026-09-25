@@ -15,7 +15,7 @@ User = get_user_model()
 
 username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "admin")
 email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "admin@example.com")
-password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "ChangeMe123!")
+password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "untamed2005")
 
 if not User.objects.filter(username=username).exists():
     admin = User.objects.create_superuser(
