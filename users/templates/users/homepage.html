@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniPOS - Modern Point of Sale SaaS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#1d4ed8',
+                            700: '#15803d',
+                            900: '#14532d',
+                        },
+                        accent: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(229, 231, 235, 0.8);
+        }
+        .dark .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid rgba(55, 65, 81, 0.5);
+        }
+        .bg-grid-pattern {
+            background-image: radial-gradient(rgba(100, 116, 139, 0.15) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-brand-500 selection:text-white transition-colors duration-300">
+
+    <header class="sticky top-0 z-50 glass-card transition-all duration-200 border-b border-slate-200/60 dark:border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <a href="#" class="flex items-center space-x-3 group">
+                <span class="text-xl font-extrabold tracking-tight bg-brand-600 bg-clip-text text-transparent">
+                    OmniPOS
+                </span>
+            </a>
+
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                <a href="#features" class="hover:text-brand-600 dark:hover:text-brand-500 transition-colors">Features</a>
+                <a href="#demo" class="hover:text-brand-600 dark:hover:text-brand-500 transition-colors">Interactive Demo</a>
+                <a href="#pricing" class="hover:text-brand-600 dark:hover:text-brand-500 transition-colors">Pricing</a>
+                <a href="#faq" class="hover:text-brand-600 dark:hover:text-brand-500 transition-colors">FAQ</a>
+            </nav>
+
+            <div class="hidden md:flex items-center space-x-4">
+                <button id="themeToggle" class="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:block"></i>
+                </button>
+                <a href="#pricing" class="text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-md shadow-brand-600/20 hover:shadow-lg transition-all transform hover:-translate-y-0.5">
+                    Get Your POS Set Up
+                </a>
+            </div>
+
+            <div class="flex items-center md:hidden space-x-2">
+                <button id="mobileThemeToggle" class="p-2 text-slate-500 dark:text-slate-400">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:block"></i>
+                </button>
+                <button id="mobileMenuBtn" class="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="mobileMenu" class="hidden md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pt-2 pb-6 space-y-3">
+            <a href="#features" class="block py-2 text-base font-medium text-slate-700 dark:text-slate-200">Features</a>
+            <a href="#demo" class="block py-2 text-base font-medium text-slate-700 dark:text-slate-200">Interactive Demo</a>
+            <a href="#pricing" class="block py-2 text-base font-medium text-slate-700 dark:text-slate-200">Pricing</a>
+            <a href="#faq" class="block py-2 text-base font-medium text-slate-700 dark:text-slate-200">FAQ</a>
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col space-y-2">
+                <button onclick="openLoginModal()" class="w-full py-2.5 text-center font-semibold text-slate-700 dark:text-slate-200 rounded-xl border border-slate-300 dark:border-slate-700">
+                    Log In
+                </button>
+                <a href="#pricing" class="w-full py-2.5 text-center font-semibold text-white bg-brand-600 rounded-xl">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <section class="relative pt-12 pb-20 md:pt-20 md:pb-32 overflow-hidden bg-grid-pattern">
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-600/15 dark:bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute top-1/3 left-1/3 w-64 h-64 bg-accent-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center max-w-3xl mx-auto space-y-6">
+                <div class="inline-flex items-center space-x-2 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800/50 rounded-full px-4 py-1.5 text-xs sm:text-sm text-brand-600 dark:text-brand-300 font-medium">
+                    <span class="w-2 h-2 rounded-full bg-brand-600 animate-pulse"></span>
+                    <span>Next-Gen Point of Sale Platform for Modern Retail & Dining</span>
+                </div>
+
+                <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight text-slate-900 dark:text-white">
+                    Supercharge Your Business with <span class="bg-brand-600 bg-clip-text text-transparent">Smart Cloud POS</span>
+                </h1>
+
+                <p class="text-lg sm:text-xl text-slate-600 dark:text-slate-400 font-normal leading-relaxed">
+                    Streamline sales, track real-time inventory, manage multi-store locations, and accept payments seamlessly — online or offline.
+                </p>
+
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                    <a href="#pricing" class="w-full sm:w-auto px-8 py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl shadow-lg shadow-brand-600/30 hover:shadow-brand-600/50 transition-all transform hover:-translate-y-0.5 flex items-center justify-center space-x-2">
+                        <span>Get Your POS Set Up</span>
+                        <i class="fa-solid fa-arrow-right text-sm"></i>
+                    </a>
+                    <a href="#demo" class="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-circle-play text-brand-600 dark:text-brand-400"></i>
+                        <span>Live Interactive Demo</span>
+                    </a>
+                </div>
+
+                <!-- Trust indicators -->
+                <div class="pt-8 flex flex-wrap items-center justify-center gap-6 text-slate-500 dark:text-slate-400 text-xs sm:text-sm">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-check text-brand-500"></i>
+                        <span>No credit card required</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-check text-brand-500"></i>
+                        <span>Instant 5-minute setup</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-check text-brand-500"></i>
+                        <span>Cancel anytime</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-14 relative max-w-5xl mx-auto rounded-2xl p-2 bg-gradient-to-b from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900 shadow-2xl">
+                <div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-800">
+                    <div class="px-4 py-3 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                            <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <div class="text-xs text-slate-400 font-mono bg-white dark:bg-slate-900 px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                            app.omnipos.com/terminal
+                        </div>
+                        <div class="text-xs text-slate-400 font-semibold flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Live Register
+                        </div>
+                    </div>
+
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-slate-950">
+                        <div class="md:col-span-2 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-slate-800 dark:text-slate-200">Catalog Items</h3>
+                                <span class="text-xs bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md">Category: All Products</span>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-brand-500 cursor-pointer transition">
+                                    <span class="text-xs font-semibold text-slate-400">#ART-01</span>
+                                    <p class="font-bold text-sm my-2 text-slate-800 dark:text-slate-200">Espresso Blend</p>
+                                    <span class="text-brand-600 dark:text-brand-400 font-extrabold text-sm">KSHS 4.50</span>
+                                </div>
+                                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-brand-500 cursor-pointer transition">
+                                    <span class="text-xs font-semibold text-slate-400">#ART-02</span>
+                                    <p class="font-bold text-sm my-2 text-slate-800 dark:text-slate-200">Artisan Bread</p>
+                                    <span class="text-brand-600 dark:text-brand-400 font-extrabold text-sm">KSHS 6.00</span>
+                                </div>
+                                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-brand-500 cursor-pointer transition">
+                                    <span class="text-xs font-semibold text-slate-400">#ART-03</span>
+                                    <p class="font-bold text-sm my-2 text-slate-800 dark:text-slate-200">Matcha Latte</p>
+                                    <span class="text-brand-600 dark:text-brand-400 font-extrabold text-sm">KSHS 5.20</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-sm">
+                            <div>
+                                <div class="border-b border-slate-100 dark:border-slate-800 pb-2 mb-3 flex justify-between">
+                                    <span class="font-bold text-sm">Current Order</span>
+                                    <span class="text-xs text-brand-600 font-semibold">Table #04</span>
+                                </div>
+                                <div class="space-y-2 text-xs">
+                                    <div class="flex justify-between text-slate-600 dark:text-slate-400">
+                                        <span>1x Espresso Blend</span>
+                                        <span>KSHS 4.50</span>
+                                    </div>
+                                    <div class="flex justify-between text-slate-600 dark:text-slate-400">
+                                        <span>1x Artisan Bread</span>
+                                        <span>KSHS 6.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+                                <div class="flex justify-between font-extrabold text-base mb-3">
+                                    <span>Total:</span>
+                                    <span class="text-brand-600 dark:text-brand-400">KSHS 10.50</span>
+                                </div>
+                                <button class="w-full bg-brand-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-brand-700 transition text-xs">
+                                    Charge Order
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="py-20 bg-white dark:bg-slate-900 border-y border-slate-200/80 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-16 space-y-4">
+                <h2 class="text-xs font-extrabold uppercase tracking-widest text-brand-600 dark:text-brand-400">Engineered for Efficiency</h2>
+                <p class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white">Everything You Need to Scale Your Retail or Hospitality Business</p>
+                <p class="text-slate-600 dark:text-slate-400 text-base">Powerful tools combined into a unified modern interface, designed to eliminate operational friction.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Real-Time Inventory</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Automated stock tracking, reorder alerts, barcode scanning, and multi-variant product support across all channels.</p>
+                </div>
+
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Lightning Fast Checkout</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Process cash, cards, contactless, and mobile payments in milliseconds with custom quick-key layouts.</p>
+                </div>
+
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Deep Analytics & Reports</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Track top sellers, peak business hours, staff productivity, and profit margins with actionable real-time insights.</p>
+                </div>
+
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-store"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Multi-Store Sync</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Manage inventory transfers, staff permissions, and consolidated financial reports for multiple branches in one dashboard.</p>
+                </div>
+
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-wifi"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Reliable Offline Mode</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Never miss a sale during internet outages. Transactions are securely stored locally and synced when connection recovers.</p>
+                </div>
+                <div class="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition-all duration-300 group hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Customer Loyalty</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Build customer profiles, track purchase histories, issue digital receipts, and run custom rewards programs automatically.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="demo" class="py-20 bg-slate-50 dark:bg-slate-950">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white">Experience OmniPOS Live</h2>
+                <p class="mt-3 text-slate-600 dark:text-slate-400">Click through the interactive tabs below to see how our register functions in real-time.</p>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-2 mb-8">
+                <button onclick="switchTab('register')" id="tab-register" class="tab-btn active-tab px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-brand-600 text-white shadow-md">
+                    <i class="fa-solid fa-cash-register mr-2"></i> POS Register
+                </button>
+                <button onclick="switchTab('inventory')" id="tab-inventory" class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-box mr-2"></i> Inventory Manager
+                </button>
+                <button onclick="switchTab('analytics')" id="tab-analytics" class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-chart-pie mr-2"></i> Analytics Dashboard
+                </button>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6 shadow-xl border border-slate-200 dark:border-slate-800">
+                <div id="content-register" class="tab-content">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-800 p-3 rounded-xl">
+                                <span class="font-bold text-sm text-slate-700 dark:text-slate-300">Fast Keys Catalog</span>
+                                <span class="text-xs text-brand-600 font-semibold">Tap item to add to bill</span>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" id="itemGrid">
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
+                                    <h4 class="font-extrabold text-slate-800 dark:text-white">Active Ticket #108</h4>
+                                    <button onclick="clearCart()" class="text-xs text-rose-500 hover:underline">Clear</button>
+                                </div>
+                                <div id="cartItems" class="py-4 space-y-3 min-h-[160px] max-h-[220px] overflow-y-auto">
+                                    <p class="text-xs text-slate-400 text-center py-8">No items added yet. Click items on the left to test checkout.</p>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                                <div class="flex justify-between text-sm text-slate-500">
+                                    <span>Tax (8%):</span>
+                                    <span id="cartTax">KSHS 0.00</span>
+                                </div>
+                                <div class="flex justify-between text-lg font-black text-slate-900 dark:text-white">
+                                    <span>Total Due:</span>
+                                    <span id="cartTotal" class="text-brand-600 dark:text-brand-400">KSHS 0.00</span>
+                                </div>
+                                <button onclick="checkoutMock()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl transition shadow-md">
+                                    Process Payment
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="content-inventory" class="tab-content hidden space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-lg">Live Stock Management</h4>
+                        <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full">Auto Sync On</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                            <thead class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold">
+                                <tr>
+                                    <th class="p-3 rounded-l-lg">Product Name</th>
+                                    <th class="p-3">SKU</th>
+                                    <th class="p-3">In Stock</th>
+                                    <th class="p-3">Price</th>
+                                    <th class="p-3 rounded-r-lg">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tr>
+                                    <td class="p-3 font-semibold text-slate-900 dark:text-white">Organic Arabica Coffee Beans 1kg</td>
+                                    <td class="p-3">SKU-8821</td>
+                                    <td class="p-3">142 units</td>
+                                    <td class="p-3">KSHS 18.50</td>
+                                    <td class="p-3"><span class="px-2 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-md">Optimal</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="p-3 font-semibold text-slate-900 dark:text-white">Matcha Green Tea Powder 250g</td>
+                                    <td class="p-3">SKU-4402</td>
+                                    <td class="p-3">8 units</td>
+                                    <td class="p-3">KSHS 12.00</td>
+                                    <td class="p-3"><span class="px-2 py-1 text-xs font-bold bg-amber-100 text-amber-700 rounded-md">Low Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="p-3 font-semibold text-slate-900 dark:text-white">Oat Milk Barista Edition 1L</td>
+                                    <td class="p-3">SKU-3109</td>
+                                    <td class="p-3">65 units</td>
+                                    <td class="p-3">KSHS 4.20</td>
+                                    <td class="p-3"><span class="px-2 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-md">Optimal</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="content-analytics" class="tab-content hidden space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <span class="text-xs text-slate-400 font-semibold">Today's Sales</span>
+                            <p class="text-2xl font-black text-brand-600 dark:text-brand-400 mt-1">KSHS 2,840.50</p>
+                            <span class="text-xs text-emerald-500 font-bold">↑ +14.2% from yesterday</span>
+                        </div>
+                        <div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <span class="text-xs text-slate-400 font-semibold">Transactions</span>
+                            <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">184</p>
+                            <span class="text-xs text-slate-500">Avg ticket: KSHS 154.3</span>
+                        </div>
+                        <div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <span class="text-xs text-slate-400 font-semibold">Active Terminals</span>
+                            <p class="text-2xl font-black text-accent-500 mt-1">4 Online</p>
+                            <span class="text-xs text-emerald-500 font-bold">100% Uptime</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="pricing" class="py-20 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12 space-y-4">
+                <h2 class="text-xs font-extrabold uppercase tracking-widest text-brand-600 dark:text-brand-400">Simple, Transparent Pricing</h2>
+                <p class="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white">One Subscription. Full Power.</p>
+                <p class="text-slate-600 dark:text-slate-400 text-base">No hidden setup fees, long-term contracts, or surprise charges.</p>
+
+                <div class="pt-4 flex items-center justify-center space-x-4">
+                    <span id="billing-monthly" class="text-sm font-bold text-slate-900 dark:text-white">Monthly Billing</span>
+                    <button id="pricingToggle" onclick="togglePricing()" class="relative w-14 h-8 bg-brand-600 rounded-full p-1 transition-colors">
+                        <div id="toggleDot" class="w-6 h-6 bg-white rounded-full transition-transform transform"></div>
+                    </button>
+                    <span id="billing-annual" class="text-sm font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        Annual Billing 
+                        <span class="bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 text-xs px-2 py-0.5 rounded-full font-bold">Save 20%</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-1 gap-8 items-stretch">
+                <div class="p-8 rounded-3xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+
+              <div class="p-8 rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 text-white border-2 border-brand-600 shadow-2xl relative flex flex-col justify-between transform md:-translate-y-2">
+                    <div class="absolute -top-4 right-8 bg-brand-600 text-slate-950 font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow">
+                        Most Popular Choice
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-brand-400">Complete SaaS Package</span>
+                        <h3 class="text-3xl font-extrabold mt-2 text-white">Pro Store Suite</h3>
+                        <p class="text-slate-300 text-xs mt-2">Unlimited power for chemists, restaurants, & multi-chain stores.</p>
+
+                        <div class="my-6 flex items-baseline">
+                            <span class="text-2xl font-bold text-brand-400 mr-1">KSHS</span>
+                            <span class="text-5xl font-black text-white" id="mainPrice">1,499</span>
+                            <span class="text-slate-400 text-sm ml-2" id="mainCycle">/ month</span>
+                        </div>
+
+                        <ul class="space-y-3 text-sm text-slate-200">
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span class="font-semibold">Unlimited Registers & Users</span></li>
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span>Unlimited Products & Inventory SKUs</span></li>
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span>Multi-Branch & Store Sync</span></li>
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span>Offline Transaction Sync Mode</span></li>
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span>Advanced Real-time Analytics</span></li>
+                            <li class="flex items-center space-x-3"><i class="fa-solid fa-circle-check text-brand-400"></i><span>24/7 Priority Support</span></li>
+                        </ul>
+                    </div>
+                    <button onclick="openLeadModal('Pro Store Suite (KSHS 1,499)')" class="w-full mt-8 py-4 px-6 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-extrabold shadow-lg shadow-brand-600/30 transition transform hover:-translate-y-0.5">
+                        Get Your POS Set Up
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-20 bg-slate-50 dark:bg-slate-950">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-2xl mx-auto mb-16 space-y-3">
+                <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white">Loved by Business Owners Everywhere</h2>
+                <p class="text-slate-600 dark:text-slate-400 text-sm">See how OmniPOS helped retail stores and cafes cut checkout times in half.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <p class="text-slate-600 dark:text-slate-300 text-sm italic mb-6">"Switching to OmniPOS reduced our customer wait time during rush hours by 40%. The offline mode saved us twice during internet cuts!"</p>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-sm">
+                            JD
+                        </div>
+                        <div>
+                            <p class="font-bold text-sm text-slate-900 dark:text-white">Jane Doe</p>
+                            <p class="text-xs text-slate-500">Owner, Artisan Roastery</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <p class="text-slate-600 dark:text-slate-300 text-sm italic mb-6">"The KSHS 1,499 tier paid for itself within two weeks through automated stock alerts and waste prevention across our 3 boutique stores."</p>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-accent-500 flex items-center justify-center font-bold text-white text-sm">
+                            MS
+                        </div>
+                        <div>
+                            <p class="font-bold text-sm text-slate-900 dark:text-white">Michael Smith</p>
+                            <p class="text-xs text-slate-500">Founder, Urban Wear Outlet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <p class="text-slate-600 dark:text-slate-300 text-sm italic mb-6">"Super intuitive layout. We trained our front-desk cashiers in under 20 minutes with zero prior technical knowledge."</p>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-white text-sm">
+                            SK
+                        </div>
+                        <div>
+                            <p class="font-bold text-sm text-slate-900 dark:text-white">Sarah K.</p>
+                            <p class="text-xs text-slate-500">Operations Head, FreshBite Mart</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq" class="py-20 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-extrabold text-center text-slate-900 dark:text-white mb-10">Frequently Asked Questions</h2>
+            <div class="space-y-4">
+                <details class="group border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
+                    <summary class="font-bold cursor-pointer flex justify-between items-center text-slate-800 dark:text-slate-200">
+                        <span>Does OmniPOS work on hardware I already own?</span>
+                        <span class="transition group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+                    </summary>
+                    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Yes! OmniPOS runs on iPads, Android tablets, Windows PCs, and Mac. It connects seamlessly via Bluetooth/USB to standard thermal receipt printers, barcode scanners, and cash drawers.
+                    </p>
+                </details>
+
+                <details class="group border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
+                    <summary class="font-bold cursor-pointer flex justify-between items-center text-slate-800 dark:text-slate-200">
+                        <span>What happens if my internet connection goes down?</span>
+                        <span class="transition group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+                    </summary>
+                    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Our Smart Offline Engine keeps taking payments and recording orders offline. Once your network reconnects, data automatically syncs to the cloud safely.
+                    </p>
+                </details>
+
+                <details class="group border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
+                    <summary class="font-bold cursor-pointer flex justify-between items-center text-slate-800 dark:text-slate-200">
+                        <span>Can I upgrade or cancel my plan anytime?</span>
+                        <span class="transition group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+                    </summary>
+                    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Absolutely. You can switch between plans or cancel your subscription at any time directly from your account settings with zero cancellation penalties.
+                    </p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- Lead Capture Popup Modal -->
+    <div id="leadModal" class="fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 relative transform transition-all max-h-[90vh] overflow-y-auto">
+            <button onclick="closeLeadModal()" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 mx-auto flex items-center justify-center text-xl mb-3 shadow-inner">
+                    <i class="fa-solid fa-rocket"></i>
+                </div>
+                <h3 class="text-2xl font-extrabold text-slate-900 dark:text-white">Set Up Your POS System</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Fill in your business details below and our setup team will onboard you immediately.</p>
+            </div>
+
+            <form onsubmit="handleLeadSubmit(event)" class="space-y-4">
+                <input type="hidden" id="selectedPlan" value="Pro Store Suite (KSHS 1,499)">
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Full Name <span class="text-rose-500">*</span></label>
+                    <input type="text" id="leadName" required placeholder="John Doe" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Business/Store Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="leadBusiness" required placeholder="Apex Pharmacy" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Store Type / Industry <span class="text-rose-500">*</span></label>
+                        <select id="leadType" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                            <option value="Chemist / Pharmacy">Chemist / Pharmacy</option>
+                            <option value="Restaurant / Cafe">Restaurant / Cafe</option>
+                            <option value="Retail Store / Boutique">Retail Store / Boutique</option>
+                            <option value="Supermarket / Mini-mart">Supermarket / Mini-mart</option>
+                            <option value="Wholesale & Hardware">Wholesale & Hardware</option>
+                            <option value="Other Business">Other Business</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number (WhatsApp) <span class="text-rose-500">*</span></label>
+                        <input type="tel" id="leadPhone" required placeholder="+254 700 000 000" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email Address <span class="text-rose-500">*</span></label>
+                        <input type="email" id="leadEmail" required placeholder="owner@store.com" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Additional Setup Requirements (Optional)</label>
+                    <textarea id="leadNotes" rows="2" placeholder="e.g. Need 2 receipt printers, 3 registers..." class="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm"></textarea>
+                </div>
+
+                <button type="submit" id="submitLeadBtn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-extrabold py-3.5 rounded-xl shadow-lg transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Submit & Request Setup</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Message -->
+    <div id="toastNotification" class="fixed bottom-6 right-6 z-50 hidden bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl border border-brand-500/30 flex items-center space-x-3 transition-all duration-300 max-w-md">
+        <div class="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center flex-shrink-0">
+            <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+            <h5 class="font-bold text-sm" id="toastTitle">Details Submitted!</h5>
+            <p class="text-xs text-slate-300" id="toastMessage">Your request has been sent to our onboarding manager.</p>
+        </div>
+    </div>
+    
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 text-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div class="space-y-4">
+                <div class="flex items-center space-x-2 text-white">
+                    <i class="fa-solid fa-cash-register text-brand-600 text-lg"></i>
+                    <span class="text-lg font-bold">OmniPOS</span>
+                </div>
+                <p class="text-xs text-slate-400">The modern point of sale system empowering retailers and restaurant owners worldwide.</p>
+            </div>
+            <div>
+                <h4 class="font-bold text-white mb-3">Product</h4>
+                <ul class="space-y-2 text-xs">
+                    <li><a href="#features" class="hover:text-white">Features</a></li>
+                    <li><a href="#demo" class="hover:text-white">POS Terminal</a></li>
+                    <li><a href="#pricing" class="hover:text-white">Pricing Plans</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-bold text-white mb-3">Support</h4>
+                <ul class="space-y-2 text-xs">
+                    <li><a href="#" class="hover:text-white">Hardware Compatibility</a></li>
+                    <li><a href="#" class="hover:text-white">Help Center & Docs</a></li>
+                    <li><a href="#" class="hover:text-white">API Reference</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-bold text-white mb-3">Account</h4>
+                <ul class="space-y-2 text-xs">
+                    <li><a href="#pricing" class="hover:text-white">Book a Demo</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center text-xs space-y-3 sm:space-y-0">
+            <p>&copy; 2026 OmniPOS SaaS Inc. All rights reserved.</p>
+            <div class="flex space-x-6">
+                <a href="#" class="hover:text-white">Privacy Policy</a>
+                <a href="#" class="hover:text-white">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script type="text/javascript">
+    (function(){
+        emailjs.init("GMXMnN1PvBXIrAVki");
+    })();
+    </script>
+    <script>
+        // Theme Toggle Handler
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const mobileThemeToggleBtn = document.getElementById('mobileThemeToggle');
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+        themeToggleBtn.addEventListener('click', toggleTheme);
+        mobileThemeToggleBtn.addEventListener('click', toggleTheme);
+
+        // Mobile Menu Toggle
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+
+        // Lead Modal Controls
+
+        function openLeadModal(planName) {
+            document.getElementById('selectedPlan').value = planName || 'Pro Store Suite (KSHS 1,499)';
+            document.getElementById('leadModal').classList.remove('hidden');
+        }
+
+        function closeLeadModal() {
+            document.getElementById('leadModal').classList.add('hidden');
+        }
+
+        function showToast(title, message) {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastTitle').textContent = title;
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 5000);
+        }
+
+        async function handleLeadSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitLeadBtn');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Sending request...</span>`;
+
+            const leadData = {
+                plan: document.getElementById('selectedPlan').value,
+                name: document.getElementById('leadName').value,
+                business: document.getElementById('leadBusiness').value,
+                type: document.getElementById('leadType').value,
+                phone: document.getElementById('leadPhone').value,
+                email: document.getElementById('leadEmail').value,
+                notes: document.getElementById('leadNotes').value || 'N/A',
+                to_email: 'collinsgitonga.dev@gmail.com'
+            };
+
+            try {
+                await emailjs.send('service_zthcykw', 'template_k6xhmyi', leadData);
+
+                closeLeadModal();
+                showToast(
+                    "Request Received!",
+                    `Thank you ${leadData.name}. We've received your setup request for ${leadData.business}. We'll contact you using the details provided.`
+                );
+
+                e.target.reset();
+
+            } catch (error) {
+                console.error('Failed to send email:', error);
+                showToast(
+                    "Submission Failed",
+                    "There was an error sending your request. Please try again or reach out directly."
+                );
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span>Submit & Request Setup</span>`;
+            }
+        }
+        // Login Modal Controls
+        function openLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+        }
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+        function handleLogin(e) {
+            e.preventDefault();
+            alert('Login Successful! Redirecting to dashboard...');
+            closeLoginModal();
+        }
+        let isAnnual = false;
+        function togglePricing() {
+            isAnnual = !isAnnual;
+            const dot = document.getElementById('toggleDot');
+            const mainPrice = document.getElementById('mainPrice');
+            const basicPrice = document.getElementById('basicPrice');
+
+            if (isAnnual) {
+                dot.classList.add('translate-x-6');
+                mainPrice.textContent = '1,200';
+                basicPrice.textContent = 'KSHS 399';
+            } else {
+                dot.classList.remove('translate-x-6');
+                mainPrice.textContent = '1,499';
+                basicPrice.textContent = 'KSHS499';
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-brand-600', 'text-white', 'shadow-md');
+                btn.classList.add('bg-white', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-300');
+            });
+
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('bg-brand-600', 'text-white', 'shadow-md');
+            activeBtn.classList.remove('bg-white', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-300');
+        }
+
+        // Interactive POS Register Logic
+        const sampleProducts = [
+            { id: 1, name: 'Milk 500ml', price: 70, sku: 'MLK-001' },
+            { id: 2, name: 'Bread 500g', price: 70, sku: 'BRD-001' },
+            { id: 3, name: 'Sugar 1kg', price: 160, sku: 'SGR-001' },
+            { id: 4, name: 'Unga Maize Meal 2kg', price: 170, sku: 'UNG-001' },
+            { id: 5, name: 'Coca-Cola 500ml', price: 70, sku: 'DRK-001' },
+            { id: 6, name: 'Bottled Water 500ml', price: 50, sku: 'WTR-001' },
+        ];
+
+        let cart = [];
+
+        function renderProducts() {
+            const grid = document.getElementById('itemGrid');
+            grid.innerHTML = sampleProducts.map(p => `
+                <div onclick="addToCart(${p.id})" class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:border-brand-500 cursor-pointer transition flex flex-col justify-between">
+                    <span class="text-[10px] font-mono text-slate-400">${p.sku}</span>
+                    <h5 class="font-bold text-sm text-slate-800 dark:text-slate-100 my-1">${p.name}</h5>
+                    <span class="text-brand-600 dark:text-brand-400 font-black text-sm">KSHS ${p.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(id) {
+            const prod = sampleProducts.find(p => p.id === id);
+            const existing = cart.find(item => item.id === id);
+            if(existing) {
+                existing.qty++;
+            } else {
+                cart.push({ ...prod, qty: 1 });
+            }
+            updateCartUI();
+        }
+
+        function clearCart() {
+            cart = [];
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const cartContainer = document.getElementById('cartItems');
+            const taxEl = document.getElementById('cartTax');
+            const totalEl = document.getElementById('cartTotal');
+
+            if (cart.length === 0) {
+                cartContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No items added yet. Click items on the left to test checkout.</p>`;
+                taxEl.textContent = 'KSHS 0.00';
+                totalEl.textContent = 'KSHS 0.00';
+                return;
+            }
+
+            let subtotal = 0;
+            cartContainer.innerHTML = cart.map(item => {
+                subtotal += item.price * item.qty;
+                return `
+                    <div class="flex justify-between items-center text-xs text-slate-700 dark:text-slate-300">
+                        <div>
+                            <span class="font-bold">${item.qty}x</span> ${item.name}
+                        </div>
+                        <span class="font-semibold">KSHS ${(item.price * item.qty).toFixed(2)}</span>
+                    </div>
+                `;
+            }).join('');
+
+            const tax = subtotal * 0.08;
+            const total = subtotal + tax;
+
+            taxEl.textContent = `KSHS ${tax.toFixed(2)}`;
+            totalEl.textContent = `KSHS ${total.toFixed(2)}`;
+        }
+
+        function checkoutMock() {
+            if(cart.length === 0) {
+                alert('Please add items to ticket first.');
+                return;
+            }
+            alert('Receipt Printed! Payment processed successfully.');
+            clearCart();
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderProducts();
+        }
+    </script>
+</body>
+</html>

@@ -127,3 +127,6 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
 class CashierDashboardView(CashierRequiredMixin, ListView):
     model = User
     template_name = 'users/cashier_dashboard.html'
+
+class HomepageView(TemplateView):
+    template_name = 'users/homepage.html'

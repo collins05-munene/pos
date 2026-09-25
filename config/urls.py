@@ -19,7 +19,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
 
+from users.views import HomepageView
+
 urlpatterns = [
+    path('', HomepageView.as_view(), name='homepage'),
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('products/', include('products.urls')),
