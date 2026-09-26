@@ -1,10 +1,11 @@
-#!/usr/bin/env bash
+```bash
 
 set -o errexit
 
 pip install -r requirements.txt
 
 python manage.py collectstatic --no-input
+
 python manage.py migrate
 
 python manage.py shell <<EOF
@@ -23,6 +24,7 @@ if not User.objects.filter(username=username).exists():
         email=email,
         password=password,
     )
+
     admin.role = User.Roles.ADMIN
     admin.save()
 
@@ -30,3 +32,4 @@ if not User.objects.filter(username=username).exists():
 else:
     print(f"Admin user '{username}' already exists.")
 EOF
+```

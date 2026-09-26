@@ -31,7 +31,13 @@ if os.path.exists(env_file):
 SECRET_KEY  = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# CHANGED FOR PWA/PRODUCTION HARDENING: this was hardcoded to True.
+# It now defaults to True for local/ngrok dev (unchanged behaviour if
+# you don't set anything), but MUST be set to False via the DEBUG env
+# var in production — the HTTPS/security block below only activates
+# when DEBUG is False, and a service worker will refuse to register
+# on a plain-HTTP production origin anyway (see notes below).
+DEBUG = env.bool('DEBUG', default=True)
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
@@ -79,7 +85,11 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # ADDED FOR PWA: project-level templates dir so templates/pwa/
+        # (service-worker.js, offline.html) are found. Your existing
+        # per-app templates (e.g. users/templates/users/...) still work
+        # unchanged via APP_DIRS below.
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -141,6 +151,14 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# ADDED FOR PWA: tells collectstatic where to find the project-level
+# static/ folder (manifest.json, static/icons/*.png). If you already
+# have your own STATICFILES_DIRS elsewhere, merge BASE_DIR / 'static'
+# into it instead of duplicating this setting.
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 STORAGES = {
@@ -178,3 +196,30 @@ MPESA_CONSUMER_SECRET=env('MPESA_CONSUMER_SECRET')
 MPESA_SHORTCODE=env('MPESA_SHORTCODE')
 MPESA_PASSKEY=env('MPESA_PASSKEY')
 MPESA_CALLBACK_URL=env('MPESA_CALLBACK_URL')
+
+
+# --- PWA / production HTTPS hardening ---------------------------------
+# ADDED FOR PWA. A service worker (required for installability, the
+# manifest to be honoured, and offline support) only registers on
+# "secure contexts": https://, or http://localhost / http://127.0.0.1.
+# This block only takes effect when DEBUG is False, so local dev
+# (DEBUG=True, plain http://127.0.0.1) and your existing ngrok flow
+# (already https://) are unaffected either way.
+if not DEBUG:
+    # Render (and most PaaS hosts) terminate TLS at a proxy and forward
+    # plain HTTP internally, so Django needs this header to know the
+    # original request was HTTPS — without it, SECURE_SSL_REDIRECT
+    # below would redirect-loop forever.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7  # 1 week to start; raise once confirmed stable
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    X_FRAME_OPTIONS = 'DENY'

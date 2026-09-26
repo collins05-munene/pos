@@ -5,6 +5,17 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>{% block title %} POS System {% endblock %}</title>
+
+        <!-- PWA: manifest + icons + theme color -->
+        <link rel="manifest" href="{% static 'manifest.json' %}">
+        <meta name="theme-color" content="#2563eb">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="POS System">
+        <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
+        <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+
         <link rel="stylesheet" href="{% static 'css/style.css' %}">
         <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
         <link rel="stylesheet" href="{% static 'css/topbar.css' %}">
@@ -67,6 +78,43 @@
             .session-btn:hover {
                 background-color: #1d4ed8;
             }
+
+            /* PWA update-available toast */
+            .pwa-update-toast {
+                position: fixed;
+                bottom: 1.5rem;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #ffffff;
+                border-radius: 8px;
+                padding: 1rem 1.25rem;
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.15);
+                display: none;
+                align-items: center;
+                gap: 1rem;
+                z-index: 10000;
+                font-family: system-ui, -apple-system, sans-serif;
+                max-width: 90vw;
+            }
+            .pwa-update-toast p {
+                margin: 0;
+                font-size: 0.9rem;
+                color: #1f2937;
+            }
+            .pwa-update-toast button {
+                background-color: #2563eb;
+                color: #ffffff;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 6px;
+                font-size: 0.85rem;
+                font-weight: 500;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .pwa-update-toast button:hover {
+                background-color: #1d4ed8;
+            }
         </style>
         
         {% block extra_head %} {% endblock %}
@@ -119,6 +167,12 @@
                 <p>You have been inactive for a while. You will be logged out in <span id="sessionCountdown" class="session-countdown">30</span> seconds.</p>
                 <button id="stayLoggedInBtn" class="session-btn">I'm still here</button>
             </div>
+        </div>
+
+        <!-- PWA: update-available toast, wired up by the service worker registration script below -->
+        <div id="pwaUpdateToast" class="pwa-update-toast">
+            <p>A new version is available.</p>
+            <button id="pwaUpdateBtn">Refresh</button>
         </div>
 
         <script>
@@ -197,6 +251,67 @@
 
                 
                 resetInactivityTimer();
+            })();
+        </script>
+
+        <!-- PWA: service worker registration + update handling -->
+        <script>
+            (function () {
+                if (!("serviceWorker" in navigator)) return;
+
+                window.addEventListener("load", function () {
+                    navigator.serviceWorker
+                        .register("/service-worker.js")
+                        .then(function (registration) {
+                            // If a new worker is already waiting (e.g. user
+                            // had the app open across a deploy), offer the
+                            // refresh prompt right away.
+                            if (registration.waiting) {
+                                showUpdateToast(registration);
+                            }
+
+                            registration.addEventListener("updatefound", function () {
+                                const newWorker = registration.installing;
+                                if (!newWorker) return;
+                                newWorker.addEventListener("statechange", function () {
+                                    if (
+                                        newWorker.state === "installed" &&
+                                        navigator.serviceWorker.controller
+                                    ) {
+                                        // A previous version was already
+                                        // controlling this page, so this is
+                                        // an update, not the first install.
+                                        showUpdateToast(registration);
+                                    }
+                                });
+                            });
+                        })
+                        .catch(function (err) {
+                            console.error("Service worker registration failed:", err);
+                        });
+
+                    // Reload once the new service worker takes control, so
+                    // the user actually gets the new app version.
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener("controllerchange", function () {
+                        if (refreshing) return;
+                        refreshing = true;
+                        window.location.reload();
+                    });
+                });
+
+                function showUpdateToast(registration) {
+                    const toast = document.getElementById("pwaUpdateToast");
+                    const btn = document.getElementById("pwaUpdateBtn");
+                    if (!toast || !btn) return;
+                    toast.style.display = "flex";
+                    btn.addEventListener("click", function () {
+                        if (registration.waiting) {
+                            registration.waiting.postMessage("SKIP_WAITING");
+                        }
+                        toast.style.display = "none";
+                    });
+                }
             })();
         </script>
 

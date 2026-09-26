@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>You're offline — POS System</title>
+    <style>
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            padding: 1.5rem;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 2.5rem 2rem;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .icon { font-size: 2.75rem; margin-bottom: 0.5rem; }
+        h1 { font-size: 1.25rem; margin: 0.5rem 0; }
+        p { color: #4b5563; font-size: 0.95rem; line-height: 1.5; margin: 0.75rem 0 1.5rem; }
+        button {
+            background-color: #2563eb;
+            color: #ffffff;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover { background-color: #1d4ed8; }
+        .note { font-size: 0.8rem; color: #9ca3af; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">📡</div>
+        <h1>No internet connection</h1>
+        <p>
+            The POS System needs a connection to load this page — sales,
+            inventory and payment data must always come from the live
+            server so nothing goes out of sync.
+        </p>
+        <button onclick="window.location.reload()">Try again</button>
+        <p class="note">Once you're back online, this page will reconnect automatically.</p>
+    </div>
+</body>
+</html>
