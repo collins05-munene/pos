@@ -23,6 +23,7 @@ from users.views import HomepageView
 from config.pwa_views import service_worker_view, OfflineView
 
 urlpatterns = [
+    path('', HomepageView.as_view(), name='homepage'),
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('products/', include('products.urls')),
@@ -31,6 +32,9 @@ urlpatterns = [
     path('payments/', include('payments.urls')),
     path('inventory/', include('inventory.urls')),
 
+    # --- PWA support -------------------------------------------------
+    # Must stay at the domain root (not under /static/) so the service
+    # worker's default scope covers the entire site.
     path('service-worker.js', service_worker_view, name='service_worker'),
     path('offline/', OfflineView.as_view(), name='offline'),
 ]

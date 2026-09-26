@@ -14,6 +14,7 @@ from .utils import log_action, AuditAction
 from .dashboard import build_dashboard_context
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 
+
 # Create your views here.
 def get_post_username(group, request):
     return request.POST.get('username', '').lower().strip()
