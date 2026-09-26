@@ -28,7 +28,7 @@ from django.views.generic import TemplateView
 
 
 def service_worker_view(request):
-    content = render_to_string("pwa/service-worker.js")
+    content = render_to_string("static/service-worker.js")
     response = HttpResponse(content, content_type="application/javascript")
     # Let this worker (served from an arbitrary root-level path) control
     # the whole origin. Harmless if it's already served from "/".
