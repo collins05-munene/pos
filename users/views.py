@@ -129,4 +129,4 @@ class CashierDashboardView(CashierRequiredMixin, ListView):
     template_name = 'users/cashier_dashboard.html'
 
 class HomepageView(TemplateView):
-    template_name = 'users/homepage.html'
+    template_name = 'users/pin_login.html'

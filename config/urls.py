@@ -31,9 +31,6 @@ urlpatterns = [
     path('payments/', include('payments.urls')),
     path('inventory/', include('inventory.urls')),
 
-    # --- PWA support -------------------------------------------------
-    # Must stay at the domain root (not under /static/) so the service
-    # worker's default scope covers the entire site.
     path('service-worker.js', service_worker_view, name='service_worker'),
     path('offline/', OfflineView.as_view(), name='offline'),
 ]
