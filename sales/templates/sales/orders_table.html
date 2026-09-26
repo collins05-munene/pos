@@ -1,0 +1,53 @@
+<div class="table-responsive">
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Branch</th>
+        <th>Payment</th>
+        <th>Revenue</th>
+        {% if user.get_role_display == 'Admin' %}
+        <th>Profit</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for order in recent_orders %}
+      <tr>
+        <td>
+          <a href="{% url 'order-detail' order.pk %}" class="invoice-link">
+            <strong>{{ order.invoice_number }}</strong>
+          </a>
+        </td>
+        <td>{{ order.branch.name|default:"Main" }}</td>
+        <td>{{ order.get_payment_method_display }}</td>
+        <td>KSH {{ order.total_revenue }}</td>
+        {% if user.get_role_display == 'Admin' %}
+        <td class="text-green">KSH {{ order.total_profit }}</td>
+        {% endif %}
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" class="empty-state">No sales transactions logged in this period.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if recent_orders.paginator.num_pages > 1 %}
+<div class="table-pagination">
+  <span>Page {{ recent_orders.number }} of {{ recent_orders.paginator.num_pages }} &middot; {{ recent_orders.paginator.count }} order{{ recent_orders.paginator.count|pluralize }}</span>
+  <div class="pagination-links">
+    {% if orders_prev_qs %}
+      <a href="?{{ orders_prev_qs }}" data-ajax-page="orders">&larr; Previous</a>
+    {% else %}
+      <span class="disabled">&larr; Previous</span>
+    {% endif %}
+    {% if orders_next_qs %}
+      <a href="?{{ orders_next_qs }}" data-ajax-page="orders">Next &rarr;</a>
+    {% else %}
+      <span class="disabled">Next &rarr;</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

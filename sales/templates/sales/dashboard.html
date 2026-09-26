@@ -12,7 +12,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     flex-wrap: wrap;
     gap: 1rem;
   }
@@ -39,6 +39,10 @@
     font-weight: 600;
     font-size: 0.85rem;
   }
+  .data-badge.badge-custom {
+    background: #dbeafe;
+    color: #1e40af;
+  }
   .btn-cashout {
     background: #dc2626;
     color: #fff;
@@ -51,11 +55,93 @@
   .btn-cashout:hover {
     background: #b91c1c;
   }
+
+  /* Report period filter */
+  .report-filter-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .report-filter-title {
+    margin: 0 0 0.9rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+  }
+  .report-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+  }
+  .report-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .report-filter-field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.03rem;
+  }
+  .report-filter-field input[type="datetime-local"] {
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #111827;
+  }
+  .btn-generate {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 0.65rem 1.25rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .btn-generate:hover { background: #1d4ed8; }
+  .btn-clear-period {
+    color: #6b7280;
+    font-size: 0.85rem;
+    text-decoration: none;
+    padding: 0.65rem 0.25rem;
+  }
+  .btn-clear-period:hover { color: #111827; text-decoration: underline; }
+  .quick-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+  .quick-pick-btn {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 0.3rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #4b5563;
+    cursor: pointer;
+  }
+  .quick-pick-btn:hover { background: #e5e7eb; color: #111827; }
+
   .section-divider {
     font-size: 1.25rem;
     color: #1f2937;
-    margin: 2rem 0 1rem 0;
+    margin: 2rem 0 0.25rem 0;
     font-weight: 600;
+  }
+  .section-note {
+    margin: 0 0 1rem 0;
+    font-size: 0.85rem;
+    color: #9ca3af;
   }
   .metrics-grid {
     display: grid;
@@ -112,6 +198,7 @@
   .table-responsive {
     width: 100%;
     overflow-x: auto;
+    transition: opacity 0.15s ease;
   }
   table {
     width: 100%;
@@ -144,6 +231,7 @@
   }
   .invoice-link:hover { text-decoration: underline; }
 
+  /* Status Badges */
   .badge-status {
     padding: 4px 8px;
     border-radius: 4px;
@@ -155,12 +243,44 @@
   .badge-closed { background-color: #f3f4f6; color: #4b5563; }
   .badge-in { background-color: #dbeafe; color: #1e40af; }
   .badge-out { background-color: #fee2e2; color: #991b1b; }
+
+  /* Pagination */
+  .table-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.9rem 0.25rem 0.25rem 0.25rem;
+    font-size: 0.85rem;
+    color: #6b7280;
+  }
+  .pagination-links {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .pagination-links a, .pagination-links span {
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.8rem;
+  }
+  .pagination-links a {
+    color: #2563eb;
+    background: #fff;
+    cursor: pointer;
+  }
+  .pagination-links a:hover { background: #eff6ff; }
+  .pagination-links span.disabled {
+    color: #d1d5db;
+    background: #f9fafb;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
-  
+
   <div class="dashboard-header">
     <div>
       <h1 class="dashboard-title">Performance & Cash Analytics</h1>
@@ -170,17 +290,46 @@
       {% if user.get_role_display == 'Admin' %}
       <a href="{% url 'record-cash-out' %}" class="btn-cashout">Record Cash Out</a>
       {% endif %}
-      <span class="data-badge">MTD {{ timestamp|date:"F Y" }}</span>
+      <span class="data-badge {% if period.is_custom %}badge-custom{% endif %}">{{ period.label }}</span>
     </div>
   </div>
 
   {% if user.get_role_display == 'Admin' %}
+  <div class="report-filter-card">
+    <h3 class="report-filter-title">Financial Report Period</h3>
+    <form method="GET" action="{% url 'sales-dashboard' %}">
+      <div class="report-filter-row">
+        <div class="report-filter-field">
+          <label for="period_start">From</label>
+          <input type="datetime-local" name="period_start" id="period_start" value="{{ period.start_input }}" required>
+        </div>
+        <div class="report-filter-field">
+          <label for="period_end">To</label>
+          <input type="datetime-local" name="period_end" id="period_end" value="{{ period.end_input }}" required>
+        </div>
+        <button type="submit" class="btn-generate">Generate Report</button>
+        {% if period.is_custom %}
+          <a href="{% url 'sales-dashboard' %}" class="btn-clear-period">Clear (back to Month-to-Date)</a>
+        {% endif %}
+      </div>
+    </form>
+    <div class="quick-picks">
+      <button type="button" class="quick-pick-btn" data-range="today">Today</button>
+      <button type="button" class="quick-pick-btn" data-range="yesterday">Yesterday</button>
+      <button type="button" class="quick-pick-btn" data-range="this-week">This Week</button>
+      <button type="button" class="quick-pick-btn" data-range="last-7-days">Last 7 Days</button>
+      <button type="button" class="quick-pick-btn" data-range="this-month">This Month</button>
+    </div>
+  </div>
+
+  <!-- SECTION 1: SALES & P&L METRICS — scoped to the report period above -->
   <h2 class="section-divider">Sales & Profitability</h2>
+  <p class="section-note">{{ period.label }} &middot; {{ period.order_count }} order{{ period.order_count|pluralize }}</p>
   <div class="metrics-grid">
     <div class="card metric-card card-blue">
       <h3>Gross Revenue</h3>
       <div class="value">KSH {{ metrics.revenue|floatformat:2 }}</div>
-      <p class="card-footer">Total value generated from sales.</p>
+      <p class="card-footer">Total value generated from sales in this period.</p>
     </div>
     <div class="card metric-card card-blue">
       <h3>Cost of Goods Sold</h3>
@@ -200,6 +349,7 @@
   </div>
 
   <h2 class="section-divider">Cumulative Cash & Vault Overview</h2>
+  <p class="section-note">All-time — this section always reflects the whole pool, independent of the report period above.</p>
   <div class="metrics-grid">
     <div class="card metric-card card-highlight">
       <h3>Live Branch Cash Pool</h3>
@@ -209,7 +359,7 @@
     <div class="card metric-card card-green">
       <h3>Total Cash Verified</h3>
       <div class="value">KSH {{ cumulative_cash.total_counted_cash|floatformat:2 }}</div>
-      <p class="card-footer">Total cash verified from past close.</p>
+      <p class="card-footer">Most recent physical count per branch — not summed across every past close.</p>
     </div>
     <div class="card metric-card card-blue">
       <h3>Cumulative Cash Sales</h3>
@@ -223,7 +373,8 @@
     </div>
   </div>
 
-  <h2 class="section-divider">Monthly Cash Drawer Control</h2>
+  <h2 class="section-divider">Cash Drawer Control</h2>
+  <p class="section-note">{{ period.label }}</p>
   <div class="metrics-grid">
     <div class="card metric-card card-purple">
       <h3>Active Registers</h3>
@@ -233,110 +384,34 @@
     <div class="card metric-card card-green">
       <h3>Total Cash In</h3>
       <div class="value">KSH {{ cash_metrics.cash_in|floatformat:2 }}</div>
-      <p class="card-footer">Float additions this month.</p>
+      <p class="card-footer">Float additions in this period.</p>
     </div>
     <div class="card metric-card card-red">
       <h3>Total Cash Out</h3>
       <div class="value">KSH {{ cash_metrics.cash_out|floatformat:2 }}</div>
-      <p class="card-footer">Withdrawals (deposits, rent, petty cash, etc.) this month.</p>
+      <p class="card-footer">Withdrawals (deposits, rent, petty cash, etc.) in this period.</p>
     </div>
     <div class="card metric-card {% if cash_metrics.discrepancies < 0 %}card-red{% else %}card-green{% endif %}">
-      <h3>Monthly Discrepancy</h3>
+      <h3>Period Discrepancy</h3>
       <div class="value">KSH {{ cash_metrics.discrepancies|floatformat:2 }}</div>
-      <p class="card-footer">Net shortages or overages this month.</p>
+      <p class="card-footer">Net shortages or overages from sessions closed in this period.</p>
     </div>
   </div>
 
   <div class="data-split-container">
     <div class="card table-card">
-      <h2 class="section-title">Recent Cash Register Sessions</h2>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Branch</th>
-              <th>Opened By</th>
-              <th>Opened</th>
-              <th>Closed</th>
-              <th>Opening Float</th>
-              <th>Expected Cash</th>
-              <th>Actual Count</th>
-              <th>Discrepancy</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for session in recent_sessions %}
-            <tr>
-              <td>
-                <span class="badge-status {% if session.status == 'OPEN' %}badge-open{% else %}badge-closed{% endif %}">
-                  {{ session.status }}
-                </span>
-              </td>
-              <td>{{ session.branch.name|default:"Main" }}</td>
-              <td>{{ session.opened_by.first_name|default:session.opened_by.username }}</td>
-              <td>{{ session.opened_at|date:"M d, H:i" }}</td>
-              <td>{{ session.closed_at|date:"M d, H:i"|default:"--" }}</td>
-              <td>KSH {{ session.opening_balance }}</td>
-              <td>KSH {{ session.expected_closing_balance|default:"--" }}</td>
-              <td>KSH {{ session.closing_balance|default:"--" }}</td>
-              <td class="{% if session.discrepancy < 0 %}text-red{% elif session.discrepancy > 0 %}text-green{% endif %}">
-                {% if session.discrepancy %}
-                  KSH {{ session.discrepancy }}
-                {% else %}
-                  --
-                {% endif %}
-              </td>
-              <td>{{ session.notes|default:"-" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="10" class="empty-state">No register sessions recorded yet.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <h2 class="section-title">Cash Register Sessions &mdash; {{ period.label }}</h2>
+      <div id="sessions-table-container">
+        {% include 'sales/sessions_table.html' %}
       </div>
     </div>
   </div>
 
   <div class="data-split-container">
     <div class="card table-card">
-      <h2 class="section-title">Cash In / Cash Out Audit Log</h2>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Reason / Note</th>
-              <th>Recorded By</th>
-              <th>Date & Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for txn in recent_cash_txns %}
-            <tr>
-              <td>
-                <span class="badge-status {% if txn.transaction_type == 'CASH_IN' %}badge-in{% else %}badge-out{% endif %}">
-                  {{ txn.get_transaction_type_display }}
-                </span>
-              </td>
-              <td class="{% if txn.transaction_type == 'CASH_IN' %}text-green{% else %}text-red{% endif %}">
-                KSH {{ txn.amount }}
-              </td>
-              <td>{{ txn.reason }}</td>
-              <td>{{ txn.user.username }}</td>
-              <td>{{ txn.created_at|date:"M d, Y H:i" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="empty-state">No cash adjustments made this month.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <h2 class="section-title">Cash In / Cash Out Audit Log &mdash; {{ period.label }}</h2>
+      <div id="txns-table-container">
+        {% include 'sales/cash_txns_table.html' %}
       </div>
     </div>
   </div>
@@ -344,45 +419,127 @@
 
   <div class="data-split-container">
     <div class="card table-card">
-      <h2 class="section-title">Recent Sales Transactions</h2>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Invoice</th>
-              <th>Branch</th>
-              <th>Payment</th>
-              <th>Revenue</th>
-              {% if user.get_role_display == 'Admin' %}
-              <th>Profit</th>
-              {% endif %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for order in recent_orders %}
-            <tr>
-              <td>
-                <a href="{% url 'order-detail' order.pk %}" class="invoice-link">
-                  <strong>{{ order.invoice_number }}</strong>
-                </a>
-              </td>
-              <td>{{ order.branch.name|default:"Main" }}</td>
-              <td>{{ order.get_payment_method_display }}</td>
-              <td>KSH {{ order.total_revenue }}</td>
-              {% if user.get_role_display == 'Admin' %}
-              <td class="text-green">KSH {{ order.total_profit }}</td>
-              {% endif %}
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="empty-state">No sales transactions logged this month yet.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <h2 class="section-title">Sales Transactions &mdash; {{ period.label }}</h2>
+      <div id="orders-table-container">
+        {% include 'sales/orders_table.html' %}
       </div>
     </div>
   </div>
 
 </div>
+
+<script>
+(function () {
+  'use strict';
+
+  function pad(n) { return n.toString().padStart(2, '0'); }
+
+  function toLocalInputValue(date) {
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function startOfDay(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function applyRange(startDate, endDate) {
+    const startInput = document.getElementById('period_start');
+    const endInput = document.getElementById('period_end');
+    if (!startInput || !endInput) return;
+    startInput.value = toLocalInputValue(startDate);
+    endInput.value = toLocalInputValue(endDate);
+    startInput.closest('form').submit();
+  }
+
+  document.querySelectorAll('.quick-pick-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const now = new Date();
+      const today0 = startOfDay(now);
+      let start, end;
+
+      switch (btn.dataset.range) {
+        case 'today':
+          start = today0;
+          end = now;
+          break;
+        case 'yesterday':
+          start = new Date(today0); start.setDate(start.getDate() - 1);
+          end = new Date(today0);
+          break;
+        case 'this-week': {
+          const day = (today0.getDay() + 6) % 7; // Monday = 0
+          start = new Date(today0); start.setDate(start.getDate() - day);
+          end = now;
+          break;
+        }
+        case 'last-7-days':
+          start = new Date(today0); start.setDate(start.getDate() - 6);
+          end = now;
+          break;
+        case 'this-month':
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = now;
+          break;
+        default:
+          return;
+      }
+
+      applyRange(start, end);
+    });
+  });
+
+  // --- AJAX pagination: swap one table's contents without a full page
+  // reload. Bound on the stable container div (event delegation) so it
+  // keeps working after innerHTML is replaced with the next page.
+  function bindAjaxPagination(containerId, tableKey) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.addEventListener('click', function (e) {
+      const link = e.target.closest('a[data-ajax-page="' + tableKey + '"]');
+      if (!link) return;
+
+      e.preventDefault();
+
+      const relativeHref = link.getAttribute('href'); // "?sessions_page=2&..."
+      const fetchUrl = new URL(relativeHref, window.location.href);
+      fetchUrl.searchParams.set('table', tableKey);
+
+      container.style.opacity = '0.5';
+
+      fetch(fetchUrl.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('bad response');
+          return response.json();
+        })
+        .then(function (data) {
+          if (data && data.ok) {
+            container.innerHTML = data.html;
+            // Keep the URL bookmarkable/shareable without reloading.
+            window.history.replaceState(null, '', relativeHref);
+          } else {
+            window.location.href = relativeHref;
+          }
+        })
+        .catch(function () {
+          // Network hiccup or non-JSON response: fall back to a normal
+          // navigation rather than leaving the table stuck.
+          window.location.href = relativeHref;
+        })
+        .finally(function () {
+          container.style.opacity = '1';
+        });
+    });
+  }
+
+  bindAjaxPagination('sessions-table-container', 'sessions');
+  bindAjaxPagination('txns-table-container', 'txns');
+  bindAjaxPagination('orders-table-container', 'orders');
+})();
+</script>
 {% endblock %}
