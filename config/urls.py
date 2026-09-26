@@ -23,7 +23,6 @@ from users.views import HomepageView
 from config.pwa_views import service_worker_view, OfflineView
 
 urlpatterns = [
-    path('', HomepageView.as_view(), name='homepage'),
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('products/', include('products.urls')),
