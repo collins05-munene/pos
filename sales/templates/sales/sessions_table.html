@@ -1,0 +1,65 @@
+<div class="table-responsive">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Branch</th>
+        <th>Opened By</th>
+        <th>Opened</th>
+        <th>Closed</th>
+        <th>Opening Float</th>
+        <th>Expected Cash</th>
+        <th>Actual Count</th>
+        <th>Discrepancy</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for session in recent_sessions %}
+      <tr>
+        <td>
+          <span class="badge-status {% if session.status == 'OPEN' %}badge-open{% else %}badge-closed{% endif %}">
+            {{ session.status }}
+          </span>
+        </td>
+        <td>{{ session.branch.name|default:"Main" }}</td>
+        <td>{{ session.opened_by.first_name|default:session.opened_by.username }}</td>
+        <td>{{ session.opened_at|date:"M d, H:i" }}</td>
+        <td>{{ session.closed_at|date:"M d, H:i"|default:"--" }}</td>
+        <td>KSH {{ session.opening_balance }}</td>
+        <td>KSH {{ session.expected_closing_balance|default:"--" }}</td>
+        <td>KSH {{ session.closing_balance|default:"--" }}</td>
+        <td class="{% if session.discrepancy < 0 %}text-red{% elif session.discrepancy > 0 %}text-green{% endif %}">
+          {% if session.discrepancy %}
+            KSH {{ session.discrepancy }}
+          {% else %}
+            --
+          {% endif %}
+        </td>
+        <td>{{ session.notes|default:"-" }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="10" class="empty-state">No register sessions opened in this period.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if recent_sessions.paginator.num_pages > 1 %}
+<div class="table-pagination">
+  <span>Page {{ recent_sessions.number }} of {{ recent_sessions.paginator.num_pages }} &middot; {{ recent_sessions.paginator.count }} session{{ recent_sessions.paginator.count|pluralize }}</span>
+  <div class="pagination-links">
+    {% if sessions_prev_qs %}
+      <a href="?{{ sessions_prev_qs }}" data-ajax-page="sessions">&larr; Previous</a>
+    {% else %}
+      <span class="disabled">&larr; Previous</span>
+    {% endif %}
+    {% if sessions_next_qs %}
+      <a href="?{{ sessions_next_qs }}" data-ajax-page="sessions">Next &rarr;</a>
+    {% else %}
+      <span class="disabled">Next &rarr;</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
