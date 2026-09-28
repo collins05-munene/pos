@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
-from django.views.generic import ListView, CreateView, DeleteView, UpdateView
+from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
 from django.utils.text import slugify
 from django.contrib import messages
@@ -260,7 +260,7 @@ class ProductDeleteView(AdminRequiredMixin, DeleteView):
     success_url = reverse_lazy('product-list')
 
 
-class ProductDetailView(CashierRequiredMixin, DeleteView):
+class ProductDetailView(CashierRequiredMixin, DetailView):
     model = Product
     template_name = 'products/product_detail.html'
     context_object_name = 'product'

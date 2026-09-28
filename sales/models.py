@@ -2,14 +2,34 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from decimal import Decimal
+from django.db.models.constraints import UniqueConstraint
+from django.db import transaction
 
 from products.models import ProductVariant
 from inventory.models import Branch
+from tenants.models import TenantOwnedModel
 
 User = get_user_model()
 
 
-class CashRegisterSession(models.Model):
+
+def next_number(tenant, kind, prefix):
+    if kind != "invoice":
+        raise ValueError(f"Unknown number kind: {kind}")
+    with transaction.atomic():
+        # Fixed-width zero-padded suffix => lexicographic max == numeric max
+        last = (
+            Order.objects
+            .filter(tenant=tenant, invoice_number__startswith=prefix)
+            .order_by("-invoice_number")
+            .values_list("invoice_number", flat=True)
+            .first()
+        )
+        n = int(last[len(prefix):]) if last else 0
+        return f"{prefix}{n + 1:06d}" 
+
+    
+class CashRegisterSession(TenantOwnedModel):
     """
     Represents ONE shared, continuous cash pool for a branch — not a
     per-cashier drawer, and not an isolated daily ledger. Any cashier
@@ -149,7 +169,7 @@ class CashRegisterSession(models.Model):
         super().save(*args, **kwargs)
 
 
-class CashTransaction(models.Model):
+class CashTransaction(TenantOwnedModel):
     TRANSACTION_TYPES = (
         ('CASH_IN', 'Cash In (Float Addition)'),
         ('CASH_OUT', 'Cash Out (Withdrawal)'),
@@ -166,22 +186,18 @@ class CashTransaction(models.Model):
         return f"{self.get_transaction_type_display()} - KSH {self.amount}"
 
 
-class Order(models.Model):
+class Order(TenantOwnedModel):
     PAYMENT_METHODS = (
         ('CASH', 'Cash'),
     )
-
-    invoice_number = models.CharField(max_length=50, unique=True)
+    invoice_number = models.CharField(max_length=50, blank=True, default="")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='sales', null=True)
     cashier = models.ForeignKey(User, on_delete=models.PROTECT, related_name='sales')
     cash_session = models.ForeignKey(CashRegisterSession, on_delete=models.PROTECT, related_name='orders', null=True, blank=True)
-
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
     total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_cogs = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_profit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-
-    # Cash payment details
     amount_received = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Cash physically handed over by the customer"
@@ -190,14 +206,23 @@ class Order(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Change handed back to the customer (amount_received - total_revenue)"
     )
-
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "invoice_number"], name="uniq_tenant_invoice_number"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            self.invoice_number = next_number(self.tenant, "invoice", "INV-")
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Invoice {self.invoice_number}"
+        return f"Invoice {self.invoice_number}"   
 
 
-class OrderItem(models.Model):
+class OrderItem(TenantOwnedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
