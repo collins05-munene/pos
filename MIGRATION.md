@@ -72,6 +72,7 @@ class ActivityLog(TenantOwnedModel):
 |---|---|
 | `inventory.Branch` | `(TenantOwnedModel)`; `name` -> drop `unique=True`, add `UniqueConstraint(fields=["tenant","name"])` |
 | `inventory.StockLevel, StockAdjustment, PurchaseOrder, PurchaseOrderItem, PurchasePayment, InventoryTransfer, InventoryTransferItem` | `(TenantOwnedModel)` |
+
 | `PurchaseOrder.po_number`, `InventoryTransfer.transfer_number` | drop `unique=True`; `UniqueConstraint(fields=["tenant","po_number"])` etc. |
 | `supplier.Supplier` | `(TenantOwnedModel)` |
 | `sales.CashRegisterSession, CashTransaction, Order, OrderItem` | `(TenantOwnedModel)` |

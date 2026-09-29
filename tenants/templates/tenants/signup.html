@@ -1,0 +1,82 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Open your shop's account -- Duka OS</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="wordmark">Duka<span>OS</span></div>
+    <div class="masthead-meta">Already trading? <a href="/users/pos-login/" style="text-decoration:underline;">Log in</a></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1>Open your shop's account</h1>
+    <p class="lede">One shop, one login. Add your cashiers once you're set up.</p>
+
+    <div id="alert" class="alert bad" role="alert"></div>
+
+    <form id="signup-form" novalidate>
+      <div class="field" data-field="business_name">
+        <label for="business_name">Business name</label>
+        <input id="business_name" name="business_name" type="text" placeholder="e.g. Mama Njeri Mart" autocomplete="organization" required>
+        <div class="err"></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field" data-field="business_type">
+          <label for="business_type">Business type</label>
+          <select id="business_type" name="business_type" required>
+            <option value="MINI_MART">Mini Mart</option>
+            <option value="PHARMACY">Pharmacy</option>
+            <option value="OTHER">Other</option>
+          </select>
+          <div class="err"></div>
+        </div>
+        <div class="field" data-field="owner_name">
+          <label for="owner_name">Your name</label>
+          <input id="owner_name" name="owner_name" type="text" autocomplete="name" required>
+          <div class="err"></div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field" data-field="email">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+          <div class="err"></div>
+        </div>
+        <div class="field" data-field="phone">
+          <label for="phone">M-Pesa number</label>
+          <input id="phone" name="phone" type="tel" placeholder="0712 345 678" autocomplete="tel" required>
+          <div class="err"></div>
+        </div>
+      </div>
+
+      <div class="field" data-field="password">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required>
+        <div class="err"></div>
+      </div>
+
+      <hr class="rule">
+
+      <h2>Choose your plan</h2>
+      <div class="plans" id="plans" role="group" aria-label="Subscription term"></div>
+      <p class="plan-note" id="plan-note">Loading pricing&hellip;</p>
+
+      <button type="submit" class="primary" id="submit-btn">Create my shop's account &rarr;</button>
+    </form>
+  </div>
+</main>
+
+<script src="{% static 'duka/js/duka-api.js' %}"></script>
+<script src="{% static 'duka/js/signup.js' %}"></script>
+</body>
+</html>

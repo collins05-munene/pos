@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import Expression
 from django.utils.text import slugify
 
 from .context import get_current_tenant
@@ -69,18 +70,32 @@ def generate_unique_slug(name):
 # --------------------------------------------------------------------------
 # Tenant-scoped base model + manager
 # --------------------------------------------------------------------------
-class TenantManager(models.Manager):
+class CurrentTenantId(Expression):
     """
-    Default manager for every tenant-owned model. FAIL-CLOSED: with no active
-    tenant it returns an empty queryset instead of everyone's data.
+    SQL fragment that reads the active tenant when the query is COMPILED (i.e. when
+    it actually runs), not when the queryset is built. That matters because Django
+    builds querysets at import time in places you don't control: `queryset = Model.objects...`
+    on class-based views and every ModelForm ForeignKey dropdown. With no active tenant
+    it renders NULL, and `tenant_id = NULL` matches nothing: fail-closed.
     """
+    output_field = models.BigIntegerField()
 
-    def get_queryset(self):
-        qs = super().get_queryset()
+    def as_sql(self, compiler, connection):
         tenant = get_current_tenant()
         if tenant is None:
-            return qs.none()
-        return qs.filter(tenant_id=tenant.pk)
+            return "NULL", []
+        return "%s", [tenant.pk]
+
+
+def scope_to_current_tenant(queryset):
+    return queryset.filter(tenant_id=CurrentTenantId())
+
+
+class TenantManager(models.Manager):
+    """Default manager for every tenant-owned model (see CurrentTenantId)."""
+
+    def get_queryset(self):
+        return scope_to_current_tenant(super().get_queryset())
 
     def bulk_create(self, objs, *args, **kwargs):
         tenant = get_current_tenant()
@@ -95,7 +110,7 @@ class TenantOwnedModel(models.Model):
     """
     Inherit from this for every business-data table.
 
-    objects      -> scoped to the active tenant (use this everywhere in views)
+    objects      -> scoped to the active tenant, resolved at query time (use in views)
     all_objects  -> unscoped (admin, migrations, platform reports, cron)
     """
     tenant_required = True
@@ -115,6 +130,19 @@ class TenantOwnedModel(models.Model):
 
     class Meta:
         abstract = True
+
+    def validate_constraints(self, exclude=None):
+        """
+        ModelForms exclude non-editable fields from validation, which silently skips every
+        per-tenant UniqueConstraint (they all include `tenant`). Validate them anyway so a
+        duplicate SKU is a friendly form error instead of an IntegrityError/500.
+        """
+        if self.tenant_id is None:
+            current = get_current_tenant()
+            if current is not None:
+                self.tenant_id = current.pk
+        exclude = set(exclude or ()) - {"tenant"}
+        super().validate_constraints(exclude=exclude)
 
     def save(self, *args, **kwargs):
         current = get_current_tenant()

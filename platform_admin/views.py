@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views import View
+from django.shortcuts import render, redirect
 
 from billing import services
 from billing.models import BillingEvent, Invoice, MpesaPayment
@@ -22,8 +23,13 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
 
 class OverviewView(SuperuserRequiredMixin, View):
-    def get(self, request):
-        return JsonResponse(platform_overview())
+    def get(self, request, *args, **kwargs):
+        if request.headers.get("Accept") == "application/json":
+            return JsonResponse(platform_overview())
+
+        return render(
+            request,
+            "platform_admin/overview.html")
 
 
 class TenantListView(SuperuserRequiredMixin, View):

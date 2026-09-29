@@ -17,6 +17,7 @@ class SignupView(View):
     def get(self, request):
         """Pricing for the landing/sign-up page."""
         return JsonResponse({"pricing": quote_table(include_install_fee=True)})
+    
 
     def post(self, request):
         if request.content_type == "application/json":
