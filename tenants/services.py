@@ -57,13 +57,62 @@ def register_business(*, business_name, business_type, owner_name, email, phone,
 
 def provision_workspace(tenant, owner):
     """
-    Runs inside tenant_context(tenant). Put every "new shop starts with..." default
-    here: main branch now; default categories, walk-in customer, chart of accounts,
-    pharmacy settings later (branch on tenant.business_type).
+    Runs inside tenant_context(tenant). Everything a brand-new shop starts with.
+    Reference data (units, categories) is per-tenant, so it must be seeded here.
+    Branch on tenant.business_type as pharmacy/other needs grow.
     """
+    from django.apps import apps
     from inventory.models import Branch
 
     Branch.objects.create(name="Main Branch")
+
+    if apps.is_installed("products"):
+        from products.models import Category, UnitOfMeasure
+
+        units = [("Piece", "pcs"), ("Kilogram", "kg"), ("Litre", "l"), ("Pack", "pk"), ("Box", "box")]
+        if tenant.business_type == Tenant.BusinessType.PHARMACY:
+            units += [("Tablet", "tab"), ("Bottle", "btl"), ("Strip", "strip")]
+        for name, short in units:
+            UnitOfMeasure.objects.create(name=name, short_name=short)
+        Category.objects.create(name="General", slug="general")
+
+
+def staff_handle(tenant, username):
+    prefix = f"{tenant.slug}__"
+    if username.startswith(prefix):
+        return username[len(prefix):]
+    return username
+
+
+def list_staff(tenant):
+    """Everyone except the owner -- the owner manages staff, not themselves, from here."""
+    User = get_user_model()
+    return (User.objects.filter(tenant=tenant, is_owner=False)
+            .order_by("role", "username"))
+
+
+def set_staff_credential(user, *, value):
+    """
+    CASHIER -> PIN (4-6 digits, hashed same as at creation).
+    MANAGER (or any non-cashier role) -> password, run through Django's validators.
+    Raises ValidationError on a bad value.
+    """
+    if user.role == user.Roles.CASHIER:
+        if not PIN_RE.match(value or ""):
+            raise ValidationError("PIN must be 4 to 6 digits.")
+        user.pin = value  # hashed by User.save()
+    else:
+        from django.contrib.auth.password_validation import validate_password
+        validate_password(value, user=user)
+        user.set_password(value)
+    user.save()
+    return user
+
+
+def set_staff_active(user, *, is_active):
+    user.is_active = is_active
+    user.save(update_fields=["is_active"])
+    return user
 
 
 def create_staff_user(*, tenant, handle, role, first_name="", password=None, pin=None):
@@ -80,6 +129,8 @@ def create_staff_user(*, tenant, handle, role, first_name="", password=None, pin
     user = User(username=compose_username(tenant.slug, handle), first_name=first_name,
                 role=role, tenant=tenant)
     if password:
+        from django.contrib.auth.password_validation import validate_password
+        validate_password(password, user=user)  # raises ValidationError -- caller handles it
         user.set_password(password)
     else:
         user.set_unusable_password()

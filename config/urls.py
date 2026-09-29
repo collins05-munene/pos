@@ -38,6 +38,8 @@ urlpatterns = [
     path("signup/",   include("tenants.urls")),
     path("billing/",  include("billing.urls")),
     path("platform/", include("platform_admin.urls")),
+
+    path("staff/", include("tenants.staff_urls")),
 ]
 
 

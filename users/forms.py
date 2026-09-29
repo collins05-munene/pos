@@ -26,19 +26,19 @@ class StandardLoginForm(AuthenticationForm):
 
 
 class CashierPinLoginForm(forms.Form):
-    business_code = forms.CharField(
-        max_length=40,
-        widget=forms.TextInput(attrs={'placeholder': 'Business code', 'autofocus': True,
-                                      'autocapitalize': 'none'}))
-    username = forms.CharField(
-        max_length=150,
-        widget=forms.TextInput(attrs={'placeholder': 'Cashier Username', 'autocapitalize': 'none'}))
-    pin = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Enter PIN'}), max_length=6)
+    shop_code = forms.CharField(label="Shop Code", required=True)
+    username = forms.CharField(label="Cashier Username", required=True)
+    pin = forms.CharField(label="PIN", widget=forms.PasswordInput, required=True)
 
     def clean(self):
-        cleaned = super().clean()
-        code, handle = cleaned.get("business_code"), cleaned.get("username")
-        if code and handle:
-            # The view's `form.cleaned_data.get('username')` now receives the composed name.
-            cleaned["username"] = compose_username(code, handle)
-        return cleaned
+        cleaned_data = super().clean()
+        shop_code = (cleaned_data.get("shop_code") or "").strip().lower()
+        handle = (cleaned_data.get("username") or "").strip().lower()
+
+        if shop_code and handle:
+            # Build the composed username expected by PINAuthenticationBackend
+            if "__" in handle:
+                cleaned_data["composed_username"] = handle
+            else:
+                cleaned_data["composed_username"] = f"{shop_code}__{handle}"
+        return cleaned_data

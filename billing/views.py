@@ -2,13 +2,15 @@ import hmac
 import json
 
 from django.conf import settings
-from django.contrib.auth.mixins import UserPassesTestMixin
-from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import Http404, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
+
+from tenants.mixins import OwnerRequiredMixin
+from tenants.rendering import html_or_json
 
 from . import services
 from .models import Invoice, MpesaPayment
@@ -16,18 +18,12 @@ from .mpesa import MpesaError
 from .pricing import quote_table
 
 
-class OwnerRequiredMixin(UserPassesTestMixin):
-    def test_func(self):
-        u = self.request.user
-        return u.is_authenticated and getattr(u, "is_owner", False) and u.tenant_id is not None
-
-
 class BillingOverviewView(OwnerRequiredMixin, View):
     def get(self, request):
         tenant = request.tenant
         sub = tenant.subscription
         open_invoice = Invoice.objects.filter(tenant=tenant, status=Invoice.Status.OPEN).first()
-        return JsonResponse({
+        payload = {
             "status": sub.status,
             "has_access": tenant.has_access,
             "term_months": sub.term_months,
@@ -42,7 +38,8 @@ class BillingOverviewView(OwnerRequiredMixin, View):
                 monthly_price=sub.custom_monthly_price),
             "invoices": list(Invoice.objects.filter(tenant=tenant).values(
                 "number", "status", "total", "term_months", "issued_at", "paid_at")[:20]),
-        })
+        }
+        return html_or_json(request, "billing/overview.html", payload)
 
 
 @method_decorator(ratelimit(key="user", rate="6/m", method="POST", block=True), name="post")
@@ -92,9 +89,7 @@ class MpesaCallbackView(View):
 
 
 def locked_view(request):
-    owner = request.user.is_authenticated and getattr(request.user, "is_owner", False)
-    body = ("<h2>Subscription inactive</h2>"
-            + ("<p>Open <a href='/billing/'>Billing</a> to renew.</p>" if owner else
-               "<p>Your business subscription has lapsed. Please contact the business owner.</p>")
-            + "<p><a href='/users/logout/'>Log out</a></p>")
-    return HttpResponse(body, status=402)
+    is_owner = request.user.is_authenticated and getattr(request.user, "is_owner", False)
+    resp = render(request, "billing/locked.html", {"is_owner": is_owner})
+    resp.status_code = 402
+    return resp
