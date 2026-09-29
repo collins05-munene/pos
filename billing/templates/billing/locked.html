@@ -1,0 +1,49 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Account locked -- Duka OS</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+<style>
+  main { display: flex; align-items: center; min-height: calc(100vh - 80px); }
+  .locked-box { max-width: 440px; }
+</style>
+</head>
+<body>
+<script>window.DUKA_IS_OWNER = {{ is_owner|yesno:"true,false" }};</script>
+
+<header class="masthead">
+  <div class="wrap"><div class="wordmark">Duka<span>OS</span></div></div>
+</header>
+
+<main>
+  <div class="wrap locked-box">
+    <div class="locked-stamp">Account locked</div>
+    <h1 id="headline">Your shop's subscription has lapsed</h1>
+    <p class="lede" id="body-copy">Loading&hellip;</p>
+    <button class="primary" id="action-btn" style="width:auto;">Open billing</button>
+    <p style="margin-top:28px;"><a href="/users/logout/" style="text-decoration:underline;color:var(--ink-soft);font-size:13px;">Log out</a></p>
+  </div>
+</main>
+
+<script src="{% static 'duka/js/duka-api.js' %}"></script>
+<script>
+(() => {
+  const headline = document.getElementById('headline');
+  const body = document.getElementById('body-copy');
+  const btn = document.getElementById('action-btn');
+  if (window.DUKA_IS_OWNER) {
+    headline.textContent = "Your shop's subscription has lapsed";
+    body.textContent = 'Renew below to switch your account back on -- your data is safe and waiting.';
+    btn.textContent = 'Open billing \u2192';
+    btn.onclick = () => window.location.href = '/billing/';
+  } else {
+    headline.textContent = "This shop's subscription has lapsed";
+    body.textContent = "Ask the shop owner to renew. Once they've paid, log back in and you're set.";
+    btn.style.display = 'none';
+  }
+})();
+</script>
+</body>
+</html>

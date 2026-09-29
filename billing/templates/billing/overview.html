@@ -1,0 +1,63 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Billing -- Duka OS</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="wordmark">Duka<span>OS</span></div>
+    <div class="masthead-meta"><a href="/staff/" style="text-decoration:underline;">Staff</a> &nbsp; <span id="shop-meta"></span></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1>Billing</h1>
+    <p class="lede" id="status-line">Loading your subscription&hellip;</p>
+
+    <div id="alert" class="alert" role="alert"></div>
+
+    <div class="invoice" id="invoice-panel" hidden>
+      <div class="invoice-row"><span class="k">Invoice</span><span class="v" id="inv-number">--</span></div>
+      <div class="invoice-row"><span class="k">Term</span><span class="v" id="inv-term">--</span></div>
+      <div class="invoice-total" id="inv-total">KES 0</div>
+
+      <label for="phone" style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:5px;">
+        M-Pesa number to pay from
+      </label>
+      <div class="stk-phone">
+        <input id="phone" type="tel" placeholder="0712 345 678">
+        <button class="secondary" id="pay-btn">Send STK push</button>
+      </div>
+      <div class="stk-status" id="stk-status"></div>
+    </div>
+
+    <div id="term-picker" hidden>
+      <h2>Renew with a different term</h2>
+      <div class="plans" id="plans" role="group" aria-label="Subscription term"></div>
+      <p class="plan-note" id="plan-note"></p>
+    </div>
+
+    <hr class="rule">
+
+    <h2>Invoice history</h2>
+    <table class="ledger">
+      <thead>
+        <tr><th>Invoice</th><th>Term</th><th>Issued</th><th>Status</th><th class="num">Amount</th></tr>
+      </thead>
+      <tbody id="invoice-rows">
+        <tr class="empty-row"><td colspan="5">Loading&hellip;</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script src="{% static 'duka/js/duka-api.js' %}"></script>
+<script src="{% static 'duka/js/billing.js' %}"></script>
+</body>
+</html>

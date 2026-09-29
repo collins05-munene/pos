@@ -67,6 +67,9 @@ INSTALLED_APPS = [
     'supplier',
     'sales',
     'users',
+    "tenants", 
+    "billing", 
+    "platform_admin"
 ]
 
 MIDDLEWARE = [
@@ -77,6 +80,8 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    "tenants.middleware.TenantMiddleware",            
+    "billing.middleware.SubscriptionGateMiddleware", 
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -170,7 +175,6 @@ STORAGES = {
     },
 }
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -203,7 +207,7 @@ MPESA_CALLBACK_URL=env('MPESA_CALLBACK_URL')
 # manifest to be honoured, and offline support) only registers on
 # "secure contexts": https://, or http://localhost / http://127.0.0.1.
 # This block only takes effect when DEBUG is False, so local dev
-# (DEBUG=True, plain http://127.0.0.1) and your existing ngrok flow
+# (DEBUG=True, plain http://127.0.0.1) and existing ngrok flow
 # (already https://) are unaffected either way.
 if not DEBUG:
     # Render (and most PaaS hosts) terminate TLS at a proxy and forward
@@ -223,3 +227,10 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
     X_FRAME_OPTIONS = 'DENY'
+
+TENANCY_ALLOW_NULL_TENANT = env.bool("TENANCY_ALLOW_NULL_TENANT", default=False)
+
+BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL")        # https://yourapp.onrender.com
+
+MPESA_BILLING_CALLBACK_SECRET = env("MPESA_BILLING_CALLBACK_SECRET")  # long random string
+BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]   

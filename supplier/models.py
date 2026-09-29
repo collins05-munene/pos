@@ -1,7 +1,9 @@
 from django.db import models
 
+from tenants.models import TenantOwnedModel
 
-class Supplier(models.Model):
+
+class Supplier(TenantOwnedModel):
     name = models.CharField(max_length=255, blank=True, null=True)
     contact_person = models.CharField(max_length=150, blank=True)
     email = models.EmailField(blank=True)

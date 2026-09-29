@@ -14,6 +14,9 @@ def resolve_user_branch(user):
     cash-pool session for that branch. Sessions are no longer tied to
     an individual cashier, so every view that needs "the active
     session" should go through this instead of get_active_session(user).
+
+    Branch.objects is tenant-scoped (TenantManager), so .first() here
+    already only ever sees the current tenant's branches.
     """
     if hasattr(user, 'branch') and user.branch:
         return user.branch
@@ -28,18 +31,24 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
     it is validated against the cart total computed here (server-side,
     not trusted from the client) and change_given is derived from it.
     Raises ValueError if amount_received is less than the total due.
+
+    The sale's branch is the branch the cash session actually belongs
+    to (falling back to resolve_user_branch for the rare case of a
+    sale with no session, e.g. a future non-cash flow) — NOT a
+    hardcoded "Main Branch". A cashier's register can be open for any
+    branch; stock must move in that same branch, not whichever branch
+    happens to be named "Main Branch" for this tenant.
     """
     with transaction.atomic():
-        global_branch, _ = Branch.objects.get_or_create(
-            name="Main Branch",
-            defaults={"location": "Headquarters", "is_active": True}
-        )
+        branch = cash_session.branch if cash_session else resolve_user_branch(cashier)
+        if branch is None:
+            raise ValueError("Could not determine which branch this sale belongs to.")
 
         invoice_id = f"INV-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
         order = Order.objects.create(
             invoice_number=invoice_id,
-            branch=global_branch,
+            branch=branch,
             cashier=cashier,
             payment_method=payment_method,
             cash_session=cash_session
@@ -75,7 +84,7 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             cost_price = getattr(variant, 'cost_price', Decimal('0.00'))
 
             stock_record, _ = StockLevel.objects.select_for_update().get_or_create(
-                branch=global_branch,
+                branch=branch,
                 variant=variant,
                 defaults={'quantity': 0}
             )
@@ -104,6 +113,8 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
         if payment_method == 'CASH' and amount_received is not None:
             amount_received = Decimal(str(amount_received)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             if amount_received < running_revenue:
+                # Raising here rolls back the whole atomic block, including
+                # the stock decrements above.
                 raise ValueError(
                     f"Amount received (KSH {amount_received}) is less than the total due (KSH {running_revenue})."
                 )

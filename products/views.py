@@ -1,8 +1,6 @@
-from decimal import Decimal
-
 from django.shortcuts import render, redirect
-from django.urls import reverse_lazy
-from django.views.generic import ListView, CreateView, DeleteView, UpdateView
+from django.urls import reverse, reverse_lazy
+from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
 from django.utils.text import slugify
 from django.contrib import messages
@@ -106,6 +104,15 @@ class ProductListView(CashierRequiredMixin, ListView):
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
     
 class ProductCreateView(CashierRequiredMixin, CreateView):
+    """
+    Creates the catalog entry (product + variants) only. Stock is never
+    seeded here — a new product/variant has no StockLevel row (0 on
+    hand) until a purchase is recorded for it via the inventory app,
+    which is the only place StockLevel is written. See form_valid:
+    single-variant products are sent straight into "record a purchase"
+    with that variant preselected, since that's almost always the very
+    next thing you want to do after adding a new product.
+    """
     model = Product
     form_class = ProductForm
     template_name = 'products/product_form.html'
@@ -141,43 +148,12 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
             # 2. Save Variants with individual commit to capture returned instances
             variants.instance = self.object
             saved_variants = variants.save(commit=False)
-            
+
             for variant_instance in saved_variants:
                 variant_instance.is_active = True
                 variant_instance.save()
-            
+
             variants.save_m2m()
-
-           
-
-            # 4. Fetch or create default branch for initial stock allocation
-            main_branch, _ = Branch.objects.get_or_create(
-                name="Main Branch",
-                defaults={"location": "Headquarters", "is_active": True}
-            )
-
-            has_variations = form.cleaned_data.get('has_variations', False)
-
-            if not has_variations:
-                global_initial_qty = form.cleaned_data.get('initial_stock') or 0
-                for variant_instance in saved_variants:
-                    StockLevel.objects.update_or_create(
-                        branch=main_branch,
-                        variant=variant_instance,
-                        defaults={'quantity': global_initial_qty}
-                    )
-            else:
-                for variant_form in variants.forms:
-                    if variant_form.cleaned_data and not variant_form.cleaned_data.get('DELETE', False):
-                        variant_instance = variant_form.instance
-                        
-                        if variant_instance.pk:
-                            variant_qty = variant_form.cleaned_data.get('initial_stock') or 0
-                            StockLevel.objects.update_or_create(
-                                branch=main_branch,
-                                variant=variant_instance,
-                                defaults={'quantity': variant_qty}
-                            )
 
             log_action(
                 self.request.user,
@@ -185,6 +161,21 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
                 f"Product created: {self.object.name} ({len(saved_variants)} variant(s))",
                 self.request
             )
+
+        messages.success(
+            self.request,
+            f"{self.object.name} created. It has no stock yet — record a purchase to bring it into inventory."
+        )
+
+        # Single-variant products go straight into "record a purchase"
+        # with that variant preselected — this is the only path that
+        # ever writes to StockLevel now, so it's the natural next step.
+        # Multi-variant products land on the product list instead, since
+        # preselecting several variants at once isn't supported by the
+        # purchase form's prefill.
+        if len(saved_variants) == 1:
+            purchase_url = reverse('purchase-order-create')
+            return redirect(f"{purchase_url}?variant={saved_variants[0].pk}")
 
         return redirect(self.get_success_url())
 
@@ -260,7 +251,7 @@ class ProductDeleteView(AdminRequiredMixin, DeleteView):
     success_url = reverse_lazy('product-list')
 
 
-class ProductDetailView(CashierRequiredMixin, DeleteView):
+class ProductDetailView(CashierRequiredMixin, DetailView):
     model = Product
     template_name = 'products/product_detail.html'
     context_object_name = 'product'

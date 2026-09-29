@@ -1,89 +1,148 @@
 {% extends 'users/base.html' %}
 
-{% block title %}
-    {% if object %}
-        Edit Purchase Prder: {{object.po_number}}
-    {% else %}
-        New Purchase Order
-    {% endif %}
+{% block title %}Record Stock Purchase{% endblock %}
+
+{% block extra_head %}
+    <style>
+        .payment-panel { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1.25rem; margin-top: 0.5rem; }
+        .summary-strip { display: flex; gap: 2rem; flex-wrap: wrap; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.9rem 1.1rem; margin: 1rem 0; }
+        .summary-strip div span { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+        .summary-strip div strong { font-size: 1.15rem; color: #111827; }
+        .btn-add-item { background: #eff6ff; color: #1d4ed8; border: 1px dashed #93c5fd; border-radius: 6px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
+        .btn-add-item:hover { background: #dbeafe; }
+        .inline-check { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+        .form-error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
+    </style>
 {% endblock %}
 
 {% block content %}
     <div class="form-page-container">
         <div class="form-card">
             <div class="form-card-header">
-                <h3 class="form-title">
-                    {% if object %}
-                        Update Purchase Order
-                    {% else %}
-                        Create Purchase Order
-                    {% endif %}
-                </h3>
-                <p class="fomr-subtitle">Fill out the order details and line items below.</p>
+                <h3 class="form-title">Record Stock Purchase</h3>
+                <p class="form-subtitle">
+                    Log what was bought, at what cost and how it was paid. Inventory is updated automatically,
+                    and cash payments are deducted from the branch cash pool.
+                </p>
             </div>
 
-            <form method="POST" novalidate class="styled-form">
+            <form method="POST" novalidate class="styled-form" id="purchase-form">
                 {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    {% for error in form.non_field_errors %}
+                        <div class="form-error-banner">{{ error }}</div>
+                    {% endfor %}
+                {% endif %}
+                {% if items.non_form_errors %}
+                    {% for error in items.non_form_errors %}
+                        <div class="form-error-banner">{{ error }}</div>
+                    {% endfor %}
+                {% endif %}
+
                 <div class="form-fields-stack">
-                    {% for fields in form %}
-                        <div class="form-field-group {% if field.errors %} has-errors {% endif %}" >
-                            <label for="{{field.id_for_label}}" class="field-label">
-                                {{field.label}}
-                                {% if field.field.required %}
-                                    <span class="required-asterisk">*</span>
-                                {% endif %}
-                            </label>
-                            <div class="field-widget-container">{{field}}</div>
-                            {% if field.help_text %}
-                                <div class="field-help-text">{{field.help_text|safe}}</div>
-                            {% endif %}
-                            {% for error in field.errors %}
-                                <div class="field-error-message">{{error}}</div>
-                            {% endfor %}
-                        </div>
+                    {% for field in form %}
+                        {% if field.name == 'supplier' or field.name == 'branch' or field.name == 'notes' %}
+                            {% include 'inventory/_form_field.html' %}
+                        {% endif %}
                     {% endfor %}
                 </div>
+
                 <hr class="form-divider">
 
-                <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1.5rem;">
-                    <h3 class="form-title">Line Items</h3>
-                    <p class="form-subtitle">Variants being ordered from this supplier, and thiser agreed cost price</p>
+                <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem;">
+                    <h3 class="form-title">Items Purchased</h3>
+                    <p class="form-subtitle">Product variants, quantities and the cost price per unit you paid.</p>
                 </div>
-                {{items.management_form}}
-                <div class="form-fields-stack">
+
+                {{ items.management_form }}
+                <div id="item-rows" class="form-fields-stack">
                     {% for item_form in items %}
-                        <div class="product-link-row" style="background: #f9fafb; padding:1.25rem; border-radius: 6px; border: 1px solid #e5e7eb; margin-bottom: 1rem;" >
-                            {{item_form.id}}
-                            <div style="display: grid; grid-gap: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
-                                {% for field in item_form.visible_fields %}
-                                    {% if field.name == 'DELETE' %}
-                                        <div class="field-widget-container" style="color: #991b1b; display: flex; align-items: center; gap: 0.25rem; padding-bottom: 0.5rem;">
-                                            {{field}} {{field.label_tag}}
-                                        </div>
-                                    {% else %}
-                                    <div class="field-widget-container">
-                                        <label for="{{field.id_for_label}}" style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem;">{{field.label}}</label>
-                                        {{field}}
-                                        {% for error in field.errors %}
-                                            <span style="color: #dc3545; font-size: 0.75rem;">{{error}}</span>
-                                        {% endfor %}
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        </div>
+                        {% include 'inventory/_purchase_item_row.html' %}
                     {% endfor %}
                 </div>
+                <button type="button" class="btn-add-item" id="add-item-btn">+ Add another item</button>
+
+                <template id="empty-item-form">
+                    {% with item_form=items.empty_form %}
+                        {% include 'inventory/_purchase_item_row.html' %}
+                    {% endwith %}
+                </template>
+
+                <hr class="form-divider">
+
+                <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem;">
+                    <h3 class="form-title">Receiving &amp; Payment</h3>
+                    <p class="form-subtitle">Leave the amount at 0 to record the whole purchase on credit.</p>
+                </div>
+
+                <div class="payment-panel">
+                    <div class="inline-check">
+                        {{ form.receive_immediately }}
+                        <label for="{{ form.receive_immediately.id_for_label }}" class="field-label" style="margin: 0;">{{ form.receive_immediately.label }}</label>
+                    </div>
+                    <div class="field-help-text" style="margin: -0.6rem 0 1rem 0;">{{ form.receive_immediately.help_text }}</div>
+
+                    <div class="form-fields-stack">
+                        {% for field in form %}
+                            {% if field.name == 'payment_method' or field.name == 'amount_paid' or field.name == 'payment_reference' %}
+                                {% include 'inventory/_form_field.html' %}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="summary-strip">
+                        <div><span>Total purchase cost</span><strong id="sum-total">KSH 0.00</strong></div>
+                        <div><span>Paid now</span><strong id="sum-paid">KSH 0.00</strong></div>
+                        <div><span>Balance payable</span><strong id="sum-balance">KSH 0.00</strong></div>
+                    </div>
+                </div>
+
                 <div class="form-actions">
                     <a href="{% url 'purchase-order-list' %}" class="btn-link cancel-btn">Cancel</a>
-                    <button type="submit" class="btn btn-submit">
-                        {% if object %}
-                            Save changes
-                        {% else %}
-                            Create Purchase
-                        {% endif %}
-                    </button>
+                    <button type="submit" class="btn btn-submit">Record Purchase</button>
                 </div>
             </form>
         </div>
     </div>
+
+    <script>
+    (function () {
+        'use strict';
+        const prefix = '{{ items.prefix }}';
+        const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+        const rows = document.getElementById('item-rows');
+        const template = document.getElementById('empty-item-form');
+        const paidInput = document.getElementById('{{ form.amount_paid.id_for_label }}');
+
+        function money(n) { return 'KSH ' + n.toFixed(2); }
+
+        function recalc() {
+            let total = 0;
+            rows.querySelectorAll('.item-row').forEach(function (row) {
+                const del = row.querySelector('input[name$="-DELETE"]');
+                if (del && del.checked) return;
+                const qty = parseFloat(row.querySelector('input[name$="-quantity_ordered"]').value) || 0;
+                const cost = parseFloat(row.querySelector('input[name$="-unit_cost"]').value) || 0;
+                total += qty * cost;
+            });
+            const paid = parseFloat(paidInput.value) || 0;
+            document.getElementById('sum-total').textContent = money(total);
+            document.getElementById('sum-paid').textContent = money(paid);
+            document.getElementById('sum-balance').textContent = money(Math.max(total - paid, 0));
+        }
+
+        document.getElementById('add-item-btn').addEventListener('click', function () {
+            const index = parseInt(totalForms.value, 10);
+            const html = template.innerHTML.replace(/__prefix__/g, index);
+            rows.insertAdjacentHTML('beforeend', html);
+            totalForms.value = index + 1;
+        });
+
+        rows.addEventListener('input', recalc);
+        rows.addEventListener('change', recalc);
+        paidInput.addEventListener('input', recalc);
+        recalc();
+    })();
+    </script>
 {% endblock %}

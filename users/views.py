@@ -12,6 +12,7 @@ from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
 from .utils import log_action, AuditAction
 from .dashboard import build_dashboard_context
+from tenants.services import compose_username
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 
 
@@ -82,18 +83,25 @@ class CashierPINLoginView(FormView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        username = form.cleaned_data.get('username')
+        shop_code = self.request.POST.get('shop_code', '').strip().lower()
+        handle = form.cleaned_data.get('username', '').strip().lower()
         pin = form.cleaned_data.get('pin')
 
-        user = authenticate(self.request, username=username, pin=pin)
+        # Automatically prepend shop_code if handle doesn't already contain '__'
+        if "__" in handle:
+            composed_username = handle
+        else:
+            composed_username = compose_username(shop_code, handle)
+
+        user = authenticate(self.request, username=composed_username, pin=pin)
 
         if user is not None:
             login(self.request, user)
             log_action(user, AuditAction.LOGIN_PIN, f"Logged in to POS terminal via pin.", self.request)
             return super().form_valid(form)
         else:
-            log_action(None, "PIN_LOGIN_FAILED", f"Failed PIN login attempt for username: {username}")
-            form.add_error(None, "Invalid Username or PIN")
+            log_action(None, "PIN_LOGIN_FAILED", f"Failed PIN login attempt for username: {composed_username}")
+            form.add_error(None, "Invalid Shop Code, Username, or PIN")
             return self.form_invalid(form)
 
 class LogoutView(View):
