@@ -22,6 +22,8 @@
     .btn-secondary { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
     .btn-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 4px; padding: 0.35rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
     .empty-form-template { display: none; }
+    .stock-note { display: flex; gap: 0.6rem; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 0.85rem 1rem; font-size: 0.85rem; margin-top: 1.25rem; }
+    .stock-note strong { display: block; margin-bottom: 0.15rem; }
 </style>
 
 <div class="form-page-container" style="max-width: 1000px; margin: 0 auto; padding: 2rem 1rem;">
@@ -83,19 +85,18 @@
                     <span>Active in POS</span>
                 </label>
             </div>
-        </div>
 
-        <!-- Single Product Stock (Hides when Has Variations is checked) -->
-        {% if not object %}
-        <div class="form-section" id="single-stock-section">
-            <h3 class="form-section-title">Initial Inventory</h3>
-            <p class="form-section-sub">Opening stock quantity at Main Branch for single items.</p>
-            <div class="form-group" style="max-width: 250px;">
-                <label>Starting Quantity</label>
-                {{ form.initial_stock }}
-            </div>
+            {% if not object %}
+                <div class="stock-note">
+                    <span>&#9432;</span>
+                    <div>
+                        <strong>No stock quantity here on purpose.</strong>
+                        Saving this product won't add any stock. After it's saved, you'll record a purchase for it —
+                        that's what brings it into inventory, with a cost, an optional supplier, and a payment trail attached.
+                    </div>
+                </div>
+            {% endif %}
         </div>
-        {% endif %}
 
         <div class="form-section" id="variants-section">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -163,7 +164,10 @@
             </tr>
         </table>
 
-        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 2rem;">
+            {% if not object %}
+                <span style="font-size: 0.8rem; color: #6b7280;">You'll be taken to record its purchase next.</span>
+            {% endif %}
             <a href="{% url 'product-list' %}" class="btn-action btn-secondary">Cancel</a>
             <button type="submit" class="btn-action btn-primary">Save Product</button>
         </div>
@@ -174,21 +178,14 @@
     document.addEventListener('DOMContentLoaded', function() {
         const skuPrefixInput = document.querySelector('input[name="sku_prefix"]');
         const hasVariationsCheckbox = document.querySelector('#toggle-variations');
-        const singleStockSection = document.querySelector('#single-stock-section');
         const addVariantBtn = document.querySelector('#add-variant-btn');
         const variantTbody = document.querySelector('#variant-tbody');
         const totalFormsInput = document.querySelector('#id_variants-TOTAL_FORMS');
         const emptyRowTemplate = document.querySelector('.empty-form-row');
 
-        
         function toggleVariationView() {
             const isMultiVariant = hasVariationsCheckbox.checked;
 
-            if (singleStockSection) {
-                singleStockSection.style.display = isMultiVariant ? 'none' : 'block';
-            }
-
-            
             addVariantBtn.style.display = isMultiVariant ? 'inline-block' : 'none';
 
             const rows = variantTbody.querySelectorAll('.variant-row');

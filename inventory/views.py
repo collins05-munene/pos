@@ -87,12 +87,30 @@ class PurchaseOrderCreateView(AdminRequiredMixin, CreateView):
     template_name = 'inventory/purchase_order_form.html'
     success_url = reverse_lazy('purchase-order-list')
 
+    def get_initial(self):
+        # Supports the "record a purchase" link a new product now redirects
+        # into (see products/views.py ProductCreateView) — ?branch=<id>
+        # preselects the branch dropdown the same way StockAdjustmentCreateView
+        # already does for adjustments.
+        initial = super().get_initial()
+        branch_id = self.request.GET.get('branch')
+        if branch_id:
+            initial['branch'] = branch_id
+        return initial
+
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         if self.request.POST:
             data['items'] = PurchaseOrderItemFormSet(self.request.POST, instance=self.object)
         else:
-            data['items'] = PurchaseOrderItemFormSet(instance=self.object)
+            formset = PurchaseOrderItemFormSet(instance=self.object)
+            # ?variant=<id> preselects that variant on the first (empty)
+            # item row, so a brand-new product's own "record a purchase"
+            # link doesn't leave the cashier hunting for it in the dropdown.
+            variant_id = self.request.GET.get('variant')
+            if variant_id and formset.forms:
+                formset.forms[0].initial['variant'] = variant_id
+            data['items'] = formset
         return data
 
     def form_valid(self, form):

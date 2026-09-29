@@ -1,8 +1,8 @@
-
 from django import forms
 
-from .models import Category, Brand, Product,UnitOfMeasure, ProductVariant
+from .models import Category, Brand, Product, UnitOfMeasure, ProductVariant
 from supplier.models import Supplier
+
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -33,14 +33,15 @@ class UnitOfMeasureForm(forms.ModelForm):
             'short_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. kg'})
         }
 
+
 class ProductForm(forms.ModelForm):
-    initial_stock = forms.IntegerField(
-        required=False,
-        min_value=0,
-        initial=0,
-        help_text="Initial inventory quantity for single-variant products.",
-        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': '0'})
-    )
+    """
+    Defines the catalog entry only — name, price, category, etc. Stock
+    quantity is NOT set here: it comes exclusively from recording a
+    purchase (inventory app), which is the only thing allowed to write
+    to StockLevel. A brand-new product simply starts with no StockLevel
+    row (treated as 0 on hand) until its first purchase is logged.
+    """
 
     class Meta:
         model = Product
@@ -67,13 +68,7 @@ class ProductForm(forms.ModelForm):
 
 
 class ProductVariantForm(forms.ModelForm):
-    initial_stock = forms.IntegerField(
-        required=False,
-        min_value=0,
-        initial=0,
-        help_text="Initial opening stock quantity for this variant.",
-        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': '0'})
-    )
+    """Defines a variant's identity and pricing only — no initial_stock (see ProductForm)."""
 
     class Meta:
         model = ProductVariant
@@ -96,5 +91,3 @@ ProductVariantFormSet = forms.inlineformset_factory(
     extra=1,
     can_delete=True
 )
-
-

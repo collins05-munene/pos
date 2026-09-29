@@ -1,11 +1,24 @@
 from django.urls import path
-from . import views
+
+from .views import (
+    StockLevelListView,
+    StockAdjustmentCreateView,
+    PurchaseOrderListView,
+    PurchaseOrderCreateView,
+    PurchaseOrderDetailView,
+    ReceivePurchaseOrderView,
+    PurchasePaymentCreateView,
+)
 
 urlpatterns = [
-    path('stock/', views.StockLevelListView.as_view(), name='stock-level-list'),
-    path('stock/adjust/', views.StockAdjustmentCreateView.as_view(), name='stock-adjust'),
-    path('purchase/order/', views.PurchaseOrderListView.as_view(), name='purchase-order-list'),
-    path('purchase/order/new/', views.PurchaseOrderCreateView.as_view(), name='purchase-order-create'),
-    path('purchase/order/<int:pk>/', views.PurchaseOrderDetailView.as_view(), name='purchase-order-detail'),
-    path('purchase/order/<int:pk>/receive/', views.ReceivePurchaseOrderView.as_view(), name='purchase-order-receive')
+    # Stock levels & adjustments
+    path('stock/', StockLevelListView.as_view(), name='stock-level-list'),
+    path('stock/adjust/', StockAdjustmentCreateView.as_view(), name='stock-adjust'),
+
+    # Purchases (stock-in / procurement)
+    path('purchases/', PurchaseOrderListView.as_view(), name='purchase-order-list'),
+    path('purchases/new/', PurchaseOrderCreateView.as_view(), name='purchase-order-create'),
+    path('purchases/<int:pk>/', PurchaseOrderDetailView.as_view(), name='purchase-order-detail'),
+    path('purchases/<int:pk>/receive/', ReceivePurchaseOrderView.as_view(), name='purchase-order-receive'),
+    path('purchases/<int:pk>/pay/', PurchasePaymentCreateView.as_view(), name='purchase-order-pay'),
 ]
