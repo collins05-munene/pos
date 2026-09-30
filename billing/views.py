@@ -37,7 +37,7 @@ class BillingOverviewView(OwnerRequiredMixin, View):
                     tenant=tenant, status=Invoice.Status.PAID, install_fee_amount__gt=0).exists(),
                 monthly_price=sub.custom_monthly_price),
             "invoices": list(Invoice.objects.filter(tenant=tenant).values(
-                "number", "status", "total", "term_months", "issued_at", "paid_at")[:20]),
+                "number", "status", "total", "term_months", "issued_at", "paid_at", "period_end")[:20]),
         }
         return html_or_json(request, "billing/overview.html", payload)
 

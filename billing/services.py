@@ -3,6 +3,7 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
+from operator import sub
 
 from django.conf import settings
 from django.db import transaction
@@ -76,11 +77,15 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
         inv.status = Invoice.Status.VOID
         inv.save(update_fields=["status"])
 
+    start = sub.current_period_end or timezone.now()
+    end = add_months(start, term_months)
+
     invoice = Invoice.objects.create(
         tenant=tenant, term_months=term_months,
         list_price_amount=q["list_price"], discount_amount=q["discount_amount"],
         subscription_amount=q["subscription_amount"],
         install_fee_amount=q["install_fee"], total=q["total"],
+        period_start=start, period_end=end,  
     )
     record_event("invoice.created", tenant, invoice=invoice.number, total=invoice.total,
                  term_months=term_months)

@@ -154,17 +154,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
-# ADDED FOR PWA: tells collectstatic where to find the project-level
-# static/ folder (manifest.json, static/icons/*.png). If you already
-# have your own STATICFILES_DIRS elsewhere, merge BASE_DIR / 'static'
-# into it instead of duplicating this setting.
+# Tell Django to look in the root-level 'static' directory
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STORAGES = {
     "default": {
