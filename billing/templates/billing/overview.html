@@ -1,17 +1,19 @@
-{% load static %}<!DOCTYPE html>
+{% load static %}.
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Billing -- Duka OS</title>
+<title>Billing -- POS Retail Suite</title>
 <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
 </head>
 <body>
 
 <header class="masthead">
   <div class="wrap">
-    <div class="wordmark">Duka<span>OS</span></div>
+    <div class="wordmark">POS<span>Retail Suite</span></div>
     <div class="masthead-meta"><a href="/staff/" style="text-decoration:underline;">Staff</a> &nbsp; <span id="shop-meta"></span></div>
+    <div class="masthead-meta"><a href="{% url 'admin-dashboard' %}" style="text-decoration:underline;">Dashboard</a></div>
   </div>
 </header>
 
@@ -41,6 +43,7 @@
       <h2>Renew with a different term</h2>
       <div class="plans" id="plans" role="group" aria-label="Subscription term"></div>
       <p class="plan-note" id="plan-note"></p>
+      <button id="select-plan-btn" class="primary" style="margin-top: 15px;">Proceed to Payment</button>
     </div>
 
     <hr class="rule">
@@ -48,7 +51,7 @@
     <h2>Invoice history</h2>
     <table class="ledger">
       <thead>
-        <tr><th>Invoice</th><th>Term</th><th>Issued</th><th>Status</th><th class="num">Amount</th></tr>
+        <tr><th>Invoice</th><th>Term</th><th>Issued</th><th>Expires</th><th>Status</th><th class="num">Amount</th></tr>
       </thead>
       <tbody id="invoice-rows">
         <tr class="empty-row"><td colspan="5">Loading&hellip;</td></tr>

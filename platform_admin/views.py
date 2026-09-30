@@ -24,13 +24,11 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
 class OverviewView(SuperuserRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        if request.headers.get("Accept") == "application/json":
+        accept_header = request.headers.get("Accept", "")
+        if "application/json" in accept_header or request.GET.get("format") == "json":
             return JsonResponse(platform_overview())
 
-        return render(
-            request,
-            "platform_admin/overview.html")
-
+        return render(request, "platform_admin/overview.html")
 
 class TenantListView(SuperuserRequiredMixin, View):
     def get(self, request):

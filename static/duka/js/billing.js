@@ -10,6 +10,7 @@
   const stkStatus = document.getElementById('stk-status');
   const rowsEl = document.getElementById('invoice-rows');
   const shopMeta = document.getElementById('shop-meta');
+  const selectPlanBtn = document.getElementById('select-plan-btn');
 
   let pollTimer = null;
   let currentPlans = [];
@@ -24,28 +25,49 @@
   function renderInvoiceRows(invoices) {
     rowsEl.innerHTML = '';
     if (!invoices || invoices.length === 0) {
-      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '5', text: 'No invoices yet.' })));
+      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '6', text: 'No invoices yet.' })));
       return;
     }
     invoices.forEach(inv => {
+      let expiryDate = inv.period_end || inv.expires_at;
+
+      // Fallback: If period_end is null, calculate estimated expiry from issued_at + term_months
+      if (!expiryDate && inv.issued_at) {
+        const issueDate = new Date(inv.issued_at);
+        issueDate.setMonth(issueDate.getMonth() + Number(inv.term_months || 1));
+        expiryDate = issueDate.toISOString();
+      }
+
       const tr = Duka.el('tr', {}, [
         Duka.el('td', { text: inv.number }),
         Duka.el('td', { text: `${inv.term_months} mo` }),
         Duka.el('td', { text: Duka.dt(inv.issued_at) }),
+        Duka.el('td', { text: Duka.dt(inv.expiryDate) }),
         Duka.el('td', {}, Duka.statusBadge(inv.status)),
         Duka.el('td', { class: 'num', text: Duka.money(inv.total) }),
       ]);
       rowsEl.appendChild(tr);
     });
   }
-
   function renderPlanPicker(plans) {
     currentPlans = plans;
     plansEl.innerHTML = '';
     plans.forEach(p => {
       const btn = Duka.el('button', {
         type: 'button', class: 'plan', 'aria-pressed': String(p.term_months === selectedTerm),
-        onclick: () => { selectedTerm = p.term_months; renderPlanPicker(currentPlans); },
+        onclick: async () => { 
+          selectedTerm = p.term_months; 
+          renderPlanPicker(currentPlans);
+          
+          // Hide plan picker and show invoice panel directly
+          termPicker.hidden = true;
+          invoicePanel.hidden = false;
+
+          // Populate invoice card details
+          document.getElementById('inv-number').textContent = 'Pending...';
+          document.getElementById('inv-term').textContent = `${p.term_months} month(s)`;
+          document.getElementById('inv-total').textContent = Duka.money(p.total);
+        },
       }, [
         Duka.el('span', { class: 'months', text: `${p.term_months} mo` }),
         Duka.el('span', { class: 'price', text: Duka.money(p.subscription_amount) }),
@@ -56,7 +78,6 @@
     const p = plans.find(x => x.term_months === selectedTerm);
     planNote.textContent = p ? `Renewing for ${p.term_months} month(s) costs ${Duka.money(p.total)}.` : '';
   }
-
   function renderOpenInvoice(inv, plans) {
     if (!inv) {
       invoicePanel.hidden = true;
@@ -71,6 +92,23 @@
     document.getElementById('inv-term').textContent = `${inv.term_months} month(s)`;
     document.getElementById('inv-total').textContent = Duka.money(inv.total);
   }
+  selectPlanBtn.addEventListener('click', () => {
+    if (!selectedTerm) {
+      showAlert('Please select a term option.');
+      return;
+    }
+    const plan = currentPlans.find(p => p.term_months === selectedTerm);
+    if (!plan) return;
+
+    // Hide plan picker and show invoice panel
+    termPicker.hidden = true;
+    invoicePanel.hidden = false;
+
+    // Update invoice UI fields
+    document.getElementById('inv-number').textContent = 'Pending...';
+    document.getElementById('inv-term').textContent = `${plan.term_months} month(s)`;
+    document.getElementById('inv-total').textContent = Duka.money(plan.total);
+  });
 
   async function load() {
     try {
