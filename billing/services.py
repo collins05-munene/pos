@@ -92,7 +92,6 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
     return invoice
 
 
-# ---------------------------------------------------------------- payment
 def initiate_stk_payment(invoice, phone):
     if invoice.status != Invoice.Status.OPEN:
         raise BillingError("This invoice is not payable.")
