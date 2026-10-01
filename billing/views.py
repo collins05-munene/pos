@@ -72,13 +72,14 @@ class PaymentStatusView(OwnerRequiredMixin, View):
 @method_decorator(csrf_exempt, name="dispatch")
 class MpesaCallbackView(View):
     """
-    Daraja's STK callbacks are unsigned, so we defend in layers: secret path
-    segment, exact CheckoutRequestID match against a payment WE initiated,
-    amount check, idempotency. (Optionally also allow-list Safaricom IPs at the proxy.)
+    Daraja's STK callbacks are unsigned, so we defend in layers: secret query token,
+    exact CheckoutRequestID match against a payment WE initiated, amount check,
+    and idempotency.
     """
 
-    def post(self, request, secret):
-        if not hmac.compare_digest(secret, settings.MPESA_BILLING_CALLBACK_SECRET):
+    def post(self, request):
+        token = request.GET.get("token", "")
+        if not hmac.compare_digest(token, settings.MPESA_BILLING_CALLBACK_SECRET):
             raise Http404
         try:
             payload = json.loads(request.body)

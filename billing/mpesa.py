@@ -2,6 +2,7 @@
 import base64
 import re
 from datetime import datetime
+import logging
 
 import requests
 from django.conf import settings
@@ -9,6 +10,8 @@ from django.core.cache import cache
 
 TIMEOUT = 20
 
+
+logger = logging.getLogger(__name__)
 
 class MpesaError(Exception):
     pass
