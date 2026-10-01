@@ -5,8 +5,8 @@ from django.conf import settings
 
 DEFAULTS = {
     "CURRENCY": "KES",
-    "MONTHLY_PRICE": Decimal("1499"),
-    "INSTALL_FEE": Decimal("3000"),          # one-off, added to the first invoice
+    "MONTHLY_PRICE": Decimal("10"),
+    "INSTALL_FEE": Decimal("20"),          # one-off, added to the first invoice
     # % off the (monthly x months) list price when paying ahead
     "TERM_DISCOUNT_PERCENT": {1: 0, 3: 30, 6: 30, 12: 30},
     "GRACE_DAYS": 5,                          # access continues this long after period end

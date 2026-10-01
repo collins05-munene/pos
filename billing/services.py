@@ -93,19 +93,38 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
 
 
 def initiate_stk_payment(invoice, phone):
+    # 1. Guard against non-payable invoices
     if invoice.status != Invoice.Status.OPEN:
         raise BillingError("This invoice is not payable.")
-    msisdn = mpesa.normalize_phone(phone)  # ValueError -> 400 in the view
+        
+    # 2. Normalize raw input (e.g. 0712345678 -> 254712345678)
+    msisdn = mpesa.normalize_phone(phone)
 
-    callback_url = settings.BILLING_CALLBACK_BASE_URL.rstrip("/") + reverse(
-        "billing:mpesa-callback", args=[settings.MPESA_BILLING_CALLBACK_SECRET]
-    )
+    # 3. Build callback URL dynamically with query string token authentication
+    base_domain = getattr(
+        settings, 
+        "BILLING_CALLBACK_BASE_URL", 
+        "https://9e4c-154-159-252-56.ngrok-free.app"
+    ).rstrip("/")
+    
+    callback_path = reverse("billing:mpesa-callback")
+    full_callback_url = f"{base_domain}{callback_path}?token={settings.MPESA_BILLING_CALLBACK_SECRET}"
+
+    # 4. Trigger STK push
     resp = mpesa.stk_push(
-        phone=msisdn, amount=invoice.total, account_reference=invoice.number,
-        description="Subscription", callback_url=callback_url,
+        phone=msisdn,
+        amount=invoice.total,
+        account_reference=str(invoice.number),
+        description="Subscription",
+        callback_url=full_callback_url,
     )
+
+    # 5. Save and return the DB record so polling works
     return MpesaPayment.objects.create(
-        invoice=invoice, tenant=invoice.tenant, phone=msisdn, amount=invoice.total,
+        invoice=invoice,
+        tenant=invoice.tenant,
+        phone=msisdn,
+        amount=invoice.total,
         merchant_request_id=resp.get("MerchantRequestID", ""),
         checkout_request_id=resp["CheckoutRequestID"],
     )
@@ -206,7 +225,6 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
     return invoice
 
 
-# -------------------------------------------------- lock-out / overrides
 def cancel_subscription(tenant, *, immediate=False, by=None, note=""):
     sub = tenant.subscription
     if immediate:

@@ -7,5 +7,5 @@ urlpatterns = [
     path("checkout/", views.CheckoutView.as_view(), name="checkout"),
     path("payments/<int:pk>/", views.PaymentStatusView.as_view(), name="payment-status"),
     path("locked/", views.locked_view, name="locked"),
-    path("mpesa/callback/<str:secret>/", views.MpesaCallbackView.as_view(), name="mpesa-callback"),
+    path("mpesa/callback/", views.MpesaCallbackView.as_view(), name="mpesa-callback"),
 ]
