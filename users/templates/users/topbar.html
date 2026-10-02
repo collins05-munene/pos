@@ -4,9 +4,9 @@
     <div class="right-side">
         <button></button>
         <div class="status">
-            {% if user.is_superuser %}
+            {% if user.role == 'ADMIN' %}
                 Admin
-            {% else %}
+            {% elif user.role == 'CASHIER' %}
                 Cashier
             {% endif %}
         </div>
