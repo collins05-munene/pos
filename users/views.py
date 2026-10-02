@@ -131,14 +131,23 @@ class ActivityLogDetailView(AdminRequiredMixin, TenantScopedQuerysetMixin, Detai
     template_name = 'users/audit_detail_page.html'
     context_object_name = 'log'
 
+
 class AdminDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'users/admin-dashboard.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        tenant = self.request.tenant
+        tenant = getattr(self.request, 'tenant', None)
+        
+        # Fallback: Check if user has an associated tenant on their account
+        if tenant is None and hasattr(self.request.user, 'tenant'):
+            tenant = self.request.user.tenant
+
         if tenant is None:
-            raise PermissionDenied("No active business selected.")
+            # Handle gracefully without raising raw PermissionDenied that triggers a 500
+            context['error'] = "No active business found for this account."
+            return context
+
         context.update(build_dashboard_context(tenant))
         return context
 
