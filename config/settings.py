@@ -69,7 +69,8 @@ INSTALLED_APPS = [
     'users',
     "tenants", 
     "billing", 
-    "platform_admin"
+    "platform_admin",
+    "backups"
 ]
 
 MIDDLEWARE = [
@@ -163,12 +164,18 @@ STATICFILES_DIRS = [
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+BACKUP_ROOT = BASE_DIR / "private_backups"
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "backups": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": BACKUP_ROOT},
     },
 }
 
@@ -231,4 +238,6 @@ BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL")
 
 MPESA_BILLING_CALLBACK_SECRET = env("MPESA_BILLING_CALLBACK_SECRET")  
 
-BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]   
+BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]  
+
+BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")

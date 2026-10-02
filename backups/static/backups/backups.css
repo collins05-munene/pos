@@ -1,0 +1,81 @@
+/* Backups page. Uses the variables from style.css (:root). Everything is scoped under .backups-page. */
+.backups-page{padding:24px;max-width:1100px}
+.backups-page h1{font-size:1.5rem;margin-bottom:4px}
+.backups-page .subtitle{color:#6b7280;margin-bottom:20px;font-size:.9rem}
+
+.backups-page .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:20px;margin-bottom:20px;
+}
+.backups-page .card h2{font-size:1.05rem;margin-bottom:14px;color:var(--secondary)}
+
+.backups-page .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:800px){.backups-page .grid{grid-template-columns:1fr}}
+
+/* buttons */
+.backups-page .btn{
+    display:inline-block;border:0;cursor:pointer;
+    padding:9px 16px;border-radius:8px;font-size:.9rem;font-weight:600;
+    background:var(--secondary);color:#fff;font-family:inherit;
+}
+.backups-page .btn:hover{opacity:.9}
+.backups-page .btn-primary{background:var(--primary)}
+.backups-page .btn-danger{background:var(--danger)}
+.backups-page .btn-sm{padding:5px 10px;font-size:.8rem}
+.backups-page .btn-link{background:none;color:var(--primary);padding:5px 8px}
+
+/* form fields (Django's {{ form.as_p }} output) */
+.backups-page form p{margin-bottom:12px}
+.backups-page label{display:block;font-size:.85rem;font-weight:600;margin-bottom:4px}
+.backups-page input[type=number],.backups-page select{
+    width:100%;padding:8px 10px;border:1px solid var(--border);
+    border-radius:8px;font-family:inherit;background:#fff;
+}
+.backups-page input[type=checkbox]{margin-right:6px}
+.backups-page .helptext{display:block;color:#6b7280;font-size:.78rem;margin-top:3px}
+
+/* encryption notice */
+.backups-page .notice{padding:10px 14px;border-radius:8px;font-size:.85rem;margin-top:12px}
+.backups-page .notice.ok{background:#dcfce7;color:#166534}
+.backups-page .notice.warn{background:#fef9c3;color:#854d0e}
+
+/* history table */
+.backups-page .table-wrap{overflow-x:auto}
+.backups-page table{width:100%;border-collapse:collapse;font-size:.88rem}
+.backups-page th{
+    text-align:left;padding:10px 12px;background:var(--background);
+    border-bottom:1px solid var(--border);font-size:.78rem;
+    text-transform:uppercase;letter-spacing:.04em;color:#6b7280;
+}
+.backups-page td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.backups-page tr:last-child td{border-bottom:0}
+.backups-page .actions{display:flex;gap:6px;align-items:center;white-space:nowrap}
+.backups-page .actions form{display:inline}
+.backups-page .empty{text-align:center;color:#6b7280;padding:24px}
+
+/* status bk-badges */
+.backups-page .bk-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.75rem;font-weight:600}
+.backups-page .bk-badge-success{background:#dcfce7;color:#166534}
+.backups-page .bk-badge-failed{background:#fee2e2;color:#991b1b}
+.backups-page .bk-badge-running{background:#dbeafe;color:#1e40af}
+.backups-page .bk-badge-manual{background:#e0e7ff;color:#3730a3}
+.backups-page .bk-badge-auto{background:#f1f5f9;color:#334155}
+
+/* password confirmation dialog (outside .backups-page, <dialog> renders in the top layer) */
+.backups-dialog{
+    border:0;border-radius:var(--radius);box-shadow:0 10px 40px rgba(0,0,0,.25);
+    padding:24px;width:min(420px,92vw);margin:auto;
+}
+.backups-dialog::backdrop{background:rgba(15,23,42,.55)}
+.backups-dialog h2{font-size:1.1rem;margin-bottom:6px;color:var(--secondary)}
+.backups-dialog .subtitle{color:#6b7280;font-size:.85rem;margin-bottom:14px}
+.backups-dialog input[type=password]{
+    width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;
+}
+.backups-dialog .actions{display:flex;gap:8px;margin-top:6px}
+.backups-dialog .btn{
+    border:0;cursor:pointer;padding:9px 16px;border-radius:8px;font-weight:600;
+    background:var(--secondary);color:#fff;font-family:inherit;
+}
+.backups-dialog .btn-primary{background:var(--primary)}
