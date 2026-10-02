@@ -1,0 +1,113 @@
+{% extends "users/base.html" %} 
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'backups/backups.css' %}">
+
+<div class="backups-page">
+  <h1>Data Backups</h1>
+  <p class="subtitle">Protect your business data with manual and automatic backups.</p>
+
+  {% for m in messages %}
+    <div class="alert {{ m.tags }}">{{ m }}</div>
+  {% endfor %}
+
+  <div class="grid">
+    <div class="card">
+      <h2>Manual backup</h2>
+      <p class="subtitle">Create a full copy of your shop data right now.</p>
+      <form method="post" action="{% url 'backup-create' %}">{% csrf_token %}
+        <button type="submit" class="btn btn-primary">Back up now</button>
+      </form>
+      {% if encrypted %}
+        <div class="notice ok">Stored backups are encrypted on the server. Downloads are decrypted for you.</div>
+      {% else %}
+        <div class="notice warn">Backups are not encrypted. Ask your administrator to set an encryption key.</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Automatic backups</h2>
+      <form method="post" action="{% url 'backup-schedule' %}">{% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn">Save schedule</button>
+        {% if next_run %}<p class="subtitle" style="margin-top:12px">Next run: {{ next_run|date:"D d M, H:i" }}</p>{% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Export to Excel</h2>
+    <p class="subtitle">Download your sales, stock, products and more as spreadsheets (CSV files in a zip) that open in Excel or Google Sheets.</p>
+    <button type="button" class="btn btn-primary"
+            data-confirm-url="{% url 'backup-export' %}" data-confirm-title="Export your data to spreadsheets">Export data</button>
+  </div>
+
+  <div class="card">
+    <h2>Backup history</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Status</th><th>Records</th><th>Size</th><th>By</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for b in backups %}
+          <tr>
+            <td>{{ b.created_at|date:"d M Y, H:i" }}</td>
+            <td><span class="bk-badge {% if b.kind == 'MANUAL' %}bk-badge-manual{% else %}bk-badge-auto{% endif %}">{{ b.get_kind_display }}</span></td>
+            <td>
+              <span class="bk-badge bk-badge-{{ b.status|lower }}">{{ b.get_status_display }}</span>
+              {% if b.error %}<br><small>{{ b.error }}</small>{% endif %}
+            </td>
+            <td>{{ b.record_count }}</td>
+            <td>{{ b.size_bytes|filesizeformat }}</td>
+            <td>{{ b.created_by.username|default:"system" }}</td>
+            <td class="actions">
+              {% if b.status == "SUCCESS" %}
+                <button type="button" class="btn btn-sm btn-primary"
+                        data-confirm-url="{% url 'backup-download' b.pk %}" data-confirm-title="Download this backup">Download</button>
+              {% endif %}
+              <form method="post" action="{% url 'backup-delete' b.pk %}"
+                    onsubmit="return confirm('Delete this backup permanently?')">{% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="empty">No backups yet. Click "Back up now" to create your first one.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<dialog id="confirm-dialog" class="backups-dialog">
+  <form method="post" action="">{% csrf_token %}
+    <h2 data-title></h2>
+    <p class="subtitle">Enter your password to continue. The file contains your business data, so keep it somewhere safe.</p>
+    <p><input type="password" name="password" autocomplete="current-password" placeholder="Your password" required></p>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Confirm</button>
+      <button type="button" class="btn" data-cancel>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var dlg = document.getElementById('confirm-dialog');
+  var form = dlg.querySelector('form');
+  document.querySelectorAll('[data-confirm-url]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      form.action = btn.dataset.confirmUrl;
+      dlg.querySelector('[data-title]').textContent = btn.dataset.confirmTitle;
+      form.querySelector('input[name=password]').value = '';
+      dlg.showModal();
+      form.querySelector('input[name=password]').focus();
+    });
+  });
+  dlg.querySelector('[data-cancel]').addEventListener('click', function () { dlg.close(); });
+  form.addEventListener('submit', function () { setTimeout(function () { dlg.close(); }, 300); });
+})();
+</script>
+{% endblock %}
