@@ -75,19 +75,20 @@ class AuditLogMixin:
         return response
 
 
+MANAGEMENT_ROLES = ("ADMIN", "MANAGER")
+
+
 class AdminRequiredMixin(AccessMixin):
     """
-    CBV mixin that verifies the current user is authenticated AND has the 'ADMIN' role.
+    CBV mixin that verifies the current user is authenticated AND is a
+    management user (ADMIN or MANAGER), or a superuser.
     """
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
 
-        # Check role attribute or method (supports user.role == 'ADMIN' or user.is_admin)
-        user_role = getattr(request.user, 'role', None)
-        is_admin_flag = getattr(request.user, 'is_admin', False)
-
-        if user_role == 'ADMIN' or is_admin_flag or request.user.is_superuser:
+        user = request.user
+        if getattr(user, "role", None) in MANAGEMENT_ROLES or user.is_superuser:
             return super().dispatch(request, *args, **kwargs)
 
         raise PermissionDenied("You do not have administrative permission to access this page.")
@@ -95,17 +96,28 @@ class AdminRequiredMixin(AccessMixin):
 
 class CashierRequiredMixin(AccessMixin):
     """
-    CBV mixin that verifies the current user is authenticated AND has either 'CASHIER' or 'ADMIN' role.
-    (Admins are typically permitted to access cashier functions as well).
+    CBV mixin that verifies the current user is authenticated AND is a
+    CASHIER, ADMIN or MANAGER, or a superuser.
     """
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
 
-        user_role = getattr(request.user, 'role', None)
-
-        # Allow CASHIERs or ADMINs / Superusers
-        if user_role in ['CASHIER', 'ADMIN'] or request.user.is_superuser:
+        user = request.user
+        if getattr(user, "role", None) in ("CASHIER",) + MANAGEMENT_ROLES or user.is_superuser:
             return super().dispatch(request, *args, **kwargs)
 
         raise PermissionDenied("You do not have cashier permissions to access this page.")
+
+class TenantScopedQuerysetMixin:
+    """
+    Explicitly restricts a view's queryset to the request's tenant.
+    Does not depend on the model's default manager. If there is no tenant
+    (e.g. a superuser outside a support session), it returns nothing.
+    """
+    def get_queryset(self):
+        tenant = getattr(self.request, "tenant", None)
+        base = self.model._base_manager      
+        if tenant is None:
+            return base.none()
+        return base.filter(tenant_id=tenant.pk)

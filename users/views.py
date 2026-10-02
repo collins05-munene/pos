@@ -7,13 +7,15 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
+from django.core.exceptions import PermissionDenied
 
 from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
 from .utils import log_action, AuditAction
 from .dashboard import build_dashboard_context
 from tenants.services import compose_username
-from users.mixins import AdminRequiredMixin, CashierRequiredMixin
+from tenants.models import Tenant
+from users.mixins import AdminRequiredMixin, CashierRequiredMixin, TenantScopedQuerysetMixin
 
 
 # Create your views here.
@@ -100,7 +102,12 @@ class CashierPINLoginView(FormView):
             log_action(user, AuditAction.LOGIN_PIN, f"Logged in to POS terminal via pin.", self.request)
             return super().form_valid(form)
         else:
-            log_action(None, "PIN_LOGIN_FAILED", f"Failed PIN login attempt for username: {composed_username}")
+            tenant = Tenant.objects.filter(slug=shop_code).first()
+            log_action(
+                None, "PIN_LOGIN_FAILED",
+                f"Failed PIN login attempt for username: {composed_username}",
+                request=self.request, tenant=tenant,
+            )
             form.add_error(None, "Invalid Shop Code, Username, or PIN")
             return self.form_invalid(form)
 
@@ -112,14 +119,14 @@ class LogoutView(View):
         return redirect('pin_login')
     
 
-class ActivityLogListView(AdminRequiredMixin, ListView):
+class ActivityLogListView(AdminRequiredMixin, TenantScopedQuerysetMixin, ListView):
     model = ActivityLog
     template_name = 'users/activity_logs.html'
     context_object_name = 'logs'
     paginate_by = 10
 
 
-class ActivityLogDetailView(AdminRequiredMixin, DetailView):
+class ActivityLogDetailView(AdminRequiredMixin, TenantScopedQuerysetMixin, DetailView):
     model = ActivityLog
     template_name = 'users/audit_detail_page.html'
     context_object_name = 'log'
@@ -129,13 +136,19 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(build_dashboard_context())
+        tenant = self.request.tenant
+        if tenant is None:
+            raise PermissionDenied("No active business selected.")
+        context.update(build_dashboard_context(tenant))
         return context
 
 
 class CashierDashboardView(CashierRequiredMixin, ListView):
     model = User
     template_name = 'users/cashier_dashboard.html'
+
+    def get_queryset(self):
+        return User.tenant_objects.filter(role=User.Roles.CASHIER, is_active=True)
 
 class HomepageView(TemplateView):
     template_name = 'users/pin_login.html'
