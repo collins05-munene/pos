@@ -67,7 +67,7 @@ class StockLevelListView(CashierRequiredMixin, ListView):
     queryset = StockLevel.objects.select_related('branch', 'variant', 'variant__product')
 
 
-class PurchaseOrderListView(AdminRequiredMixin, ListView):
+class PurchaseOrderListView(CashierRequiredMixin, ListView):
     model = PurchaseOrder
     template_name = 'inventory/purchase_order_list.html'
     context_object_name = 'purchase_orders'
@@ -75,7 +75,7 @@ class PurchaseOrderListView(AdminRequiredMixin, ListView):
     queryset = PurchaseOrder.objects.select_related('supplier', 'branch').prefetch_related('items', 'payments')
 
 
-class PurchaseOrderCreateView(AdminRequiredMixin, CreateView):
+class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
     """
     Records a stock purchase as one transaction: items + costs, optional
     supplier, payment (none / partial / full) and, by default, immediate
