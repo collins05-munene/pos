@@ -311,12 +311,14 @@
             <td><a class="view-link" href="{% url 'order-detail' order.pk %}">View</a></td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="empty-note">No transactions yet today.</td></tr>
+          <tr><td colspan="
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">5" class="empty-note">No transactions yet today.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
 
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
     <div class="dash-panel">
       <h3>Cashier / Register Status</h3>
       <table class="dash-table">

@@ -1,13 +1,13 @@
-{% load static %}.
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Billing -- POS Retail Suite</title>
-<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
-</head>
-<body>
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block title %}Billing -- POS Retail Suite {% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+{% endblock %}
+
+{% block content %}
 
 <header class="masthead">
   <div class="wrap">
@@ -60,7 +60,6 @@
   </div>
 </main>
 
-<script src="{% static 'duka/js/duka-api.js' %}"></script>
-<script src="{% static 'duka/js/billing.js' %}"></script>
-</body>
-</html>
+  <script src="{% static 'duka/js/duka-api.js' %}"></script>
+  <script src="{% static 'duka/js/billing.js' %}"></script>
+{% endblock %}

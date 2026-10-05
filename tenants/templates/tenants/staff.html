@@ -1,83 +1,89 @@
-{% load static %}<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Staff -- POS Retail Suite</title>
-<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
-</head>
-<body>
+{% extends 'users/base.html' %}
+{% load static %}
 
-<header class="masthead">
-  <div class="wrap">
-    <div class="wordmark">POS<span>Retail Suite</span></div>
-    <div class="masthead-meta"><a href="/billing/" style="text-decoration:underline;">Billing</a> <span id="shop-meta"></span></div>
-    <div class="masthead-meta"><a href="{% url 'admin-dashboard' %}" style="text-decoration:underline;">Dashboard</a></div>
-  </div>
-</header>
+{% block title %}Staff -- POS Retail Suite{% endblock %}
 
-<main>
-  <div class="wrap">
-    <h1>Staff</h1>
-    <p class="lede" id="shop-line">Cashiers log in with your shop's code and a PIN. Managers log in with the code, their username and a password.</p>
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+{% endblock %}
 
-    <div id="alert" class="alert" role="alert"></div>
+{% block content %}
 
-    <h2>Add someone</h2>
-    <form id="add-form" novalidate>
-      <div class="field-row">
-        <div class="field" data-field="handle">
-          <label for="handle">Username</label>
-          <input id="handle" name="handle" type="text" placeholder="e.g. john" autocapitalize="none" required>
-          <div class="err"></div>
-        </div>
-        <div class="field" data-field="first_name">
-          <label for="first_name">First name</label>
-          <input id="first_name" name="first_name" type="text">
-          <div class="err"></div>
-        </div>
+    <header class="masthead">
+      <div class="wrap">
+        <div class="wordmark">POS<span>Retail Suite</span></div>
+        <div class="masthead-meta"><a href="/billing/" style="text-decoration:underline;">Billing</a> <span id="shop-meta"></span></div>
+        <div class="masthead-meta"><a href="{% url 'admin-dashboard' %}" style="text-decoration:underline;">Dashboard</a></div>
       </div>
+    </header>
 
-      <div class="field" data-field="role">
-        <label for="role">Role</label>
-        <select id="role" name="role">
-          <option value="CASHIER">Cashier -- logs in with a PIN</option>
-          <option value="MANAGER">Manager -- logs in with a password</option>
-        </select>
-        <div class="err"></div>
-      </div>
+    <main>
+      <div class="wrap">
+        <h1>Staff</h1>
+        <p class="lede" id="shop-line">Cashiers log in with your shop's code and a PIN. Managers log in with the code, their username and a password.</p>
 
-      <div class="field" data-field="credential">
-        <label for="credential" id="credential-label">PIN (4-6 digits)</label>
-        <input id="credential" name="credential" type="password" autocomplete="new-password" required>
-        <div class="err"></div>
-      </div>
+        <div id="alert" class="alert" role="alert"></div>
 
-      <button type="submit" class="primary" id="add-btn" style="width:auto;">Add to shop</button>
-    </form>
+        <h2>Add someone</h2>
+        <form id="add-form" novalidate>
+          <div class="field-row">
+            <div class="field" data-field="handle">
+              <label for="handle">Username</label>
+              <input id="handle" name="handle" type="text" placeholder="e.g. john" autocapitalize="none" required>
+              <div class="err"></div>
+            </div>
+            <div class="field" data-field="first_name">
+              <label for="first_name">First name</label>
+              <input id="first_name" name="first_name" type="text">
+              <div class="err"></div>
+            </div>
+          </div>
 
-    <hr class="rule">
+          <div class="field" data-field="role">
+            <label for="role">Role</label>
+            <select id="role" name="role">
+              <option value="CASHIER">Cashier -- logs in with a PIN</option>
+              <option value="MANAGER">Manager -- logs in with a password</option>
+            </select>
+            <div class="err"></div>
+          </div>
 
-    <h2>Everyone with access</h2>
-    <table class="ledger">
-      <thead>
-        <tr><th>Username</th><th>Role</th><th>Login</th><th>Status</th><th></th></tr>
-      </thead>
-      <tbody id="staff-rows">
-        <tr class="empty-row"><td colspan="5">Loading&hellip;</td></tr>
-      </tbody>
-    </table>
-  </div>
-</main>
+          <div class="field" data-field="credential">
+            <label for="credential" id="credential-label">PIN (4-6 digits)</label>
+            <input id="credential" name="credential" type="password" autocomplete="new-password" required>
+            <div class="err"></div>
+          </div>
 
-<div class="drawer-backdrop" id="drawer-backdrop"></div>
-<aside class="drawer" id="drawer" aria-hidden="true">
-  <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
-  <div id="drawer-content"></div>
-</aside>
+          <button type="submit" class="primary" id="add-btn" style="width:auto;">Add to shop</button>
+        </form>
 
-<script src="{% static 'duka/js/duka-api.js' %}"></script>
-<script src="{% static 'duka/js/staff.js' %}"></script>
-<script src="{% static 'duka/js/billing.js' %}"></script>
-</body>
-</html>
+        <hr class="rule">
+
+        <h2>Everyone with access</h2>
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Login</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="staff-rows">
+            <tr class="empty-row"><td colspan="5">Loading&hellip;</td></tr>
+          </tbody>
+        </table>
+                    </div>
+                  </main>
+
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
+      <div id="drawer-content"></div>
+    </aside>
+
+  <script src="{% static 'duka/js/duka-api.js' %}"></script>
+  <script src="{% static 'duka/js/staff.js' %}"></script>
+  <script src="{% static 'duka/js/billing.js' %}"></script>
+{% endblock %}
