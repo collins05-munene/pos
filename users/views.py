@@ -8,6 +8,9 @@ from django.contrib.auth.mixins import UserPassesTestMixin
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
+from django.views.decorators.cache import never_cache
+from .dashboard_live import get_version
 
 from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
@@ -110,10 +113,11 @@ class CashierPINLoginView(FormView):
             )
             form.add_error(None, "Invalid Shop Code, Username, or PIN")
             return self.form_invalid(form)
-
+        
 class LogoutView(View):
     def get(self, request):
         if request.user.is_authenticated:
+            User.objects.filter(pk=request.user.pk).update(last_seen=None)
             log_action(request.user, 'Logout', 'Logged out of session', request)
             logout(request)
         return redirect('pin_login')
@@ -139,8 +143,37 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
         tenant = self.request.tenant
         if tenant is None:
             raise PermissionDenied("No active business selected.")
+        version = get_version(tenant.pk)             # read BEFORE building the data
+        context.update(build_dashboard_context(tenant))
+        context["dash_version"] = version
+        return context
+
+
+@method_decorator(never_cache, name='dispatch')
+class DashboardVersionView(AdminRequiredMixin, View):
+    def get(self, request):
+        if request.tenant is None:
+            raise PermissionDenied("No active business selected.")
+        return JsonResponse({"v": get_version(request.tenant.pk)})
+
+
+@method_decorator(never_cache, name='dispatch')
+class DashboardBodyView(AdminRequiredMixin, TemplateView):
+    template_name = 'users/_dashboard_body.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        tenant = self.request.tenant
+        if tenant is None:
+            raise PermissionDenied("No active business selected.")
+        context["dash_version"] = get_version(tenant.pk)   # read first, then build
         context.update(build_dashboard_context(tenant))
         return context
+
+    def render_to_response(self, context, **kwargs):
+        resp = super().render_to_response(context, **kwargs)
+        resp["X-Dash-Version"] = str(context["dash_version"])
+        return resp
 
 
 class CashierDashboardView(CashierRequiredMixin, ListView):

@@ -1,0 +1,169 @@
+<p class="last-seen" style="text-align: right; margin: 0 0 1rem 0;">Updated {{ generated_at|date:"H:i:s" }}</p>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Gross Sales (Today)</div>
+    <div class="kpi-value">KSH {{ today_kpis.gross_sales|floatformat:2 }}</div>
+    {% with d=kpi_deltas.gross_sales_vs_yesterday %}
+      {% if d is not None %}
+        <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
+          {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
+        </div>
+      {% else %}
+        <div class="kpi-delta flat">No sales yesterday to compare</div>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-label">Net Profit (Today)</div>
+    <div class="kpi-value">KSH {{ today_kpis.profit|floatformat:2 }}</div>
+    {% with d=kpi_deltas.profit_vs_yesterday %}
+      {% if d is not None %}
+        <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
+          {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
+        </div>
+      {% else %}
+        <div class="kpi-delta flat">No baseline yet</div>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-label">Transactions (Today)</div>
+    <div class="kpi-value">{{ today_kpis.transactions }}</div>
+    {% with d=kpi_deltas.transactions_vs_yesterday %}
+      {% if d is not None %}
+        <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
+          {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
+        </div>
+      {% else %}
+        <div class="kpi-delta flat">No baseline yet</div>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-label">Average Ticket Value</div>
+    <div class="kpi-value">KSH {{ today_kpis.atv|floatformat:2 }}</div>
+    <div class="pay-pills">
+      {% for row in payment_breakdown %}
+        <span class="pay-pill">{{ row.payment_method }}: KSH {{ row.total|floatformat:0 }}</span>
+      {% empty %}
+        <span class="pay-pill">No sales yet today</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="lists-grid">
+
+  <div class="dash-panel">
+    <h3>Top-Selling Products (Today)</h3>
+    <div class="table-scroll">
+      <table class="dash-table">
+        <thead>
+          <tr><th>Product</th><th>SKU</th><th>Units</th><th>Revenue</th></tr>
+        </thead>
+        <tbody>
+          {% for p in top_products %}
+          <tr>
+            <td>{{ p.name }}</td>
+            <td>{{ p.sku }}</td>
+            <td>{{ p.units_sold }}</td>
+            <td>KSH {{ p.revenue|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="empty-note">No items sold yet today.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-panel">
+    <h3>Low Stock Alerts</h3>
+    <div class="table-scroll">
+      <table class="dash-table">
+        <thead>
+          <tr><th>Item</th><th>Branch</th><th>Qty</th><th>Threshold</th></tr>
+        </thead>
+        <tbody>
+          {% for sl in low_stock_alerts %}
+          <tr>
+            <td>{{ sl.variant.product.name }} ({{ sl.variant.sku }})</td>
+            <td>{{ sl.branch.name }}</td>
+            <td><span class="badge-low">{{ sl.quantity }}</span></td>
+            <td>{{ sl.variant.low_stock_threshold }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="empty-note">Nothing below threshold.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-panel">
+    <h3>Recent Transactions</h3>
+    <div class="table-scroll">
+      <table class="dash-table">
+        <thead>
+          <tr><th>Invoice</th><th>Time</th><th>Payment</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for order in recent_transactions %}
+          <tr>
+            <td>{{ order.invoice_number }}</td>
+            <td>{{ order.created_at|date:"H:i" }}</td>
+            <td>{{ order.get_payment_method_display }}</td>
+            <td>KSH {{ order.total_revenue|floatformat:2 }}</td>
+            <td><a class="view-link" href="{% url 'order-detail' order.pk %}">View</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="empty-note">No transactions yet today.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dash-panel">
+    <h3>Cashier / Register Status</h3>
+    <div class="table-scroll">
+      <table class="dash-table">
+        <thead>
+          <tr><th>Cashier</th><th>Status</th><th>Shift Sales</th><th>Txns</th></tr>
+        </thead>
+        <tbody>
+          {% for row in cashier_status %}
+          <tr>
+            <td>{{ row.cashier.get_full_name|default:row.cashier.username }}</td>
+            <td>
+              {% if row.status == 'active' %}
+                <span class="status-badge badge-live">● Active</span>
+              {% elif row.status == 'idle' %}
+                <span class="status-badge badge-idle">◐ Idle</span>
+                <span class="last-seen">Last seen {{ row.cashier.last_seen|timesince }} ago</span>
+              {% else %}
+                <span class="status-badge badge-offline">○ Offline</span>
+                {% if row.cashier.last_seen %}
+                  <span class="last-seen">Last seen {{ row.cashier.last_seen|timesince }} ago</span>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td>KSH {{ row.shift_sales|floatformat:2 }}</td>
+            <td>{{ row.shift_transactions }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="empty-note">No active cashier accounts found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{{ hourly_trend|json_script:"hourly-trend-data" }}
+{{ top_categories|json_script:"top-categories-data" }}

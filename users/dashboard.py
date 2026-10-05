@@ -9,13 +9,16 @@ from django.utils import timezone
 from sales.models import Order, OrderItem
 from inventory.models import StockLevel
 from .models import User, ActivityLog
+from .dashboard_live import get_version
 
 CACHE_TTL_SECONDS = 90
 
 
 def _cache_key(tenant):
-    # One cache entry PER TENANT. A shared key leaks one shop's data to another.
-    return f"pos:admin_dashboard:v2:{tenant.pk}"
+    # Per tenant (never share), per live-version (a sale changes the key),
+    # per local date (so "today" can't carry over past midnight).
+    today = timezone.localdate().isoformat()
+    return f"pos:admin_dashboard:v3:{tenant.pk}:{today}:{get_version(tenant.pk)}"
 
 
 def _day_bounds(dt):
@@ -218,3 +221,41 @@ def build_dashboard_context(tenant, use_cache=True):
         cache.set(key, context, CACHE_TTL_SECONDS)
 
     return context
+
+
+ACTIVE_WINDOW = timedelta(minutes=5)
+IDLE_WINDOW = timedelta(minutes=30)
+def _cashier_status(tenant, start, end):
+    cashiers = list(
+        User.objects.filter(tenant_id=tenant.pk, role=User.Roles.CASHIER, is_active=True)
+    )
+    if not cashiers:
+        return []
+
+    sales_by_cashier = {
+        row["cashier_id"]: row
+        for row in _orders(tenant, start, end)
+        .filter(cashier_id__in=[c.id for c in cashiers])
+        .values("cashier_id")
+        .annotate(total=Sum("total_revenue"), transactions=Count("id"))
+    }
+
+    now = timezone.now()
+    results = []
+    for cashier in cashiers:
+        sales_row = sales_by_cashier.get(cashier.id, {})
+        age = (now - cashier.last_seen) if cashier.last_seen else None
+        if age is not None and age <= ACTIVE_WINDOW:
+            status = "active"
+        elif age is not None and age <= IDLE_WINDOW:
+            status = "idle"
+        else:
+            status = "offline"
+        results.append({
+            "cashier": cashier,
+            "status": status,
+            "shift_sales": sales_row.get("total") or Decimal("0"),
+            "shift_transactions": sales_row.get("transactions") or 0,
+        })
+    results.sort(key=lambda r: r["shift_sales"], reverse=True)
+    return results

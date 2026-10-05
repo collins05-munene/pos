@@ -25,7 +25,7 @@ class User(AbstractUser):
         CASHIER = "CASHIER", "Cashier"
 
     role = models.CharField(max_length=15, choices=Roles.choices, default=Roles.CASHIER)
-    
+    last_seen = models.DateTimeField(null=True, blank=True)
     pin = models.CharField(
         max_length=128, blank=True, null=True,
         validators=[RegexValidator(r'^\d{4,6}$', 'Pin must be 4  to 6 digits')],

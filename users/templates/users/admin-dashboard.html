@@ -6,345 +6,219 @@
 {% block extra_head %}
 <style>
 .dash {
-    --dash-bg: #f8fafc;           
-    --dash-card: #ffffff;      
-    --dash-border: #e2e8f0;       
-    --dash-text: #0f172a;         
-    --dash-muted: #64748b;       
-    --dash-good: #047857;         
-    --dash-good-bg: #d1fae5;     
-    --dash-bad: #be123c;          
-    --dash-bad-bg: #ffe4e6;       
-    --dash-accent: #4338ca;      
+    --dash-card: #ffffff;
+    --dash-border: #e2e8f0;
+    --dash-text: #0f172a;
+    --dash-muted: #64748b;
+    --dash-good: #047857;
+    --dash-good-bg: #d1fae5;
+    --dash-bad: #be123c;
+    --dash-bad-bg: #ffe4e6;
+    --dash-warn: #b45309;
+    --dash-warn-bg: #fef3c7;
+    --dash-neutral-bg: #f1f5f9;
+    --dash-accent: #4338ca;
     --dash-accent-light: #4f46e5;
-    
+
     color: var(--dash-text);
     font-family: system-ui, -apple-system, sans-serif;
-  }
+}
 
-    
-  .dash-stale-note { 
-    color: var(--dash-muted); 
-    font-size: 0.85rem; 
-    margin-bottom: 1.5rem; 
-    display: flex; 
-    align-items: center; 
+/* ---------- Live status bar ---------- */
+.dash-live-bar {
+    display: flex;
+    align-items: center;
     justify-content: flex-end;
-    text-align: right;         
-    gap: 0.35rem; 
-  }
-  .kpi-grid {
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.85rem;
+    color: var(--dash-muted);
+}
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: var(--dash-good-bg);
+    color: var(--dash-good);
+    font-weight: 600;
+    font-size: 0.78rem;
+}
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.live-indicator.is-live .live-dot { animation: live-pulse 2s ease-in-out infinite; }
+.live-indicator.is-paused  { background: var(--dash-neutral-bg); color: var(--dash-muted); }
+.live-indicator.is-offline { background: var(--dash-warn-bg); color: var(--dash-warn); }
+@keyframes live-pulse { 50% { opacity: .35; } }
+
+/* ---------- KPI cards ---------- */
+.kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1.25rem;
     margin-bottom: 2rem;
-  }
-  .kpi-card {
+}
+.kpi-card {
     background: var(--dash-card);
     border: 1px solid var(--dash-border);
     border-radius: 12px;
     padding: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-  }
-  .kpi-card:hover {
-    border-color: #2e3547;
-    transform: translateY(-2px);
-  }
-  .kpi-label { 
-    color: var(--dash-muted); 
-    font-size: 0.75rem; 
-    text-transform: uppercase; 
-    letter-spacing: .06em; 
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.kpi-label {
+    color: var(--dash-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
     font-weight: 600;
-  }
-  .kpi-value { 
-    font-size: 1.85rem; 
-    font-weight: 700; 
-    margin: 0.5rem 0; 
+}
+.kpi-value {
+    font-size: 1.85rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
     letter-spacing: -0.02em;
-  }
-  .kpi-delta { 
-    font-size: 0.8rem; 
+    font-variant-numeric: tabular-nums;
+}
+.kpi-delta {
+    font-size: 0.8rem;
     font-weight: 500;
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     padding: 0.15rem 0.5rem;
     border-radius: 4px;
-  }
-  .kpi-delta.up { color: var(--dash-good); background: var(--dash-good-bg); }
-  .kpi-delta.down { color: var(--dash-bad); background: var(--dash-bad-bg); }
-  .kpi-delta.flat { color: var(--dash-muted); background: rgba(255,255,255,0.05); }
+}
+.kpi-delta.up   { color: var(--dash-good); background: var(--dash-good-bg); }
+.kpi-delta.down { color: var(--dash-bad);  background: var(--dash-bad-bg); }
+.kpi-delta.flat { color: var(--dash-muted); background: var(--dash-neutral-bg); }
 
-  .pay-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
-  .pay-pill {
-    background: rgba(129, 140, 248, 0.08);
-    border: 1px solid rgba(129, 140, 248, 0.15);
+.pay-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.pay-pill {
+    background: rgba(79, 70, 229, 0.08);
+    border: 1px solid rgba(79, 70, 229, 0.15);
     border-radius: 6px;
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     color: var(--dash-accent-light);
     font-weight: 500;
-  }
+}
 
-  .dash-row {
+/* ---------- Panels & tables ---------- */
+.lists-grid {
     display: grid;
-    grid-template-columns: 1.6fr 1.4fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
     gap: 1.25rem;
-    margin-bottom: 2rem;
-  }
-  .dash-panel {
+}
+.dash-panel {
     background: var(--dash-card);
     border: 1px solid var(--dash-border);
     border-radius: 12px;
     padding: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  }
-  .dash-panel h3 {
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    min-width: 0;
+}
+.dash-panel h3 {
     margin: 0 0 1.25rem 0;
     font-size: 1rem;
     font-weight: 600;
     color: var(--dash-text);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
+}
+.table-scroll { overflow-x: auto; }
 
-  .lists-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 1.25rem;
-  }
-
-  table.dash-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-  table.dash-table th {
-    text-align: left; 
-    color: var(--dash-muted); 
+table.dash-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+table.dash-table th {
+    text-align: left;
+    color: var(--dash-muted);
     font-weight: 600;
-    font-size: 0.75rem; 
-    text-transform: uppercase; 
+    font-size: 0.75rem;
+    text-transform: uppercase;
     letter-spacing: .05em;
-    padding-bottom: 0.75rem; 
+    padding-bottom: 0.75rem;
     border-bottom: 2px solid var(--dash-border);
-  }
-  table.dash-table td { 
-    padding: 0.75rem 0; 
-    border-bottom: 1px solid var(--dash-border); 
+}
+table.dash-table td {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--dash-border);
     vertical-align: middle;
-  }
-  table.dash-table tr:hover td {
-    color: blue;
-  }
-  table.dash-table tr:last-child td { border-bottom: none; }
+    font-variant-numeric: tabular-nums;
+}
+table.dash-table tbody tr:hover td { background: #f8fafc; }
+table.dash-table tr:last-child td { border-bottom: none; }
 
-  .badge-low { 
-    color: var(--dash-bad); 
-    font-weight: 600; 
+.badge-low {
+    color: var(--dash-bad);
+    font-weight: 600;
     background: var(--dash-bad-bg);
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
-  }
-  .badge-live { 
-    color: var(--dash-good); 
-    background: var(--dash-good-bg);
-    padding: 0.2rem 0.5rem;
+}
+
+/* ---------- Cashier status ---------- */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
-    display: inline-block;
-  }
-  .badge-offline { 
-    color: var(--dash-muted); 
-    background: rgba(255,255,255,0.05);
-    padding: 0.2rem 0.5rem;
-    border-radius: 6px;
+    white-space: nowrap;
+}
+.badge-live    { color: var(--dash-good);  background: var(--dash-good-bg); }
+.badge-idle    { color: var(--dash-warn);  background: var(--dash-warn-bg); }
+.badge-offline { color: var(--dash-muted); background: var(--dash-neutral-bg); }
+.last-seen { display: block; margin-top: 0.2rem; font-size: 0.72rem; color: var(--dash-muted); }
+
+.empty-note { color: var(--dash-muted); font-size: 0.85rem; padding: 1.5rem 0; text-align: center; }
+
+.view-link {
+    color: var(--dash-accent-light);
+    text-decoration: none;
     font-size: 0.8rem;
-    font-weight: 500;
-    display: inline-block;
-  }
-  
-  .empty-note { color: var(--dash-muted); font-size: 0.85rem; padding: 1.5rem 0; text-align: center; }
-  
-  .view-link { 
-    color: var(--dash-accent-light); 
-    text-decoration: none; 
-    font-size: 0.8rem; 
     font-weight: 500;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
-    background: rgba(129, 140, 248, 0.05);
+    background: rgba(79, 70, 229, 0.06);
     transition: background 0.2s;
-  }
-  .view-link:hover {
-    background: rgba(129, 140, 248, 0.15);
-    text-decoration: none;
-  }
+}
+.view-link:hover { background: rgba(79, 70, 229, 0.15); }
 
-  @media (max-width: 960px) {
-    .dash-row { grid-template-columns: 1fr; }
-    .lists-grid { grid-template-columns: 1fr; }
-  }
+/* ---------- Refresh feedback: the single orchestrated moment ---------- */
+.dash-flash .kpi-card { animation: dash-flash 0.8s ease; }
+@keyframes dash-flash {
+    from { border-color: var(--dash-accent-light); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+    to   { border-color: var(--dash-border); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dash-flash .kpi-card, .live-indicator.is-live .live-dot { animation: none; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dash">
 
-  <p class="dash-stale-note">Snapshot as of {{ generated_at|date:"H:i" }} today — refreshes every couple of minutes.</p>
-
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">Gross Sales (Today)</div>
-      <div class="kpi-value">KSH {{ today_kpis.gross_sales|floatformat:2 }}</div>
-      {% with d=kpi_deltas.gross_sales_vs_yesterday %}
-        {% if d is not None %}
-          <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
-            {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
-          </div>
-        {% else %}
-          <div class="kpi-delta flat">No sales yesterday to compare</div>
-        {% endif %}
-      {% endwith %}
-    </div>{% load static %}
-
-    <div class="kpi-card">
-      <div class="kpi-label">Net Profit (Today)</div>
-      <div class="kpi-value">KSH {{ today_kpis.profit|floatformat:2 }}</div>
-      {% with d=kpi_deltas.profit_vs_yesterday %}
-        {% if d is not None %}
-          <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
-            {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
-          </div>
-        {% else %}
-          <div class="kpi-delta flat">No baseline yet</div>
-        {% endif %}
-      {% endwith %}
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-label">Transactions (Today)</div>
-      <div class="kpi-value">{{ today_kpis.transactions }}</div>
-      {% with d=kpi_deltas.transactions_vs_yesterday %}
-        {% if d is not None %}
-          <div class="kpi-delta {% if d > 0 %}up{% elif d < 0 %}down{% else %}flat{% endif %}">
-            {% if d > 0 %}▲{% elif d < 0 %}▼{% else %}—{% endif %} {{ d }}% vs yesterday
-          </div>
-        {% else %}
-          <div class="kpi-delta flat">No baseline yet</div>
-        {% endif %}
-      {% endwith %}
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-label">Average Ticket Value</div>
-      <div class="kpi-value">KSH {{ today_kpis.atv|floatformat:2 }}</div>
-      <div class="pay-pills">
-        {% for row in payment_breakdown %}
-          <span class="pay-pill">{{ row.payment_method }}: KSH {{ row.total|floatformat:0 }}</span>
-        {% empty %}
-          <span class="pay-pill">No sales yet today</span>
-        {% endfor %}
-      </div>
-    </div>
+  <div class="dash-live-bar">
+    <span id="live-indicator" class="live-indicator is-live" role="status" aria-live="polite">
+      <span class="live-dot"></span><span id="live-text">Live</span>
+    </span>
   </div>
 
-
-
-  <div class="lists-grid">
-
-    <div class="dash-panel">
-      <h3>Top-Selling Products (Today)</h3>
-      <table class="dash-table">
-        <thead>
-          <tr><th>Product</th><th>SKU</th><th>Units</th><th>Revenue</th></tr>
-        </thead>
-        <tbody>
-          {% for p in top_products %}
-          <tr>
-            <td>{{ p.name }}</td>
-            <td>{{ p.sku }}</td>
-            <td>{{ p.units_sold }}</td>
-            <td>KSH {{ p.revenue|floatformat:2 }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" class="empty-note">No items sold yet today.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="dash-panel">
-      <h3>Low Stock Alerts</h3>
-      <table class="dash-table">
-        <thead>
-          <tr><th>Item</th><th>Branch</th><th>Qty</th><th>Threshold</th></tr>
-        </thead>
-        <tbody>
-          {% for sl in low_stock_alerts %}
-          <tr>
-            <td>{{ sl.variant.product.name }} ({{ sl.variant.sku }})</td>
-            <td>{{ sl.branch.name }}</td>
-            <td class="badge-low">{{ sl.quantity }}</td>
-            <td>{{ sl.variant.low_stock_threshold }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" class="empty-note">Nothing below threshold. </td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="dash-panel">
-      <h3>Recent Transactions</h3>
-      <table class="dash-table">
-        <thead>
-          <tr><th>Invoice</th><th>Time</th><th>Payment</th><th>Total</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for order in recent_transactions %}
-          <tr>
-            <td>{{ order.invoice_number }}</td>
-            <td>{{ order.created_at|date:"H:i" }}</td>
-            <td>{{ order.get_payment_method_display }}</td>
-            <td>KSH {{ order.total_revenue|floatformat:2 }}</td>
-            <td><a class="view-link" href="{% url 'order-detail' order.pk %}">View</a></td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="
-<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">5" class="empty-note">No transactions yet today.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
-    <div class="dash-panel">
-      <h3>Cashier / Register Status</h3>
-      <table class="dash-table">
-        <thead>
-          <tr><th>Cashier</th><th>Status</th><th>Shift Sales</th><th>Txns</th></tr>
-        </thead>
-        <tbody>
-          {% for row in cashier_status %}
-          <tr>
-            <td>{{ row.cashier.get_full_name|default:row.cashier.username }}</td>
-            <td class="{% if row.is_logged_in %}badge-live{% else %}badge-offline{% endif %}">
-              {% if row.is_logged_in %}● Active{% else %}○ Offline{% endif %}
-            </td>
-            <td>KSH {{ row.shift_sales|floatformat:2 }}</td>
-            <td>{{ row.shift_transactions }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" class="empty-note">No active cashier accounts found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
+  <div id="dash-live"
+       data-version="{{ dash_version }}"
+       data-version-url="{% url 'dashboard-version' %}"
+       data-body-url="{% url 'dashboard-body' %}">
+    {% include 'users/_dashboard_body.html' %}
   </div>
+
 </div>
+{% endblock %}
 
-{{ hourly_trend|json_script:"hourly-trend-data" }}
-{{ top_categories|json_script:"top-categories-data" }}
+{% block extra_js %}
+<script src="{% static 'js/dashboard-live.js' %}"></script>
 {% endblock %}

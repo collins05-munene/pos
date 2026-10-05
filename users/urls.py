@@ -8,6 +8,8 @@ urlpatterns = [
     path('logs/', views.ActivityLogListView.as_view(), name='activity-logs'),
     path('logs/<int:pk>/', views.ActivityLogDetailView.as_view(), name='activity-log-detail'),
     path('admin/dashboard/', views.AdminDashboardView.as_view(), name='admin-dashboard'),
-    path('cashier/dashboard/', views.CashierDashboardView.as_view(), name='cashier-dashboard')
+    path('cashier/dashboard/', views.CashierDashboardView.as_view(), name='cashier-dashboard'),
+    path('dashboard/live/version/', views.DashboardVersionView.as_view(), name='dashboard-version'),
+    path('dashboard/live/body/',    views.DashboardBodyView.as_view(),    name='dashboard-body'),
     
 ]   
