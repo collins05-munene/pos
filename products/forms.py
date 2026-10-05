@@ -1,4 +1,5 @@
 from django import forms
+from django.urls import reverse
 
 from .models import Category, Brand, Product, UnitOfMeasure, ProductVariant
 from supplier.models import Supplier
@@ -10,7 +11,7 @@ class CategoryForm(forms.ModelForm):
         fields = ['name', 'parent']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'parent': forms.Select(attrs={'class': 'form-control'})
+            'parent': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search parent category…'})
         }
 
 
@@ -35,24 +36,17 @@ class UnitOfMeasureForm(forms.ModelForm):
 
 
 class ProductForm(forms.ModelForm):
-    """
-    Defines the catalog entry only — name, price, category, etc. Stock
-    quantity is NOT set here: it comes exclusively from recording a
-    purchase (inventory app), which is the only thing allowed to write
-    to StockLevel. A brand-new product simply starts with no StockLevel
-    row (treated as 0 on hand) until its first purchase is logged.
-    """
-
     class Meta:
         model = Product
         fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure', 'description', 'has_variations', 'is_active', 'supplier']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Wireless Mouse'}),
             'sku_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. WM-100'}),
-            'category': forms.Select(attrs={'class': 'form-select'}),
-            'brand': forms.Select(attrs={'class': 'form-select'}),
-            'supplier': forms.Select(attrs={'class': 'form-select',}),
-            'unit_of_measure': forms.Select(attrs={'class': 'form-select'}),
+            # 'searchable' only (no form-select): Tom Select copies classes onto its wrapper
+            'category': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search category…'}),
+            'brand': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search brand…'}),
+            'supplier': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search supplier…'}),
+            'unit_of_measure': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search unit…'}),
             'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
             'has_variations': forms.CheckboxInput(attrs={'class': 'form-checkbox', 'id': 'toggle-variations'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
@@ -60,11 +54,21 @@ class ProductForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['supplier'].queryset = Supplier.objects.filter(
-            is_active=True
-        )
+
+        self.fields['supplier'].queryset = Supplier.objects.filter(is_active=True).order_by('name')
         self.fields['supplier'].required = False
         self.fields['supplier'].empty_label = "Select Supplier (Optional)"
+
+        cat = self.fields['category']
+        cat.queryset = Category.objects.select_related('parent').order_by('name')
+        cat.label_from_instance = lambda c: f"{c.parent.name} › {c.name}" if c.parent_id else c.name
+        cat.widget.attrs['data-create-url'] = reverse('category-quick-create')
+
+        brand = self.fields['brand']
+        brand.queryset = Brand.objects.order_by('name')
+        brand.widget.attrs['data-create-url'] = reverse('brand-quick-create')
+
+        self.fields['unit_of_measure'].queryset = UnitOfMeasure.objects.order_by('name')
 
 
 class ProductVariantForm(forms.ModelForm):

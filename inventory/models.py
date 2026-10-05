@@ -113,6 +113,7 @@ class PurchaseOrder(TenantOwnedModel):
                 name="unique_tenant_po_number"
             )
         ]
+        ordering = ['-created_at']
 
 
     def __str__(self):
@@ -158,11 +159,7 @@ class PurchaseOrder(TenantOwnedModel):
         'PAID': 'Fully Paid',
     }
 
-    @property
-    def payment_status_display(self):
-        return self.PAYMENT_STATUS_LABELS.get(self.payment_status, self.payment_status)
-
-
+        
 class PurchaseOrderItem(TenantOwnedModel):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='po_items')

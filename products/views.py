@@ -2,8 +2,10 @@ from django.shortcuts import render, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
+from django.views import View
 from django.utils.text import slugify
 from django.contrib import messages
+from django.http import JsonResponse
 
 
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
@@ -14,27 +16,51 @@ from inventory.models import Branch, StockLevel
 from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet
 
 # Create your views here.
+
+
+class _QuickCreateView(CashierRequiredMixin, View):
+    model = None
+    label = ""
+
+    def build(self, name):
+        return self.model.objects.create(name=name)
+
+    def post(self, request):
+        name = " ".join(request.POST.get("name", "").split())
+        if len(name) < 2:
+            return JsonResponse({"error": "Name is too short."}, status=400)
+        if len(name) > 100:
+            return JsonResponse({"error": "Name is too long (100 characters max)."}, status=400)
+
+        existing = self.model.objects.filter(name__iexact=name).first()
+        if existing:   # typed a duplicate - just select the existing one
+            return JsonResponse({"id": existing.pk, "name": existing.name})
+
+        obj = self.build(name)
+        log_action(request.user, AuditAction.RECORD_CREATE,
+                   f"{self.label} created inline: {obj.name}", request)
+        return JsonResponse({"id": obj.pk, "name": obj.name}, status=201)
+
+
+
 class CategoryListView(CashierRequiredMixin, ListView):
     model = Category
     template_name = 'products/category_list.html'
     context_object_name = 'categories'
     paginate_by = 20
 
-class CategoryCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
-    model = Category
-    form_class = CategoryForm
-    template_name = 'products/category_form.html'
-    success_url = reverse_lazy('category-list')
 
-    def form_valid(self, form):
-        category = form.save(commit=False)
-        category.slug = slugify(category.name)
-        category.save()
-        
-        self.object = category
-        
-   
-        return super().form_valid(form)
+class CategoryQuickCreateView(_QuickCreateView):
+    model = Category
+    label = "Category"
+
+    def build(self, name):
+        base = slugify(name) or "category"
+        slug, i = base, 2
+        while Category.objects.filter(slug=slug).exists():
+            slug = f"{base}-{i}"
+            i += 1
+        return Category.objects.create(name=name, slug=slug)
 
    
 
@@ -55,11 +81,9 @@ class BrandListView(CashierRequiredMixin, ListView):
     context_object_name = 'brands'
     paginate_by = 10
 
-class BrandCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
+class BrandQuickCreateView(_QuickCreateView):
     model = Brand
-    template_name = 'products/brand_form.html'
-    form_class = BrandForm
-    success_url = reverse_lazy('brand-list')
+    label = "Brand"
 
 class BrandUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Brand

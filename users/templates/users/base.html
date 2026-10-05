@@ -15,6 +15,7 @@
         <meta name="apple-mobile-web-app-title" content="POS System">
         <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
         <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+        <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" rel="stylesheet">
 
         <link rel="stylesheet" href="{% static 'users/css/style.css' %}">
         <link rel="stylesheet" href="{% static 'users/css/sidebar.css' %}">
@@ -115,6 +116,11 @@
             .pwa-update-toast button:hover {
                 background-color: #1d4ed8;
             }
+            .ts-wrapper { width: 100%; }
+            .ts-wrapper.form-select, .ts-wrapper.form-input { padding: 0; border: 0; background: none; }
+            .ts-control { padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .875rem; }
+            .ts-dropdown { font-size: .875rem; }
+            .ts-dropdown .create { color: #1d4ed8; }
         </style>
         
         {% block extra_head %} {% endblock %}
@@ -316,5 +322,8 @@
         </script>
 
         {% block extra_js %} {% endblock %}
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+        {% load static %}
+        <script src="{% static 'js/searchable-select.js' %}"></script>
     </body>
 </html>

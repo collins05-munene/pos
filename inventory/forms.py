@@ -6,6 +6,14 @@ from django.forms import formset_factory, BaseFormSet
 from .models import Branch, PurchaseOrder, PurchaseOrderItem, StockAdjustment, PurchasePayment
 from products.models import ProductVariant
 
+
+def _variant_queryset():
+    return (ProductVariant.objects.filter(is_active=True)
+            .select_related('product').order_by('product__name', 'sku'))
+
+SEARCHABLE_VARIANT = {'class': 'searchable', 'data-placeholder': 'Search product or SKU…'}
+
+
 class PurchaseOrderForm(forms.ModelForm):
     """
     Records a stock purchase. By default it is an immediate, real-world
@@ -47,7 +55,7 @@ class PurchaseOrderForm(forms.ModelForm):
         model = PurchaseOrder
         fields = ['supplier', 'branch', 'notes']
         widgets = {
-            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'supplier': forms.Select(attrs={'class': 'form-select', 'class': 'searchable'}),
             'branch': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3, 'placeholder': 'Optional notes'}),
         }
@@ -74,10 +82,14 @@ class PurchaseOrderItemForm(forms.ModelForm):
         model = PurchaseOrderItem
         fields = ['variant', 'quantity_ordered', 'unit_cost']
         widgets = {
-            'variant': forms.Select(attrs={'class': 'form-select'}),
+            'variant': forms.Select(attrs=SEARCHABLE_VARIANT),
             'quantity_ordered': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.001', 'min': '0.001', 'placeholder': 'Qty'}),
             'unit_cost': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'placeholder': 'Cost / unit'}),
         }
+
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.fields['variant'].queryset = _variant_queryset()
 
 
 PurchaseOrderItemFormSet = forms.inlineformset_factory(
@@ -97,11 +109,15 @@ class StockAdjustmentForm(forms.ModelForm):
         fields = ['branch', 'variant', 'adjustment_type', 'quantity_changed', 'reason']
         widgets = {
             'branch': forms.Select(attrs={'class': 'form-select'}),
-            'variant': forms.Select(attrs={'class': 'form-select'}),
+            'variant': forms.Select(attrs=SEARCHABLE_VARIANT),
             'adjustment_type': forms.Select(attrs={'class': 'form-select'}),
             'quantity_changed': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.001'}),
             'reason': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2}),
         }
+
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.fields['variant'].queryset = _variant_queryset()
 
 
 class PurchasePaymentForm(forms.Form):
@@ -119,7 +135,8 @@ class PurchasePaymentForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Optional reference'}),
     )
 
-ProductVariant
+
+
 class OpeningStockForm(forms.Form):
     branch = forms.ModelChoiceField(
         queryset=Branch.objects.filter(is_active=True),
@@ -132,7 +149,7 @@ class OpeningStockForm(forms.Form):
 
 
 class OpeningStockItemForm(forms.Form):
-    variant = forms.ModelChoiceField(queryset=ProductVariant.objects.filter(is_active=True))
+    variant = forms.ModelChoiceField(queryset=_variant_queryset(), widget=forms.Select(attrs=SEARCHABLE_VARIANT))
     quantity = forms.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'),
                                   label="Quantity on hand")
     cost_price = forms.DecimalField(
