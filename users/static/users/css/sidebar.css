@@ -16,11 +16,11 @@
     color: white;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    position: sticky;
-    top: 0;
-    overflow-y: auto;
+    height: 100%;              /* follow .app-container, not the viewport */
+    overflow: hidden;          /* the frame never scrolls */
+    flex-shrink: 0;
     transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease;
+    /* removed: position: sticky; top: 0; height: 100vh; overflow-y: auto */
 }
 
 .sidebar.sidebar-hidden {
@@ -64,6 +64,7 @@
 }
 
 .logo {
+    flex-shrink: 0;
     padding: 24px 30px;
     border-bottom: 1px solid var(--sidebar-border);
 }
@@ -83,6 +84,12 @@
     list-style: none;
     padding: 1.5rem;
     margin: 0;
+    flex: 1 1 auto;            /* takes the space between logo and footer */
+    min-height: 0;             /* required so it can shrink and scroll */
+    overflow-y: auto;          /* only this part scrolls */
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.2) transparent;
 }
 
 .menu-title {
@@ -109,10 +116,11 @@
 }
 
 .sidebar-footer {
-    margin-top: auto;
+    flex-shrink: 0;            /* always visible */
     padding: 20px;
     border-top: 1px solid var(--sidebar-border);
     background: var(--sidebar-bg-deep);
+    /* removed: margin-top: auto (the menu's flex: 1 now does this job) */
 }
 
 .sidebar-footer a {

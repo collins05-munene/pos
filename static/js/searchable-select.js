@@ -17,8 +17,7 @@
         allowEmptyOption: true,
         plugins: ['clear_button'],
         placeholder: el.dataset.placeholder || 'Type to search…',
-        dropdownParent: 'body',          // avoids clipping inside grid/overflow containers
-      };
+        };
 
       const createUrl = el.dataset.createUrl;
       if (createUrl) {

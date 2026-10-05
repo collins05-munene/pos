@@ -15,6 +15,11 @@
     padding:0;
     box-sizing:border-box;
 }
+html, body {
+    height: 100%;
+    overflow: hidden;         
+}
+
 body{
     font-family:Segoe UI;
     background:var(--background);
@@ -28,17 +33,25 @@ a{
 .app-container{
     display:flex;
     height:100vh;
+    height: 100dvh; 
+    overflow: hidden;
 }
 
 .main-content{
     flex:1;
     display:flex;
+    min-width: 0;   
     flex-direction:column;
     overflow:hidden;
 }
 
-.page-content{
-    overflow:auto;
+.page-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .alert{
