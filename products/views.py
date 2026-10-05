@@ -75,6 +75,26 @@ class CategoryDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     template_name = 'products/category_confirm_delete.html'
     success_url = reverse_lazy('category-list')
 
+class CategoryCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
+    model = Category
+    form_class = CategoryForm
+    template_name = 'products/category_form.html'
+    success_url = reverse_lazy('category-list')
+
+    def form_valid(self, form):
+        category = form.save(commit=False)
+        category.slug = slugify(category.name)
+        category.save()
+        self.object = category
+        return super().form_valid(form)
+
+
+class BrandCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
+    model = Brand
+    template_name = 'products/brand_form.html'
+    form_class = BrandForm
+    success_url = reverse_lazy('brand-list')
+    
 class BrandListView(CashierRequiredMixin, ListView):
     model = Brand
     template_name = 'products/brand_list.html'
