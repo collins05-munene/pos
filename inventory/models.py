@@ -47,6 +47,7 @@ class StockLevel(TenantOwnedModel):
 
 class StockAdjustment(TenantOwnedModel):
     ADJUSTMENT_TYPES = (
+        ('OPENING', 'Opening Stock (Initial Setup)'), 
         ('COUNT', 'Stock Count / Audit'),
         ('DAMAGE', 'Damaged Items Written Off'),
         ('THEFT', 'Stolen / Missing'),

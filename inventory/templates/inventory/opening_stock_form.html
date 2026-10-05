@@ -1,0 +1,59 @@
+{% extends 'users/base.html' %}
+{% block title %}Opening Stock{% endblock %}
+
+{% block content %}
+<div class="form-page-container">
+  <div class="form-card">
+    <div class="form-card-header">
+      <h3 class="form-title">Opening Stock (Initial Setup)</h3>
+      <p class="form-subtitle">
+        Enter the stock you already have on the shelves. No purchase or payment is created
+        and nothing is deducted from the cash pool.
+      </p>
+    </div>
+
+    <form method="POST" novalidate class="styled-form">
+      {% csrf_token %}
+      {% for error in items.non_form_errors %}
+        <div class="form-error-banner" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;">{{ error }}</div>
+      {% endfor %}
+
+      <div class="form-fields-stack">
+        {% for field in form %}{% include 'inventory/_form_field.html' %}{% endfor %}
+      </div>
+
+      <hr class="form-divider">
+      {{ items.management_form }}
+      <div id="item-rows" class="form-fields-stack">
+        {% for item_form in items %}{% include 'inventory/_purchase_item_row.html' %}{% endfor %}
+      </div>
+      <button type="button" id="add-item-btn" class="btn-add-item"
+              style="background:#eff6ff;color:#1d4ed8;border:1px dashed #93c5fd;border-radius:6px;padding:.55rem 1rem;font-weight:600;cursor:pointer;">
+        + Add another item
+      </button>
+
+      <template id="empty-item-form">
+        {% with item_form=items.empty_form %}{% include 'inventory/_purchase_item_row.html' %}{% endwith %}
+      </template>
+
+      <div class="form-actions">
+        <a href="{% url 'stock-level-list' %}" class="btn-link cancel-btn">Cancel</a>
+        <button type="submit" class="btn btn-submit">Save Opening Stock</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const total = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
+  const rows = document.getElementById('item-rows');
+  const tpl = document.getElementById('empty-item-form');
+  document.getElementById('add-item-btn').addEventListener('click', function () {
+    const i = parseInt(total.value, 10);
+    rows.insertAdjacentHTML('beforeend', tpl.innerHTML.replace(/__prefix__/g, i));
+    total.value = i + 1;
+  });
+})();
+</script>
+{% endblock %}

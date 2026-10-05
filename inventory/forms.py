@@ -1,9 +1,10 @@
 from decimal import Decimal
 
 from django import forms
+from django.forms import formset_factory, BaseFormSet
 
-from .models import PurchaseOrder, PurchaseOrderItem, StockAdjustment, PurchasePayment
-
+from .models import Branch, PurchaseOrder, PurchaseOrderItem, StockAdjustment, PurchasePayment
+from products.models import ProductVariant
 
 class PurchaseOrderForm(forms.ModelForm):
     """
@@ -117,3 +118,47 @@ class PurchasePaymentForm(forms.Form):
         max_length=100,
         widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Optional reference'}),
     )
+
+ProductVariant
+class OpeningStockForm(forms.Form):
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.filter(is_active=True),
+        help_text="The branch this starting stock is physically held at.",
+    )
+    notes = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={'rows': 2}),
+        help_text="Optional, e.g. 'Initial setup count - 5 Oct 2026'.",
+    )
+
+
+class OpeningStockItemForm(forms.Form):
+    variant = forms.ModelChoiceField(queryset=ProductVariant.objects.filter(is_active=True))
+    quantity = forms.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'),
+                                  label="Quantity on hand")
+    cost_price = forms.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal('0'), required=False,
+        label="Cost price (optional)",
+        help_text="Leave blank to keep the variant's current cost price.",
+    )
+
+
+class BaseOpeningStockFormSet(BaseFormSet):
+    def clean(self):
+        if any(self.errors):
+            return
+        seen, count = set(), 0
+        for form in self.forms:
+            if not form.has_changed() or self._should_delete_form(form):
+                continue
+            count += 1
+            variant = form.cleaned_data['variant']
+            if variant.pk in seen:
+                raise forms.ValidationError(f"{variant} appears more than once - combine the quantities.")
+            seen.add(variant.pk)
+        if count == 0:
+            raise forms.ValidationError("Add at least one item.")
+
+
+OpeningStockFormSet = formset_factory(
+    OpeningStockItemForm, formset=BaseOpeningStockFormSet, extra=3, can_delete=True,
+)
