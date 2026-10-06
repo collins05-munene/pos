@@ -31,7 +31,6 @@
     invoices.forEach(inv => {
       let expiryDate = inv.period_end || inv.expires_at;
 
-      // Fallback: If period_end is null, calculate estimated expiry from issued_at + term_months
       if (!expiryDate && inv.issued_at) {
         const issueDate = new Date(inv.issued_at);
         issueDate.setMonth(issueDate.getMonth() + Number(inv.term_months || 1));
@@ -59,11 +58,9 @@
           selectedTerm = p.term_months; 
           renderPlanPicker(currentPlans);
           
-          // Hide plan picker and show invoice panel directly
           termPicker.hidden = true;
           invoicePanel.hidden = false;
 
-          // Populate invoice card details
           document.getElementById('inv-number').textContent = 'Pending...';
           document.getElementById('inv-term').textContent = `${p.term_months} month(s)`;
           document.getElementById('inv-total').textContent = Duka.money(p.total);
@@ -100,11 +97,9 @@
     const plan = currentPlans.find(p => p.term_months === selectedTerm);
     if (!plan) return;
 
-    // Hide plan picker and show invoice panel
     termPicker.hidden = true;
     invoicePanel.hidden = false;
 
-    // Update invoice UI fields
     document.getElementById('inv-number').textContent = 'Pending...';
     document.getElementById('inv-term').textContent = `${plan.term_months} month(s)`;
     document.getElementById('inv-total').textContent = Duka.money(plan.total);

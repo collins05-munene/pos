@@ -49,7 +49,7 @@
     });
   }
 
-  // Also picks up rows added later (purchase / opening-stock "Add another item")
+ 
   let pending = false;
   new MutationObserver(function () {
     if (pending) return;

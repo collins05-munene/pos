@@ -19,7 +19,6 @@ class Branch(TenantOwnedModel):
 
     class Meta:
         verbose_name_plural = "Branches"
-        # Move the constraint inside the constraints list and add a name
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "name"], 
@@ -237,7 +236,6 @@ class InventoryTransfer(TenantOwnedModel):
         ('CANCELLED', 'Cancelled'),
     )
     transfer_number = models.CharField(max_length=50)
-    # Changed to_branch to PROTECT to ensure historical record integrity
     from_branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='outgoing_transfers')
     to_branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='incoming_transfers')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
@@ -248,7 +246,6 @@ class InventoryTransfer(TenantOwnedModel):
     
     class Meta:
         constraints = [
-            # Ensures unique transfer sequence numbers per tenant
             models.UniqueConstraint(
                 fields=["tenant", "transfer_number"], 
                 name="unique_tenant_transfer_number"

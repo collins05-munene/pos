@@ -16,7 +16,7 @@ class Category(TenantOwnedModel):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-name']
+        ordering = ['name']
         verbose_name_plural = "Categories"
         constraints = _unique_per_tenant("category", "name", "slug")
 
@@ -29,7 +29,7 @@ class Brand(TenantOwnedModel):
     description = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['-name']
+        ordering = ['name']
         constraints = _unique_per_tenant("brand", "name")
 
     def __str__(self):
@@ -41,6 +41,7 @@ class UnitOfMeasure(TenantOwnedModel):
     short_name = models.CharField(max_length=10)
 
     class Meta:
+        ordering = ['name']
         constraints = _unique_per_tenant("uom", "name", "short_name")
 
     def __str__(self):
@@ -61,7 +62,7 @@ class Product(TenantOwnedModel):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-updated_at']
+        ordering = ['name']
         constraints = _unique_per_tenant("product", "sku_prefix")
 
     def __str__(self):

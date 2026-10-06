@@ -16,7 +16,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from tenants.context import tenant_context          # same helper your M-Pesa note refers to
+from tenants.context import tenant_context    
 from tenants.models import Tenant, TenantOwnedModel
 from users.models import User
 
@@ -30,7 +30,6 @@ class BackupError(Exception):
     pass
 
 
-# ---------------------------------------------------------------- helpers
 def _fernet():
     key = getattr(settings, "BACKUP_ENCRYPTION_KEY", "")
     if not key:
@@ -47,15 +46,12 @@ def tenant_models():
 
 
 def _user_fields():
-    # Never export password / PIN hashes.
     return [f.name for f in User._meta.concrete_fields if f.name not in {"password", "pin"}]
 
 
 def _dump(qs, **kw):
     return json.loads(serializers.serialize("json", qs, **kw))
 
-
-# ---------------------------------------------------------------- create
 def build_payload(tenant):
     data, counts = {}, {}
     for model in tenant_models():
@@ -91,7 +87,7 @@ def create_backup(tenant, kind, user=None):
             backup.checksum = hashlib.sha256(blob).hexdigest()
             backup.record_count = sum(payload["counts"].values())
             backup.status = Backup.Status.SUCCESS
-        except Exception as exc:  # record the failure; never lose the attempt
+        except Exception as exc:  
             log.exception("Backup failed for tenant %s", tenant.pk)
             backup.status = Backup.Status.FAILED
             backup.error = str(exc)[:500]
@@ -126,7 +122,6 @@ def run_due_backups(force=False):
     return results
 
 
-# ---------------------------------------------------------------- restore
 def read_backup_gzip(backup):
     """Checksum-verified, DEcrypted gzip bytes of a stored backup (what the admin downloads)."""
     with backup.file.open("rb") as fh:
@@ -180,7 +175,7 @@ def restore_missing_rows(backup):
             for model in tenant_models():
                 rows = missing(model, payload["data"].get(model._meta.label, []))
                 for d in serializers.deserialize("python", rows):
-                    d.save()          # raw save: bypasses TenantOwnedModel.save, keeps original pk
+                    d.save()          
                 if rows:
                     restored[model._meta.label] = len(rows)
                     touched_models.append(model)
@@ -192,7 +187,6 @@ def restore_missing_rows(backup):
     return restored
 
 
-# ---------------------------------------------------------------- spreadsheet export
 EXPORT_EXCLUDE = {"tenant", "password", "pin", "is_superuser", "is_staff"}
 
 
@@ -223,7 +217,7 @@ def _cell(obj, field, cache):
         return value.strftime("%Y-%m-%d %H:%M") if hasattr(value, "hour") else value.isoformat()
     if isinstance(value, str):
         return _guard(value)
-    return str(value)          # numbers: left as-is so negatives stay numeric
+    return str(value)        
 
 
 def build_export_zip(tenant):
@@ -245,7 +239,7 @@ def build_export_zip(tenant):
             if name in used:
                 name = f"{model._meta.app_label}-{name}"
             used.add(name)
-            zf.writestr(f"{name}.csv", sio.getvalue().encode("utf-8-sig"))   # BOM: Excel reads UTF-8
+            zf.writestr(f"{name}.csv", sio.getvalue().encode("utf-8-sig")) 
         zf.writestr("README.txt",
                     f"Data export for {tenant.name}\nCreated {timezone.localtime():%Y-%m-%d %H:%M}\n\n"
                     "Each .csv file is one table. Open them with Excel or Google Sheets.\n"

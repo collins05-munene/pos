@@ -113,8 +113,6 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
         if payment_method == 'CASH' and amount_received is not None:
             amount_received = Decimal(str(amount_received)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             if amount_received < running_revenue:
-                # Raising here rolls back the whole atomic block, including
-                # the stock decrements above.
                 raise ValueError(
                     f"Amount received (KSH {amount_received}) is less than the total due (KSH {running_revenue})."
                 )

@@ -88,10 +88,6 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
     success_url = reverse_lazy('purchase-order-list')
 
     def get_initial(self):
-        # Supports the "record a purchase" link a new product now redirects
-        # into (see products/views.py ProductCreateView) — ?branch=<id>
-        # preselects the branch dropdown the same way StockAdjustmentCreateView
-        # already does for adjustments.
         initial = super().get_initial()
         branch_id = self.request.GET.get('branch')
         if branch_id:
@@ -104,9 +100,6 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
             data['items'] = PurchaseOrderItemFormSet(self.request.POST, instance=self.object)
         else:
             formset = PurchaseOrderItemFormSet(instance=self.object)
-            # ?variant=<id> preselects that variant on the first (empty)
-            # item row, so a brand-new product's own "record a purchase"
-            # link doesn't leave the cashier hunting for it in the dropdown.
             variant_id = self.request.GET.get('variant')
             if variant_id and formset.forms:
                 formset.forms[0].initial['variant'] = variant_id
@@ -124,7 +117,6 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
         reference = (form.cleaned_data.get('payment_reference') or '').strip()
         branch = form.cleaned_data['branch']
 
-        # Validate everything BEFORE writing anything.
         projected_total = Decimal('0.00')
         for item_form in items.forms:
             cd = item_form.cleaned_data

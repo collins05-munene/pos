@@ -22,7 +22,6 @@ class BillingError(Exception):
     pass
 
 
-# ---------------------------------------------------------------- helpers
 def add_months(dt, months):
     idx = dt.month - 1 + months
     year, month = dt.year + idx // 12, idx % 12 + 1
@@ -34,8 +33,6 @@ def record_event(event_type, tenant=None, **payload):
     billing_event.send_robust(sender=BillingEvent, event=event)
     return event
 
-
-# ---------------------------------------------------------- subscription
 @transaction.atomic
 def start_subscription(tenant, term_months=1):
     """-> event `subscription.created`; returns (subscription, first_invoice)."""
@@ -93,14 +90,11 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
 
 
 def initiate_stk_payment(invoice, phone):
-    # 1. Guard against non-payable invoices
     if invoice.status != Invoice.Status.OPEN:
         raise BillingError("This invoice is not payable.")
         
-    # 2. Normalize raw input (e.g. 0712345678 -> 254712345678)
     msisdn = mpesa.normalize_phone(phone)
 
-    # 3. Build callback URL dynamically with query string token authentication
     base_domain = getattr(
         settings, 
         "BILLING_CALLBACK_BASE_URL", 
@@ -110,7 +104,6 @@ def initiate_stk_payment(invoice, phone):
     callback_path = reverse("billing:mpesa-callback")
     full_callback_url = f"{base_domain}{callback_path}?token={settings.MPESA_BILLING_CALLBACK_SECRET}"
 
-    # 4. Trigger STK push
     resp = mpesa.stk_push(
         phone=msisdn,
         amount=invoice.total,
@@ -119,7 +112,6 @@ def initiate_stk_payment(invoice, phone):
         callback_url=full_callback_url,
     )
 
-    # 5. Save and return the DB record so polling works
     return MpesaPayment.objects.create(
         invoice=invoice,
         tenant=invoice.tenant,
@@ -149,7 +141,7 @@ def handle_stk_callback(payload):
             logger.warning("Callback for unknown CheckoutRequestID %s", data["checkout_request_id"])
             return None
         if payment.status != MpesaPayment.Status.INITIATED:
-            return payment  # duplicate delivery
+            return payment 
 
         now = timezone.now()
         payment.result_code = data["result_code"]
@@ -163,14 +155,12 @@ def handle_stk_callback(payload):
             payment.status = MpesaPayment.Status.SUCCESS
             payment.save()
             if paid < payment.invoice.total:
-                # Never activate on a short payment; a human resolves it.
                 record_event("invoice.payment_underpaid", payment.tenant,
                              invoice=payment.invoice.number, expected=payment.invoice.total,
                              received=paid, receipt=payment.mpesa_receipt)
             else:
                 mark_invoice_paid(payment.invoice, paid_at=now, receipt=payment.mpesa_receipt)
         else:
-            # 1032 = customer cancelled the prompt
             payment.status = (MpesaPayment.Status.CANCELLED if data["result_code"] == 1032
                               else MpesaPayment.Status.FAILED)
             payment.save()
@@ -197,7 +187,7 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
         still_running = bool(sub.current_period_end and sub.current_period_end > paid_at
                              and previous_status in (Subscription.Status.ACTIVE,
                                                      Subscription.Status.PAST_DUE))
-        start = sub.current_period_end if still_running else paid_at   # early renewals stack
+        start = sub.current_period_end if still_running else paid_at   
         end = add_months(start, invoice.term_months)
 
         invoice.status = Invoice.Status.PAID
@@ -271,7 +261,6 @@ def set_custom_price(tenant, *, monthly_price, by, note=""):
     return sub
 
 
-# --------------------------------------------------------- daily cron job
 def run_billing_cycle(now=None):
     """Idempotent; run daily. M-Pesa can't auto-debit, so 'renewal' = open an invoice + notify."""
     now = now or timezone.now()

@@ -56,7 +56,6 @@
     background: #b91c1c;
   }
 
-  /* Report period filter */
   .report-filter-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -231,7 +230,6 @@
   }
   .invoice-link:hover { text-decoration: underline; }
 
-  /* Status Badges */
   .badge-status {
     padding: 4px 8px;
     border-radius: 4px;
@@ -244,7 +242,6 @@
   .badge-in { background-color: #dbeafe; color: #1e40af; }
   .badge-out { background-color: #fee2e2; color: #991b1b; }
 
-  /* Pagination */
   .table-pagination {
     display: flex;
     justify-content: space-between;
@@ -322,7 +319,7 @@
     </div>
   </div>
 
-  <!-- SECTION 1: SALES & P&L METRICS — scoped to the report period above -->
+  
   <h2 class="section-divider">Sales & Profitability</h2>
   <p class="section-note">{{ period.label }} &middot; {{ period.order_count }} order{{ period.order_count|pluralize }}</p>
   <div class="metrics-grid">
@@ -445,55 +442,16 @@
     return d;
   }
 
-  function applyRange(startDate, endDate) {
-    const startInput = document.getElementById('period_start');
-    const endInput = document.getElementById('period_end');
-    if (!startInput || !endInput) return;
-    startInput.value = toLocalInputValue(startDate);
-    endInput.value = toLocalInputValue(endDate);
-    startInput.closest('form').submit();
-  }
 
   document.querySelectorAll('.quick-pick-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      const now = new Date();
-      const today0 = startOfDay(now);
-      let start, end;
-
-      switch (btn.dataset.range) {
-        case 'today':
-          start = today0;
-          end = now;
-          break;
-        case 'yesterday':
-          start = new Date(today0); start.setDate(start.getDate() - 1);
-          end = new Date(today0);
-          break;
-        case 'this-week': {
-          const day = (today0.getDay() + 6) % 7; // Monday = 0
-          start = new Date(today0); start.setDate(start.getDate() - day);
-          end = now;
-          break;
-        }
-        case 'last-7-days':
-          start = new Date(today0); start.setDate(start.getDate() - 6);
-          end = now;
-          break;
-        case 'this-month':
-          start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = now;
-          break;
-        default:
-          return;
-      }
-
-      applyRange(start, end);
+      const form = document.getElementById('period_start').closest('form');
+      const url = new URL(form.getAttribute('action'), window.location.href);
+      url.searchParams.set('period', btn.dataset.range);
+      window.location.href = url.toString();
     });
   });
 
-  // --- AJAX pagination: swap one table's contents without a full page
-  // reload. Bound on the stable container div (event delegation) so it
-  // keeps working after innerHTML is replaced with the next page.
   function bindAjaxPagination(containerId, tableKey) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -504,7 +462,8 @@
 
       e.preventDefault();
 
-      const relativeHref = link.getAttribute('href'); // "?sessions_page=2&..."
+      const relativeHref = link.getAttribute('href'); 
+      
       const fetchUrl = new URL(relativeHref, window.location.href);
       fetchUrl.searchParams.set('table', tableKey);
 
@@ -520,15 +479,14 @@
         .then(function (data) {
           if (data && data.ok) {
             container.innerHTML = data.html;
-            // Keep the URL bookmarkable/shareable without reloading.
+            
             window.history.replaceState(null, '', relativeHref);
           } else {
             window.location.href = relativeHref;
           }
         })
         .catch(function () {
-          // Network hiccup or non-JSON response: fall back to a normal
-          // navigation rather than leaving the table stuck.
+          
           window.location.href = relativeHref;
         })
         .finally(function () {

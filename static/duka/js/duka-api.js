@@ -1,4 +1,4 @@
-/* Duka OS -- tiny fetch helper shared by every page. No build step, no deps. */
+
 const Duka = (() => {
   function getCookie(name) {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));

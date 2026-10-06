@@ -93,8 +93,7 @@
       addBtn.textContent = 'Add to shop';
     }
   });
-
-  // ---------------------------------------------------------- manage drawer
+  
   function closeDrawer() { drawer.classList.remove('open'); drawerBackdrop.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); }
   drawerClose.addEventListener('click', closeDrawer);
   drawerBackdrop.addEventListener('click', closeDrawer);

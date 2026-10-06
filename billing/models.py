@@ -8,9 +8,6 @@ from django.utils import timezone
 from tenants.models import Tenant
 from . import conf
 
-# NOTE: billing tables belong to the PLATFORM, not to a tenant, so they do NOT use
-# TenantOwnedModel. Tenant-facing billing views filter on request.tenant explicitly.
-
 
 class Subscription(models.Model):
     class Status(models.TextChoices):
@@ -35,7 +32,6 @@ class Subscription(models.Model):
         help_text="What this tenant pays per month after term discount. Feeds MRR.",
     )
 
-    # ---- platform-owner overrides ----
     custom_monthly_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     comp_until = models.DateTimeField(null=True, blank=True,
                                       help_text="Free access until this moment, regardless of payment.")

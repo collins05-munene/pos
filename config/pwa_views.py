@@ -30,10 +30,7 @@ from django.views.generic import TemplateView
 def service_worker_view(request):
     content = render_to_string("static/service-worker.js")
     response = HttpResponse(content, content_type="application/javascript")
-    # Let this worker (served from an arbitrary root-level path) control
-    # the whole origin. Harmless if it's already served from "/".
     response["Service-Worker-Allowed"] = "/"
-    # Never let a CDN/browser cache an old service worker version.
     response["Cache-Control"] = "no-cache"
     return response
 

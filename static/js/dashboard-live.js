@@ -7,10 +7,9 @@
   const indicator = document.getElementById('live-indicator');
   const indicatorText = document.getElementById('live-text');
 
-  const POLL_MS = 5000;          // how often to ask "has anything changed?"
-  const FORCE_MS = 120000;       // full refresh at least every 2 minutes, so idle/offline times stay fresh
-  const MAX_BACKOFF = 5;         // slow down to 5x the poll interval when offline
-
+  const POLL_MS = 5000;          
+  const FORCE_MS = 120000;       
+  const MAX_BACKOFF = 5;         
   let version = root.dataset.version;
   let busy = false;
   let failures = 0;
@@ -28,7 +27,6 @@
   }
 
   function sessionEnded(response) {
-    // A redirect to the login page, or 401/403, means the session is gone.
     return response.redirected || response.status === 401 || response.status === 403;
   }
 
@@ -41,13 +39,12 @@
     version = response.headers.get('X-Dash-Version') || version;
     lastFull = Date.now();
 
-    // Hold the current height during the swap so the page doesn't jump or lose its scroll position.
     root.style.minHeight = root.offsetHeight + 'px';
     root.innerHTML = html;
     root.style.minHeight = '';
 
     root.classList.remove('dash-flash');
-    void root.offsetWidth;                     // restart the animation
+    void root.offsetWidth;                    
     root.classList.add('dash-flash');
     setTimeout(function () { root.classList.remove('dash-flash'); }, 900);
 
@@ -85,7 +82,6 @@
     timer = setTimeout(tick, POLL_MS * (1 + failures));
   }
 
-  // Catch up immediately when the admin comes back to the tab.
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) { clearTimeout(timer); tick(); }
   });

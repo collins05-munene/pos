@@ -6,6 +6,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q, OuterRef, Subquery
 from django.core.paginator import Paginator
 from django.views.generic import TemplateView, DetailView
+from datetime import datetime, time, timedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
@@ -394,19 +395,56 @@ def cart_remove(request):
 
 def _resolve_report_period(request, now):
     """
-    Resolves the dashboard's reporting window from ?period_start= and
-    ?period_end= query params (datetime-local strings, e.g.
-    "2026-09-22T06:00"), falling back to month-to-date when they're
-    absent or invalid.
+    Resolves the dashboard's reporting window.
 
-    Supports both whole-day ranges ("Monday to Tuesday" -> pick
-    00:00 on each date) and partial-day ranges ("Monday 6am to Monday
-    12pm") since the client sends full datetimes either way — the
-    dashboard's quick-pick buttons just fill in the date+00:00 for the
-    whole-day case.
+    Two ways in:
+      1. ?period=today|yesterday|this-week|last-7-days|this-month
+         The quick-pick buttons. Resolved HERE, in the server's timezone,
+         so the browser's clock/timezone can't shift the window.
+      2. ?period_start= & ?period_end= (datetime-local strings) from the
+         calendar inputs.
 
-    Returns (start, end, label, is_custom).
+    Falls back to month-to-date when neither is present/valid.
+
+    Custom-range rules (datetime-local only has MINUTE precision):
+      - End time of exactly 00:00 means "the whole of that day"
+        (a calendar pick of Oct 6 shouldn't silently exclude Oct 6).
+      - Any other end time is treated as inclusive of that minute.
+      - The query window is [start, end) with the end already adjusted.
+
+    Returns (start, end, label, is_custom, display_end). `end` is what the
+    queries must use; `display_end` is what to show back in the input box.
     """
+    local_now = timezone.localtime(now)
+    tz = timezone.get_current_timezone()
+
+    def day_start(d):
+        return timezone.make_aware(datetime.combine(d, time.min), tz)
+
+    today = local_now.date()
+    today0 = day_start(today)
+
+    preset = request.GET.get('period', '').strip()
+    if preset:
+        if preset == 'today':
+            s, e, label = today0, now, f"Today — {today.strftime('%b %d, %Y')}"
+        elif preset == 'yesterday':
+            y = today - timedelta(days=1)
+            s, e, label = day_start(y), today0, f"Yesterday — {y.strftime('%b %d, %Y')}"
+        elif preset == 'this-week':
+            mon = today - timedelta(days=today.weekday())
+            s, e, label = day_start(mon), now, f"This Week — from {mon.strftime('%b %d, %Y')}"
+        elif preset == 'last-7-days':
+            s = day_start(today - timedelta(days=6))
+            e, label = now, "Last 7 Days"
+        elif preset == 'this-month':
+            s = day_start(today.replace(day=1))
+            e, label = now, f"This Month — {today.strftime('%B %Y')}"
+        else:
+            s = None
+        if s is not None:
+            return s, e, label, True, e
+
     raw_start = request.GET.get('period_start', '').strip()
     raw_end = request.GET.get('period_end', '').strip()
 
@@ -416,18 +454,24 @@ def _resolve_report_period(request, now):
 
         if start_dt and end_dt:
             if timezone.is_naive(start_dt):
-                start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
+                start_dt = timezone.make_aware(start_dt, tz)
             if timezone.is_naive(end_dt):
-                end_dt = timezone.make_aware(end_dt, timezone.get_current_timezone())
+                end_dt = timezone.make_aware(end_dt, tz)
 
-            if end_dt > start_dt:
+            local_end = timezone.localtime(end_dt)
+            if local_end.hour == 0 and local_end.minute == 0:
+                query_end = day_start(local_end.date() + timedelta(days=1))
+            else:
+                query_end = end_dt + timedelta(minutes=1)
+
+            if query_end > start_dt:
                 local_start = timezone.localtime(start_dt)
-                local_end = timezone.localtime(end_dt)
-                label = f"{local_start.strftime('%b %d, %Y %H:%M')} — {local_end.strftime('%b %d, %Y %H:%M')}"
-                return start_dt, end_dt, label, True
+                label_end = timezone.localtime(query_end - timedelta(minutes=1))
+                label = f"{local_start.strftime('%b %d, %Y %H:%M')} — {label_end.strftime('%b %d, %Y %H:%M')}"
+                return start_dt, query_end, label, True, label_end
 
-    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    return start_of_month, now, f"Month to Date — {now.strftime('%B %Y')}", False
+    start_of_month = day_start(today.replace(day=1))
+    return start_of_month, now, f"Month to Date — {local_now.strftime('%B %Y')}", False, now
 
 
 def _paginate(request, queryset, page_param, page_size=15):
@@ -478,7 +522,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         now = timezone.now()
-        period_start, period_end, period_label, is_custom_period = _resolve_report_period(self.request, now)
+        period_start, period_end, period_label, is_custom_period, period_display_end = _resolve_report_period(self.request, now)
 
         orders = Order.objects.all()
         period_orders = orders.filter(created_at__gte=period_start, created_at__lt=period_end)
@@ -572,7 +616,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'label': period_label,
             'is_custom': is_custom_period,
             'start_input': timezone.localtime(period_start).strftime('%Y-%m-%dT%H:%M'),
-            'end_input': timezone.localtime(period_end).strftime('%Y-%m-%dT%H:%M'),
+            'end_input': timezone.localtime(period_display_end).strftime('%Y-%m-%dT%H:%M'),
             'order_count': period_orders.count(),
         }
 

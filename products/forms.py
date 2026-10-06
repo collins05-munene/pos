@@ -42,7 +42,6 @@ class ProductForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Wireless Mouse'}),
             'sku_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. WM-100'}),
-            # 'searchable' only (no form-select): Tom Select copies classes onto its wrapper
             'category': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search category…'}),
             'brand': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search brand…'}),
             'supplier': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search supplier…'}),

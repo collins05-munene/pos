@@ -83,7 +83,7 @@ class BackupDownloadView(AdminRequiredMixin, View):
     """POST (password required). Stored file stays encrypted; the admin receives a decrypted .json.gz."""
 
     def post(self, request, pk):
-        backup = get_object_or_404(Backup, pk=pk, status=Backup.Status.SUCCESS)  # tenant-scoped
+        backup = get_object_or_404(Backup, pk=pk, status=Backup.Status.SUCCESS)  
         if not _password_ok(request, f"download of backup #{backup.pk}"):
             return redirect("backup-list")
         try:

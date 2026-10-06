@@ -78,7 +78,7 @@
   searchInput.addEventListener('input', debounce(() => loadTenants(true), 300));
   statusFilter.addEventListener('change', () => loadTenants(true));
 
-  // ---------------------------------------------------------- drawer
+
   async function openDrawer(id) {
     drawer.classList.add('open');
     drawerBackdrop.classList.add('open');
@@ -141,7 +141,6 @@
 
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
 
-    // --- grant free access
     drawerContent.appendChild(Duka.el('h2', { text: 'Grant free access' }));
     const compDays = Duka.el('input', { type: 'number', min: '1', value: '30', placeholder: 'days' });
     const compForm = Duka.el('div', { class: 'override-form' }, [
@@ -150,7 +149,6 @@
     ]);
     drawerContent.appendChild(compForm);
 
-    // --- custom price
     drawerContent.appendChild(Duka.el('h2', { text: 'Custom monthly price', style: 'margin-top:20px;' }));
     const priceInput = Duka.el('input', { type: 'number', min: '0', placeholder: 'KES / month, blank to clear' });
     drawerContent.appendChild(Duka.el('div', { class: 'override-form' }, [
@@ -160,7 +158,6 @@
 
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
 
-    // --- account actions
     drawerContent.appendChild(Duka.el('h2', { text: 'Account' }));
     const actionsRow = Duka.el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;' });
     actionsRow.appendChild(Duka.el('button', { class: 'secondary', text: 'Suspend now', onclick: () => act(id, 'suspend', {}) }));
@@ -172,7 +169,6 @@
 
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
 
-    // --- invoices
     drawerContent.appendChild(Duka.el('h2', { text: 'Recent invoices' }));
     const table = Duka.el('table', { class: 'ledger' });
     const tbody = Duka.el('tbody');

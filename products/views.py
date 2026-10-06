@@ -17,7 +17,6 @@ from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, Prod
 
 # Create your views here.
 
-
 class _QuickCreateView(CashierRequiredMixin, View):
     model = None
     label = ""
@@ -33,7 +32,7 @@ class _QuickCreateView(CashierRequiredMixin, View):
             return JsonResponse({"error": "Name is too long (100 characters max)."}, status=400)
 
         existing = self.model.objects.filter(name__iexact=name).first()
-        if existing:   # typed a duplicate - just select the existing one
+        if existing:   
             return JsonResponse({"id": existing.pk, "name": existing.name})
 
         obj = self.build(name)
@@ -183,13 +182,11 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
 
     def form_valid(self, form, variants):
         with transaction.atomic():
-            # 1. Save main Product instance (force is_active = True)
             self.object = form.save(commit=False)
             self.object.is_active = True
             self.object.save()
             form.save_m2m()
 
-            # 2. Save Variants with individual commit to capture returned instances
             variants.instance = self.object
             saved_variants = variants.save(commit=False)
 
@@ -211,12 +208,6 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
             f"{self.object.name} created. It has no stock yet — record a purchase to bring it into inventory."
         )
 
-        # Single-variant products go straight into "record a purchase"
-        # with that variant preselected — this is the only path that
-        # ever writes to StockLevel now, so it's the natural next step.
-        # Multi-variant products land on the product list instead, since
-        # preselecting several variants at once isn't supported by the
-        # purchase form's prefill.
         if len(saved_variants) == 1:
             purchase_url = reverse('purchase-order-create')
             return redirect(f"{purchase_url}?variant={saved_variants[0].pk}")
