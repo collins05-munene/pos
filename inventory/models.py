@@ -38,6 +38,20 @@ class StockLevel(TenantOwnedModel):
     class Meta:
         unique_together = ('branch', 'variant')
         ordering = ['-branch']
+        
+    def breakdown(self):
+        """Stock split from the biggest unit down: [('Box', 9), ('Packet', 2), ('Tablet', 8)]"""
+        base_name = self.variant.unit_name or self.variant.product.unit_of_measure.short_name
+        units = [(p.unit_name, p.units_per_pack) for p in self.variant.packagings.all() if p.is_active]
+        units.append((base_name, Decimal('1')))
+        units.sort(key=lambda u: u[1], reverse=True)
+
+        remaining, parts = self.quantity, []
+        for name, size in units:
+            count, remaining = divmod(remaining, size)
+            if count:
+                parts.append((name, count))
+        return parts
 
     @property
     def is_low_stock(self):
@@ -157,6 +171,9 @@ class PurchaseOrder(TenantOwnedModel):
         'PARTIAL': 'Partially Paid',
         'PAID': 'Fully Paid',
     }
+    @property
+    def payment_status_display(self):
+        return self.PAYMENT_STATUS_LABELS[self.payment_status]
 
         
 class PurchaseOrderItem(TenantOwnedModel):

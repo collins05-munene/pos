@@ -24,4 +24,8 @@ urlpatterns = [
 
     path('categories/quick-create/', views.CategoryQuickCreateView.as_view(), name='category-quick-create'),
     path('brands/quick-create/', views.BrandQuickCreateView.as_view(), name='brand-quick-create'),
+
+    path('variant/<int:pk>/packaging/add/', views.PackagingSaveView.as_view(creating=True), name='packaging-create'),
+    path('packaging/<int:pk>/edit/', views.PackagingSaveView.as_view(), name='packaging-update'),
+    path('packaging/<int:pk>/deactivate/', views.PackagingDeactivateView.as_view(), name='packaging-deactivate'),
 ]

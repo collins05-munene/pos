@@ -42,7 +42,10 @@ urlpatterns = [
     path("staff/", include("tenants.staff_urls")),
     
     path("backups/", include("backups.urls")),
+
+    path("", include("notifications.urls")),
 ]
+
 
 
 if settings.DEBUG:

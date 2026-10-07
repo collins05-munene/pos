@@ -70,7 +70,8 @@ INSTALLED_APPS = [
     "tenants", 
     "billing", 
     "platform_admin",
-    "backups"
+    "backups",
+    "notifications",
 ]
 
 MIDDLEWARE = [

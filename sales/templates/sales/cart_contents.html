@@ -55,7 +55,7 @@
 <div id="cart-panel" class="cart-container">
     <div class="cart-header">
         <h3 style="margin:0; color:#111827;">Current Checkout Session</h3>
-        <small style="color:#6b7280;">Staged units: {{ cart.total_items }} lines</small>
+        <small style="color:#6b7280;">{{ cart.cart|length }} line{{ cart.cart|length|pluralize }} &middot; {{ cart.total_items }} item{{ cart.total_items|pluralize }}</small>
     </div>
 
     <div class="cart-rows-box">

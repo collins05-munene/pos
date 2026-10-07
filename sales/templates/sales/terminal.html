@@ -315,17 +315,17 @@
         }
     });
 }());
+
 async function ajaxCartSubmit(form) {
     const data = new FormData(form);
+    const skuInput = document.querySelector('input[name="sku"]');
+    const checkoutPanel = document.querySelector('.checkout-panel');
 
     let response;
     try {
         response = await fetch(form.action, {
             method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': getCsrfToken(),
-            },
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() },
             body: data,
         });
     } catch (_) {
@@ -333,40 +333,28 @@ async function ajaxCartSubmit(form) {
         return;
     }
 
-    // FIX: Catch stock errors cleanly before executing hard form.submit() fallback
-    if (!response.ok) { 
-        try {
-            const errPayload = await response.json();
-            if (errPayload.error_type === 'INSUFFICIENT_STOCK') {
-                // Clear out the SKU input box if processing scanner inputs
-                const skuInput = document.querySelector('input[name="sku"]');
-                if (skuInput) { skuInput.value = ''; skuInput.focus(); }
-
-                // Native clean web UI alert pop-up
-                alert(`⚠️ Stock Allocation Error:\n${errPayload.message}`);
-                return; // HALT execution here to stop the page reload crash!
+    if (!response.ok) {
+        let err = null;
+        try { err = await response.json(); } catch (_) {}
+        if (err && err.message) {
+            if (err.cart_html) {
+                checkoutPanel.innerHTML = err.cart_html;
+                delegateCartEvents(checkoutPanel);
             }
-        } catch (_) {
-            // If response is not JSON or completely malformed, let the original fallback handle it
+            if (skuInput) { skuInput.value = ''; skuInput.focus(); }
+            alert('⚠️ ' + err.message);
+            return;
         }
-        
-        form.submit(); 
-        return; 
+        form.submit();
+        return;
     }
 
     const payload = await response.json();
     if (!payload.ok) { form.submit(); return; }
 
-    const checkoutPanel = document.querySelector('.checkout-panel');
     checkoutPanel.innerHTML = payload.cart_html;
-
     delegateCartEvents(checkoutPanel);
-
-    const skuInput = document.querySelector('input[name="sku"]');
-    if (skuInput) {
-        skuInput.value = '';
-        skuInput.focus();
-    }
-}
+    if (skuInput) { skuInput.value = ''; skuInput.focus(); }
+}   
 </script>
 {% endblock %}

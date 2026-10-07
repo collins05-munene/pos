@@ -1,6 +1,8 @@
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
+from django.db.models import Q
 
+from products.models import Product
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from .models import Supplier
 from .forms import SupplierForm
@@ -36,8 +38,8 @@ class SupplierDetailView(CashierRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['products'] = (
-            self.object.products.filter(is_active=True)
-            .select_related('category', 'brand')
-            .prefetch_related('variants')
+            Product.objects.filter(is_active=True)
+            .filter(Q(supplier=self.object) | Q(variants__po_items__purchase_order__supplier=self.object))
+            .select_related('category', 'brand').prefetch_related('variants').distinct()
         )
         return context

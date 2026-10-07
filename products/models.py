@@ -1,4 +1,6 @@
 from django.db import models
+from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 from tenants.models import TenantOwnedModel
 
@@ -79,10 +81,41 @@ class ProductVariant(TenantOwnedModel):
     low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, default=10.000)
     is_active = models.BooleanField(default=True)
 
+    unit_name = models.CharField(max_length=30, blank=True, help_text="How it's sold: Tablet, Packet, Box")
+    base_variant = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
+                                     related_name='packagings',
+                                     help_text="Set only for packs; points at the unit that holds the stock.")
+    units_per_pack = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+
+    class Meta:
+        constraints = _unique_per_tenant("variant", "sku") + [
+            models.CheckConstraint(condition=models.Q(units_per_pack__gt=0), name="variant_units_per_pack_gt_0"),
+        ]
+
+    @property
+    def stock_variant(self):
+        return self.base_variant if self.base_variant_id else self
+
+    def to_base_units(self, qty):
+        return Decimal(qty) * self.units_per_pack
+
+    def clean(self):
+        super().clean()
+        if self.base_variant_id:
+            b = self.base_variant
+            if b.pk == self.pk or b.base_variant_id:
+                raise ValidationError("A pack must point to a base unit, not to another pack.")
+            if b.product_id != self.product_id:
+                raise ValidationError("Base unit must belong to the same product.")
+        elif self.pk and self.units_per_pack != 1:
+            raise ValidationError("A base unit must have a pack size of 1.")
     class Meta:
         constraints = _unique_per_tenant("variant", "sku")
 
     def __str__(self):
         variant_info = f" - {self.size} " if self.size else ""
         variant_info += f" / {self.color}" if self.color else ""
+        if self.base_variant_id:
+            variant_info = f" [{self.unit_name} x{self.units_per_pack.normalize()}]"
         return f"{self.product.name}{variant_info} ({self.sku})"
+       

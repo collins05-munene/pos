@@ -10,7 +10,6 @@
     .form-section-title { font-size: 1.125rem; font-weight: 600; color: #111827; margin-bottom: 0.25rem; }
     .form-section-sub { font-size: 0.875rem; color: #6b7280; margin-bottom: 1.25rem; }
     .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
     .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
     .form-group label { font-size: 0.875rem; font-weight: 500; color: #374151; }
     .form-input, .form-select, .form-textarea { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; width: 100%; }
@@ -24,11 +23,17 @@
     .empty-form-template { display: none; }
     .stock-note { display: flex; gap: 0.6rem; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 0.85rem 1rem; font-size: 0.85rem; margin-top: 1.25rem; }
     .stock-note strong { display: block; margin-bottom: 0.15rem; }
+    .form-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
+    .errorlist { list-style: none; margin: 0.25rem 0 0; padding: 0; color: #dc2626; font-size: 0.75rem; }
 </style>
 
 <div class="form-page-container" style="max-width: 1000px; margin: 0 auto; padding: 2rem 1rem;">
     <form method="POST" enctype="multipart/form-data" novalidate id="product-form">
         {% csrf_token %}
+
+        {% for error in form.non_field_errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        {% for error in variants.non_form_errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        {% for error in form.has_variations.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
 
         <div class="form-section">
             <h3 class="form-section-title">{% if object %}Update Product{% else %}General Information{% endif %}</h3>
@@ -54,14 +59,9 @@
                     {{ form.category.errors }}
                 </div>
                 <div class="form-group">
-                    <label>Brand *</label>
+                    <label>Brand</label>
                     {{ form.brand }}
                     {{ form.brand.errors }}
-                </div>
-                <div class="form-group">
-                    <label>Supplier</label>
-                    {{ form.supplier }}
-                    {{ form.supplier.errors }}
                 </div>
                 <div class="form-group">
                     <label>Unit of Measure *</label>
@@ -93,6 +93,7 @@
                         <strong>No stock quantity here on purpose.</strong>
                         Saving this product won't add any stock. After it's saved, you'll record a purchase for it —
                         that's what brings it into inventory, with a cost, an optional supplier, and a payment trail attached.
+                        Packet/box selling units can be added from the product page afterwards.
                     </div>
                 </div>
             {% endif %}
@@ -102,7 +103,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h3 class="form-section-title">Product Variants</h3>
-                    <p class="form-section-sub">Define SKUs, pricing, and variant options.</p>
+                    <p class="form-section-sub">Define SKU, pricing, and variant options (size / color).</p>
                 </div>
                 <button type="button" id="add-variant-btn" class="btn-action btn-secondary" style="display: none;">
                     + Add Another Variant
@@ -126,15 +127,12 @@
                     {% for variant_form in variants %}
                         <tr class="variant-row">
                             {{ variant_form.id }}
-                            <td>
-                                {{ variant_form.sku }}
-                                {{ variant_form.sku.errors }}
-                            </td>
-                            <td>{{ variant_form.size }}</td>
-                            <td>{{ variant_form.color }}</td>
-                            <td>{{ variant_form.cost_price }}</td>
-                            <td>{{ variant_form.retail_price }}</td>
-                            <td>{{ variant_form.low_stock_threshold }}</td>
+                            <td>{{ variant_form.sku }}{{ variant_form.sku.errors }}</td>
+                            <td>{{ variant_form.size }}{{ variant_form.size.errors }}</td>
+                            <td>{{ variant_form.color }}{{ variant_form.color.errors }}</td>
+                            <td>{{ variant_form.cost_price }}{{ variant_form.cost_price.errors }}</td>
+                            <td>{{ variant_form.retail_price }}{{ variant_form.retail_price.errors }}</td>
+                            <td>{{ variant_form.low_stock_threshold }}{{ variant_form.low_stock_threshold.errors }}</td>
                             <td style="text-align: center;">
                                 {% if variants.can_delete %}
                                     <div style="display:none;">{{ variant_form.DELETE }}</div>
@@ -147,7 +145,7 @@
             </table>
         </div>
 
-        <!-- Hidden Template used by JS to clone new rows -->
+        <!-- Hidden template used by JS to clone new rows -->
         <table class="empty-form-template">
             <tr class="variant-row empty-form-row">
                 {{ variants.empty_form.id }}
@@ -175,7 +173,7 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const skuPrefixInput = document.querySelector('input[name="sku_prefix"]');
         const hasVariationsCheckbox = document.querySelector('#toggle-variations');
         const addVariantBtn = document.querySelector('#add-variant-btn');
@@ -183,72 +181,70 @@
         const totalFormsInput = document.querySelector('#id_variants-TOTAL_FORMS');
         const emptyRowTemplate = document.querySelector('.empty-form-row');
 
-        function toggleVariationView() {
-            const isMultiVariant = hasVariationsCheckbox.checked;
+        function visibleRows() {
+            return Array.from(variantTbody.querySelectorAll('.variant-row'))
+                .filter(function (r) { return r.style.display !== 'none'; });
+        }
 
-            addVariantBtn.style.display = isMultiVariant ? 'inline-block' : 'none';
-
-            const rows = variantTbody.querySelectorAll('.variant-row');
-            rows.forEach((row, index) => {
-                if (index > 0 && !isMultiVariant) {
-                    row.style.display = 'none';
-                    const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
-                    if (deleteCheckbox) deleteCheckbox.checked = true;
-                } else {
-                    row.style.display = '';
-                    const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
-                    if (deleteCheckbox) deleteCheckbox.checked = false;
-                }
+        // The first row is ALWAYS shown. The checkbox only controls extra rows.
+        function syncUI() {
+            const multi = hasVariationsCheckbox.checked;
+            addVariantBtn.style.display = multi ? 'inline-block' : 'none';
+            variantTbody.querySelectorAll('.remove-variant-btn').forEach(function (b) {
+                b.style.display = multi ? '' : 'none';
             });
         }
 
-       
-        addVariantBtn.addEventListener('click', function() {
+        // Product already has several variants but the box is unticked: tick it.
+        if (visibleRows().length > 1 && !hasVariationsCheckbox.checked) {
+            hasVariationsCheckbox.checked = true;
+        }
+
+        hasVariationsCheckbox.addEventListener('change', function () {
+            if (!this.checked && visibleRows().length > 1) {
+                this.checked = true;
+                alert('Remove the extra variant rows first, then untick this box.');
+                return;
+            }
+            syncUI();
+        });
+
+        addVariantBtn.addEventListener('click', function () {
             const formCount = parseInt(totalFormsInput.value, 10);
-            
+
             const newRow = emptyRowTemplate.cloneNode(true);
             newRow.classList.remove('empty-form-row');
-            
-            
             newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formCount);
-            
-            const prefixVal = skuPrefixInput ? skuPrefixInput.value.toUpperCase() : 'ITEM';
+
+            const prefixVal = skuPrefixInput && skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() : 'ITEM';
             const skuInput = newRow.querySelector('input[name$="-sku"]');
-            if (skuInput) {
-                skuInput.value = `${prefixVal}-VAR-${formCount + 1}`;
-            }
+            if (skuInput) skuInput.value = prefixVal + '-VAR-' + (formCount + 1);
 
             variantTbody.appendChild(newRow);
             totalFormsInput.value = formCount + 1;
+            syncUI();
         });
 
-        variantTbody.addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('remove-variant-btn')) {
-                const row = e.target.closest('.variant-row');
-                const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
-
-                if (deleteCheckbox) {
-                    deleteCheckbox.checked = true;
-                    row.style.display = 'none';
-                } else {
-                    row.remove();
-                }
-            }
+        // Single remove handler; always keeps at least one variant.
+        variantTbody.addEventListener('click', function (e) {
+            if (!e.target.classList.contains('remove-variant-btn')) return;
+            if (visibleRows().length <= 1) return;
+            const row = e.target.closest('.variant-row');
+            const del = row.querySelector('input[name$="-DELETE"]');
+            if (del) { del.checked = true; row.style.display = 'none'; }
+            else { row.remove(); }
         });
 
         if (skuPrefixInput) {
-            skuPrefixInput.addEventListener('input', function() {
+            skuPrefixInput.addEventListener('input', function () {
                 const firstSkuInput = variantTbody.querySelector('.variant-row input[name$="-sku"]');
                 if (firstSkuInput && (!firstSkuInput.value || firstSkuInput.value.includes('-DEFAULT'))) {
-                    firstSkuInput.value = skuPrefixInput.value ? `${skuPrefixInput.value.toUpperCase()}-DEFAULT` : '';
+                    firstSkuInput.value = skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() + '-DEFAULT' : '';
                 }
             });
         }
 
-        if (hasVariationsCheckbox) {
-            hasVariationsCheckbox.addEventListener('change', toggleVariationView);
-            toggleVariationView();
-        }
+        syncUI();
     });
 </script>
 {% endblock %}

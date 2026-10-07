@@ -1,24 +1,36 @@
 {% for variant in products %}
-<div class="variant-tile">
+<div class="variant-tile" {% if variant.available <= 0 %}style="opacity:0.6;"{% endif %}>
     <span class="tile-title">{{ variant.product.name }}</span>
-    {% if variant.size or variant.color %}
-        <span style="font-size:0.8rem; color:#4b5563; display:block; margin-bottom:0.25rem;">
-            {{ variant.size|default:"" }} / {{ variant.color|default:"" }}
+
+    {% if variant.base_variant_id %}
+        <span style="display:inline-block; align-self:flex-start; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:600; padding:0.1rem 0.5rem; border-radius:10px; margin-bottom:0.25rem;">
+            {{ variant.unit_name }} &times;{{ variant.units_per_pack|floatformat:"-3" }}
         </span>
     {% endif %}
+
+    {% if variant.size or variant.color %}
+        <span style="font-size:0.8rem; color:#4b5563; display:block; margin-bottom:0.25rem;">
+            {{ variant.size|default:"" }}{% if variant.size and variant.color %} / {% endif %}{{ variant.color|default:"" }}
+        </span>
+    {% endif %}
+
     <span class="tile-sku">{{ variant.sku }}</span>
-    <div class="tile-price" style="margin-bottom: 0.75rem;">KSH {{ variant.retail_price }}</div>
+    <div class="tile-price" style="margin-bottom: 0.25rem;">KSH {{ variant.retail_price }}</div>
+    <small style="display:block; margin-bottom:0.6rem; font-weight:600; color:{% if variant.available <= 0 %}#991b1b{% elif variant.available <= 5 %}#b45309{% else %}#166534{% endif %};">
+        {% if variant.available <= 0 %}Out of stock{% else %}{{ variant.available }} available{% endif %}
+    </small>
 
     <form method="POST" action="{% url 'cart_add' %}" data-ajax-cart>
         {% csrf_token %}
         <input type="hidden" name="variant_id" value="{{ variant.id }}">
-        <button type="submit" style="width: 100%; background: #2563eb; color: white; border: none; padding: 0.5rem; border-radius: 4px; font-weight: bold; cursor: pointer;">
+        <button type="submit" {% if variant.available <= 0 %}disabled{% endif %}
+                style="width:100%; background:{% if variant.available <= 0 %}#9ca3af{% else %}#2563eb{% endif %}; color:white; border:none; padding:0.5rem; border-radius:4px; font-weight:bold; cursor:{% if variant.available <= 0 %}not-allowed{% else %}pointer{% endif %};">
             Add to Cart
         </button>
     </form>
 </div>
 {% empty %}
-<div style="grid-column: span 4; text-align: center; color: #6b7280; padding: 2rem;">
+<div style="grid-column: 1 / -1; text-align: center; color: #6b7280; padding: 2rem;">
     No active item lines found matching criteria.
 </div>
 {% endfor %}

@@ -18,7 +18,20 @@ from .models import (
 from .forms import (
     PurchaseOrderForm, PurchaseOrderItemFormSet, StockAdjustmentForm, PurchasePaymentForm,
 )
+from products.models import ProductVariant
 
+
+def get_initial(self):
+    initial = super().get_initial()
+    branch_id = self.request.GET.get('branch')
+    if branch_id:
+        initial['branch'] = branch_id
+    variant_id = self.request.GET.get('variant')
+    if variant_id:
+        v = ProductVariant.objects.select_related('product').filter(pk=variant_id).first()
+        if v and v.product.supplier_id:
+            initial['supplier'] = v.product.supplier_id
+    return initial
 
 def _cash_pool_check(branch, amount):
     """

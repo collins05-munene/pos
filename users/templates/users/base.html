@@ -335,7 +335,85 @@
                 }
             })();
         </script>
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const bellBtn = document.getElementById("notificationBellBtn");
+                const menu = document.getElementById("notificationMenu");
+                const badge = document.getElementById("notificationBadge");
+                const list = document.getElementById("notificationList");
 
+                if (!bellBtn) return;
+
+                bellBtn.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    menu.classList.toggle("show");
+                });
+
+                document.addEventListener("click", function (e) {
+                    if (!menu.contains(e.target) && !bellBtn.contains(e.target)) {
+                        menu.classList.remove("show");
+                    }
+                });
+
+                function fetchNotifications() {
+                    fetch("{% url 'unread-notifications' %}")
+                        .then(response => response.json())
+                        .then(data => {
+                            const count = data.unread_count;
+
+                            if (count > 0) {
+                                badge.textContent = count;
+                                badge.style.display = "inline-block";
+                            } else {
+                                badge.style.display = "none";
+                            }
+
+                            if (!data.notifications || data.notifications.length === 0) {
+                                list.innerHTML = '<p class="empty-notifications">No new notifications</p>';
+                                return;
+                            }
+
+                            list.innerHTML = data.notifications.map(n => `
+                                <div class="notification-item" id="notif-${n.id}">
+                                    <div>
+                                        <div class="title">${escapeHtml(n.title)}</div>
+                                        <div class="msg">${escapeHtml(n.message)}</div>
+                                        <div class="time">${n.created_at}</div>
+                                    </div>
+                                    <button type="button" class="close-btn" onclick="markNotificationRead(${n.id})">&times;</button>
+                                </div>
+                            `).join('');
+                        })
+                        .catch(err => console.error("Error fetching notifications:", err));
+                }
+
+                function escapeHtml(str) {
+                    if (!str) return '';
+                    return str.replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/"/g, "&quot;");
+                }
+
+                window.markNotificationRead = function(id) {
+                    const csrfToken = '{{ csrf_token }}';
+                    fetch(`/api/notifications/${id}/read/`, {
+                        method: "POST",
+                        headers: {
+                            "X-CSRFToken": csrfToken,
+                            "Content-Type": "application/json"
+                        }
+                    }).then(() => {
+                        const item = document.getElementById(`notif-${id}`);
+                        if (item) item.remove();
+                        fetchNotifications();
+                    });
+                };
+
+                fetchNotifications();
+                setInterval(fetchNotifications, 30000);
+            });            
+        </script>
         {% block extra_js %} {% endblock %}
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
         {% load static %}

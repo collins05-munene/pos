@@ -20,7 +20,7 @@ from .models import Order, OrderItem, CashRegisterSession, CashTransaction
 from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
-from inventory.models import Branch
+from inventory.models import Branch, StockLevel
 
 
 logger = logging.getLogger(__name__)
@@ -243,6 +243,18 @@ class RecordCashOutView(AdminRequiredMixin, View):
         return redirect('sales-dashboard')
 
 
+def _attach_availability(variants, branch):
+    """Sets .available (whole units of that variant's own unit) from the shared stock pool."""
+    variants = list(variants)
+    roots = {v.base_variant_id or v.id for v in variants}
+    pool = dict(StockLevel.objects.filter(branch=branch, variant_id__in=roots)
+                .values_list('variant_id', 'quantity'))
+    for v in variants:
+        qty = pool.get(v.base_variant_id or v.id, Decimal('0'))
+        v.available = int(qty // v.units_per_pack)
+    return variants
+
+
 class PosTerminalView(CashierRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         branch = resolve_user_branch(request.user)
@@ -255,8 +267,8 @@ class PosTerminalView(CashierRequiredMixin, View):
 
         categories = Category.objects.filter(parent=None)
         products = ProductVariant.objects.select_related(
-            'product', 'product__unit_of_measure'
-        ).filter(is_active=True, product__is_active=True)
+            'product', 'product__unit_of_measure', 'base_variant'
+        ).filter(is_active=True, product__is_active=True).order_by('product__name', 'sku')
 
         active_category = None
         if category_id:
@@ -269,23 +281,19 @@ class PosTerminalView(CashierRequiredMixin, View):
                 pass
 
         if q:
-            products = products.filter(
-                Q(sku__icontains=q) | Q(product__name__icontains=q)
-            )
-        else:
-            products = products[:24]
+            products = products.filter(Q(sku__icontains=q) | Q(product__name__icontains=q))
+
+        # Always capped: an unfiltered or broad search must not render the whole catalogue.
+        products = _attach_availability(products[:60 if (q or category_id) else 24], branch)
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            html = render_to_string(
-                'sales/product_list.html', {'products': products}, request=request
-            )
+            html = render_to_string('sales/product_list.html', {'products': products}, request=request)
             return JsonResponse({'ok': True, 'products_html': html})
 
-        cart = POSCart(request)
         context = {
             'categories': categories,
             'products': products,
-            'cart': cart,
+            'cart': POSCart(request),
             'search_query': q,
             'active_category': active_category,
             'active_session': session,
@@ -294,70 +302,64 @@ class PosTerminalView(CashierRequiredMixin, View):
         return render(request, 'sales/terminal.html', context)
 
 
+def _is_ajax(request):
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+
 def _cart_json_response(request):
     cart = POSCart(request)
-    html = render_to_string(
-        'sales/cart_contents.html',
-        {'cart': cart},
-        request=request,
-    )
-    return JsonResponse({
-        'ok': True,
-        'cart_html': html,
-        'total_items': cart.total_items,
-    })
+    html = render_to_string('sales/cart_contents.html', {'cart': cart}, request=request)
+    return JsonResponse({'ok': True, 'cart_html': html, 'total_items': cart.total_items})
+
+
+def _error_response(request, message, error_type, status=400):
+    """JSON for the terminal JS (it reads error_type + message + refreshed cart), flash message otherwise."""
+    if _is_ajax(request):
+        cart = POSCart(request)
+        html = render_to_string('sales/cart_contents.html', {'cart': cart}, request=request)
+        return JsonResponse({
+            'ok': False,
+            'error_type': error_type,
+            'message': message,
+            'error': message,
+            'cart_html': html,
+            'total_items': cart.total_items,
+        }, status=status)
+    messages.error(request, message)
+    return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 
 def _stock_error_response(request, error):
-    message = (
-        f"Only {error.available} of {error.variant.sku} left in stock (you tried to have {error.requested})"
-    )
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        cart = POSCart(request)
-        html = render_to_string(
-            'sales/cart_contents.html',
-            {'cart': cart},
-            request=request
-        )
-
-        return JsonResponse({
-            'ok': False,
-            'error': message,
-            'cart_html': html,
-            'total_items': cart.total_items
-        }, status=400)
-
-    messages.error(request, message)
-    return redirect(request.META.get('HTTP_REFERER', '/pos/'))
+    unit = f" {error.variant.unit_name}" if getattr(error.variant, 'unit_name', '') else ""
+    message = (f"Only {error.available}{unit} of {error.variant.sku} available "
+               f"(you asked for {error.requested}).")
+    return _error_response(request, message, 'INSUFFICIENT_STOCK')
 
 
 @require_POST
 def cart_add(request):
     cart = POSCart(request)
     variant_id = request.POST.get('variant_id')
-    sku = request.POST.get('sku')
+    sku = (request.POST.get('sku') or '').strip()
 
     try:
         if sku:
             variant = ProductVariant.objects.filter(
-                sku__iexact=sku.strip(), is_active=True
+                sku__iexact=sku, is_active=True, product__is_active=True
             ).first()
-            if variant:
-                cart.add(variant_id=variant.id, quantity=1)
+            if not variant:
+                return _error_response(request, f"No active product with SKU '{sku}'.", 'NOT_FOUND', status=404)
+            cart.add(variant_id=variant.id, quantity=1)
         elif variant_id:
-            cart.add(variant_id=variant_id, quantity=1)
-
+            if not cart.add(variant_id=variant_id, quantity=1):
+                return _error_response(request, "That product no longer exists.", 'NOT_FOUND', status=404)
     except InsufficientStockError as e:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return _stock_error_response(request, e)
+        return _stock_error_response(request, e)
+    except ValueError as e:          # e.g. branch could not be determined
+        return _error_response(request, str(e), 'CART_ERROR')
 
-        messages.error(request, str(e))
-        return redirect(request.META.get('HTTP_REFERER', '/pos/'))
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    if _is_ajax(request):
         return _cart_json_response(request)
-
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 
@@ -365,17 +367,34 @@ def cart_add(request):
 def cart_update(request):
     cart = POSCart(request)
     variant_id = request.POST.get('variant_id')
-    quantity = request.POST.get('quantity', 1)
+
+    try:
+        quantity = int(request.POST.get('quantity', 1))
+    except (TypeError, ValueError):
+        return _error_response(request, "Enter a whole number quantity.", 'INVALID_QUANTITY')
 
     try:
         if variant_id:
             cart.update_quantity(variant_id=variant_id, quantity=quantity)
     except InsufficientStockError as e:
         return _stock_error_response(request, e)
+    except ValueError as e:
+        return _error_response(request, str(e), 'CART_ERROR')
 
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    if _is_ajax(request):
         return _cart_json_response(request)
+    return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
+
+@require_POST
+def cart_remove(request):
+    cart = POSCart(request)
+    variant_id = request.POST.get('variant_id')
+    if variant_id:
+        cart.remove(variant_id)
+
+    if _is_ajax(request):
+        return _cart_json_response(request)
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 

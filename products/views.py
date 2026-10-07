@@ -1,21 +1,22 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
 from django.views import View
 from django.utils.text import slugify
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 
 
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from users.utils import log_action, AuditAction
 
-from .models import Category, Brand, UnitOfMeasure, Product
-from inventory.models import Branch, StockLevel
-from .forms import CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm, ProductVariantFormSet
+from .models import Category, Brand, ProductVariant, UnitOfMeasure, Product
+from .forms import (
+    CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm,
+    ProductVariantFormSet, PackagingForm,
+)
 
-# Create your views here.
 
 class _QuickCreateView(CashierRequiredMixin, View):
     model = None
@@ -32,14 +33,13 @@ class _QuickCreateView(CashierRequiredMixin, View):
             return JsonResponse({"error": "Name is too long (100 characters max)."}, status=400)
 
         existing = self.model.objects.filter(name__iexact=name).first()
-        if existing:   
+        if existing:
             return JsonResponse({"id": existing.pk, "name": existing.name})
 
         obj = self.build(name)
         log_action(request.user, AuditAction.RECORD_CREATE,
                    f"{self.label} created inline: {obj.name}", request)
         return JsonResponse({"id": obj.pk, "name": obj.name}, status=201)
-
 
 
 class CategoryListView(CashierRequiredMixin, ListView):
@@ -61,7 +61,6 @@ class CategoryQuickCreateView(_QuickCreateView):
             i += 1
         return Category.objects.create(name=name, slug=slug)
 
-   
 
 class CategoryUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Category
@@ -69,10 +68,12 @@ class CategoryUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     template_name = 'products/category_form.html'
     success_url = reverse_lazy('category-list')
 
+
 class CategoryDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Category
     template_name = 'products/category_confirm_delete.html'
     success_url = reverse_lazy('category-list')
+
 
 class CategoryCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = Category
@@ -93,16 +94,19 @@ class BrandCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     template_name = 'products/brand_form.html'
     form_class = BrandForm
     success_url = reverse_lazy('brand-list')
-    
+
+
 class BrandListView(CashierRequiredMixin, ListView):
     model = Brand
     template_name = 'products/brand_list.html'
     context_object_name = 'brands'
     paginate_by = 10
 
+
 class BrandQuickCreateView(_QuickCreateView):
     model = Brand
     label = "Brand"
+
 
 class BrandUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Brand
@@ -110,10 +114,12 @@ class BrandUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     form_class = BrandForm
     success_url = reverse_lazy('brand-list')
 
+
 class BrandDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Brand
     template_name = 'products/brand_confirm_delete.html'
     success_url = reverse_lazy('brand-list')
+
 
 class UoMListView(CashierRequiredMixin, ListView):
     model = UnitOfMeasure
@@ -121,17 +127,20 @@ class UoMListView(CashierRequiredMixin, ListView):
     template_name = 'products/uom_list.html'
     paginate_by = 5
 
+
 class UoMCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
     success_url = reverse_lazy('uom-list')
-    
+
+
 class UoMUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'products/uom_form.html'
     success_url = reverse_lazy('uom-list')
+
 
 class UoMDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = UnitOfMeasure
@@ -145,16 +154,36 @@ class ProductListView(CashierRequiredMixin, ListView):
     context_object_name = 'products'
     paginate_by = 15
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
-    
-class ProductCreateView(CashierRequiredMixin, CreateView):
+
+
+# --------------------------------------------------------------------------
+# Product create / update (the mixin MUST come before the views that use it)
+# --------------------------------------------------------------------------
+class VariantRulesMixin:
+    def variants_ok(self, form, variants):
+        live = [f for f in variants.forms if f.cleaned_data and not f.cleaned_data.get('DELETE')]
+        if not form.cleaned_data.get('has_variations') and len(live) > 1:
+            form.add_error('has_variations',
+                "More than one variant row was submitted. Tick 'multiple variants' or remove the extra rows.")
+            return False
+        return True
+
+    def save_variants(self, variants):
+        saved = variants.save(commit=False)
+        for v in saved:
+            v.save()
+        # Removed rows are deactivated, not deleted: purchases, stock and sales reference them.
+        for v in variants.deleted_objects:
+            v.is_active = False
+            v.save(update_fields=['is_active'])
+            v.packagings.update(is_active=False)
+        return saved
+
+
+class ProductCreateView(VariantRulesMixin, CashierRequiredMixin, CreateView):
     """
-    Creates the catalog entry (product + variants) only. Stock is never
-    seeded here — a new product/variant has no StockLevel row (0 on
-    hand) until a purchase is recorded for it via the inventory app,
-    which is the only place StockLevel is written. See form_valid:
-    single-variant products are sent straight into "record a purchase"
-    with that variant preselected, since that's almost always the very
-    next thing you want to do after adding a new product.
+    Creates the catalog entry (product + variants) only. Stock enters via a purchase
+    or opening stock. Single-variant products go straight to "record a purchase".
     """
     model = Product
     form_class = ProductForm
@@ -164,19 +193,18 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         if self.request.POST:
-            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object)
+            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object, prefix='variants')
         else:
-            data['variants'] = ProductVariantFormSet(instance=self.object)
-
+            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants')
         return data
 
     def post(self, request, *args, **kwargs):
         self.object = None
         form = self.get_form()
-        context = self.get_context_data()
-        variants = context['variants']
+        variants = self.get_context_data()['variants']
 
-        if form.is_valid() and variants.is_valid():
+        form_ok, variants_ok = form.is_valid(), variants.is_valid()
+        if form_ok and variants_ok and self.variants_ok(form, variants):
             return self.form_valid(form, variants)
         return self.form_invalid(form, variants)
 
@@ -188,20 +216,11 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
             form.save_m2m()
 
             variants.instance = self.object
-            saved_variants = variants.save(commit=False)
+            saved_variants = self.save_variants(variants)
 
-            for variant_instance in saved_variants:
-                variant_instance.is_active = True
-                variant_instance.save()
-
-            variants.save_m2m()
-
-            log_action(
-                self.request.user,
-                AuditAction.RECORD_CREATE,
-                f"Product created: {self.object.name} ({len(saved_variants)} variant(s))",
-                self.request
-            )
+            log_action(self.request.user, AuditAction.RECORD_CREATE,
+                       f"Product created: {self.object.name} ({len(saved_variants)} variant(s))",
+                       self.request)
 
         messages.success(
             self.request,
@@ -209,17 +228,14 @@ class ProductCreateView(CashierRequiredMixin, CreateView):
         )
 
         if len(saved_variants) == 1:
-            purchase_url = reverse('purchase-order-create')
-            return redirect(f"{purchase_url}?variant={saved_variants[0].pk}")
-
+            return redirect(f"{reverse('purchase-order-create')}?variant={saved_variants[0].pk}")
         return redirect(self.get_success_url())
 
     def form_invalid(self, form, variants):
-        return self.render_to_response(
-            self.get_context_data(form=form, variants=variants)
-        )
+        return self.render_to_response(self.get_context_data(form=form, variants=variants))
 
-class ProductUpdateView(CashierRequiredMixin, UpdateView):
+
+class ProductUpdateView(VariantRulesMixin, CashierRequiredMixin, UpdateView):
     model = Product
     form_class = ProductForm
     template_name = 'products/product_form.html'
@@ -227,24 +243,22 @@ class ProductUpdateView(CashierRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        
-        ProductVariantFormSet.extra = 0
-
+        # Only live base variants are edited here; packs are managed on the product page.
+        qs = ProductVariant.objects.filter(is_active=True, base_variant__isnull=True)
         if self.request.POST:
-            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object, prefix='variants')
+            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object,
+                                                     prefix='variants', queryset=qs)
         else:
-            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants')
-            
+            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants', queryset=qs)
         return data
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         form = self.get_form()
-        context = self.get_context_data()
-        variants = context['variants']
-       
+        variants = self.get_context_data()['variants']
 
-        if form.is_valid() and variants.is_valid():
+        form_ok, variants_ok = form.is_valid(), variants.is_valid()
+        if form_ok and variants_ok and self.variants_ok(form, variants):
             return self.form_valid(form, variants)
         return self.form_invalid(form, variants)
 
@@ -256,30 +270,16 @@ class ProductUpdateView(CashierRequiredMixin, UpdateView):
             form.save_m2m()
 
             variants.instance = self.object
-            saved_variants = variants.save(commit=False)
-            for variant in saved_variants:
-                variant.is_active = True
-                variant.save()
-            variants.save_m2m()
+            self.save_variants(variants)
 
-            self.object.variants.all().update(is_active=True)
-
-
-            log_action(
-                self.request.user,
-                AuditAction.RECORD_UPDATE,
-                f"Product updated: {self.object.name}",
-                self.request
-            )
-
+            log_action(self.request.user, AuditAction.RECORD_UPDATE,
+                       f"Product updated: {self.object.name}", self.request)
         return redirect(self.get_success_url())
 
     def form_invalid(self, form, variants):
-        return self.render_to_response(
-            self.get_context_data(form=form, variants=variants)
-        )
+        return self.render_to_response(self.get_context_data(form=form, variants=variants))
 
-        
+
 class ProductDeleteView(AdminRequiredMixin, DeleteView):
     model = Product
     template_name = 'products/product_confirm_delete.html'
@@ -292,4 +292,51 @@ class ProductDetailView(CashierRequiredMixin, DetailView):
     context_object_name = 'product'
 
     def get_queryset(self):
-        return super().get_queryset().prefetch_related('variants')
+        return super().get_queryset().prefetch_related('variants__packagings')
+
+
+# --------------------------------------------------------------------------
+# Selling units (packet / box ...) of a base variant
+# --------------------------------------------------------------------------
+class PackagingSaveView(CashierRequiredMixin, View):
+    """Add (pk = base variant) or edit (pk = existing pack) a selling unit."""
+    creating = False
+    template_name = 'products/packaging_form.html'
+
+    def _load(self, pk):
+        obj = get_object_or_404(ProductVariant.objects.select_related('product', 'base_variant'), pk=pk)
+        if self.creating:
+            if obj.base_variant_id:
+                raise Http404
+            return obj, None
+        if not obj.base_variant_id:
+            raise Http404
+        return obj.base_variant, obj
+
+    def get(self, request, pk):
+        base, inst = self._load(pk)
+        return render(request, self.template_name,
+                      {'form': PackagingForm(instance=inst, base_variant=base), 'base': base})
+
+    def post(self, request, pk):
+        base, inst = self._load(pk)
+        form = PackagingForm(request.POST, instance=inst, base_variant=base)
+        if form.is_valid():
+            pack = form.save(commit=False)
+            pack.product, pack.base_variant, pack.is_active = base.product, base, True
+            pack.save()
+            log_action(request.user,
+                       AuditAction.RECORD_UPDATE if inst else AuditAction.RECORD_CREATE,
+                       f"Selling unit {pack.unit_name} x{pack.units_per_pack} for {base.sku}", request)
+            messages.success(request, f"{pack.unit_name} saved.")
+            return redirect('product-detail', pk=base.product_id)
+        return render(request, self.template_name, {'form': form, 'base': base})
+
+
+class PackagingDeactivateView(CashierRequiredMixin, View):
+    def post(self, request, pk):
+        pack = get_object_or_404(ProductVariant, pk=pk, base_variant__isnull=False)
+        pack.is_active = False
+        pack.save(update_fields=['is_active'])
+        messages.success(request, f"{pack.unit_name} removed from sale.")
+        return redirect('product-detail', pk=pack.product_id)

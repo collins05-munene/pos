@@ -1,8 +1,24 @@
+
 <header class="topbar">
     <div class="left-side">
     </div>
     <div class="right-side">
-        <button></button>
+        <!-- Notification Dropdown -->
+        <div class="notification-dropdown-container">
+            <button type="button" id="notificationBellBtn" class="notification-bell-btn" title="Notifications">
+                🔔
+                <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+            </button>
+            <div id="notificationMenu" class="notification-menu">
+                <div class="notification-header">
+                    <span>Notifications</span>
+                </div>
+                <div id="notificationList" class="notification-list">
+                    <p class="empty-notifications">No new notifications</p>
+                </div>
+            </div>
+        </div>
+
         <div class="status">
             {% if user.role == 'ADMIN' %}
                 Admin

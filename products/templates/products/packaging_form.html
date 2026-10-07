@@ -1,0 +1,126 @@
+{% extends 'users/base.html' %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Selling Unit{% endblock %}
+
+{% block content %}
+<style>
+    .pack-card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem; }
+    .pack-card h3 { margin:0 0 .25rem; font-size:1.125rem; color:#111827; }
+    .pack-sub { font-size:.875rem; color:#6b7280; margin-bottom:1.25rem; }
+    .pack-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; }
+    .pack-field { display:flex; flex-direction:column; gap:.35rem; }
+    .pack-field label { font-size:.875rem; font-weight:500; color:#374151; }
+    .pack-field .form-input { padding:.5rem .75rem; border:1px solid #d1d5db; border-radius:6px; font-size:.875rem; width:100%; }
+    .pack-help { font-size:.75rem; color:#6b7280; }
+    .pack-errors { list-style:none; margin:0; padding:0; color:#dc2626; font-size:.75rem; }
+    .pack-info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:6px; padding:.85rem 1rem; font-size:.85rem; margin-bottom:1.25rem; }
+    .pack-preview { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:6px; padding:.75rem 1rem; font-size:.9rem; margin-top:1rem; min-height:1.2rem; }
+    .pack-error-banner { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:.6rem .9rem; border-radius:6px; margin-bottom:1rem; font-size:.85rem; }
+    .pack-actions { display:flex; justify-content:flex-end; gap:1rem; align-items:center; }
+    .pack-btn { padding:.5rem 1.25rem; font-size:.875rem; font-weight:500; border-radius:6px; cursor:pointer; text-decoration:none; border:none; }
+    .pack-btn-primary { background:#2563eb; color:#fff; }
+    .pack-btn-secondary { background:#f3f4f6; color:#374151; border:1px solid #d1d5db; }
+    @media (max-width:700px){ .pack-grid{ grid-template-columns:1fr; } }
+</style>
+
+{% with base_label=base.unit_name|default:base.product.unit_of_measure.name %}
+<div style="max-width:720px; margin:0 auto; padding:2rem 1rem;">
+    <a href="{% url 'product-detail' base.product_id %}" style="font-size:.875rem;">&larr; Back to {{ base.product.name }}</a>
+
+    <form method="POST" novalidate id="pack-form" style="margin-top:1rem;">
+        {% csrf_token %}
+
+        <div class="pack-card">
+            <h3>{% if form.instance.pk %}Edit selling unit{% else %}Add a selling unit{% endif %} &mdash; {{ base.product.name }}</h3>
+            <p class="pack-sub">Base variant: <strong>{{ base.sku }}</strong> (sold per <strong>{{ base_label }}</strong>)</p>
+
+            <div class="pack-info">
+                A selling unit is another way to sell the <strong>same stock</strong>. It has its own SKU and price,
+                but stock is held once, in <strong>{{ base_label }}</strong>. Selling one of this unit deducts
+                the number of {{ base_label }} you enter below.
+            </div>
+
+            {% for error in form.non_field_errors %}<div class="pack-error-banner">{{ error }}</div>{% endfor %}
+
+            <div class="pack-grid">
+                <div class="pack-field">
+                    <label for="{{ form.unit_name.id_for_label }}">{{ form.unit_name.label }} *</label>
+                    {{ form.unit_name }}
+                    {{ form.unit_name.errors }}
+                    <span class="pack-help">What the cashier sees, e.g. Box, Packet, 500 g, 5 kg.</span>
+                </div>
+                <div class="pack-field">
+                    <label for="{{ form.sku.id_for_label }}">{{ form.sku.label }} *</label>
+                    {{ form.sku }}
+                    {{ form.sku.errors }}
+                    <span class="pack-help">Must be unique. Use this pack's own barcode if it has one.</span>
+                </div>
+                <div class="pack-field">
+                    <label for="{{ form.units_per_pack.id_for_label }}">{{ form.units_per_pack.label }} *</label>
+                    {{ form.units_per_pack }}
+                    {{ form.units_per_pack.errors }}
+                    <span class="pack-help">How many {{ base_label }} are in ONE of this unit (0.5 for 500 g when the base is kg).</span>
+                </div>
+                <div class="pack-field">
+                    <label for="{{ form.retail_price.id_for_label }}">{{ form.retail_price.label }} *</label>
+                    {{ form.retail_price }}
+                    {{ form.retail_price.errors }}
+                    <span class="pack-help">Selling price of one of this unit.</span>
+                </div>
+                <div class="pack-field">
+                    <label for="{{ form.cost_price.id_for_label }}">{{ form.cost_price.label }}</label>
+                    {{ form.cost_price }}
+                    {{ form.cost_price.errors }}
+                    <span class="pack-help">Leave blank to use base cost &times; units in the pack.</span>
+                </div>
+            </div>
+
+            <div id="pack-preview" class="pack-preview"
+                 data-base-name="{{ base_label }}"
+                 data-base-sku="{{ base.sku }}"
+                 data-base-cost="{{ base.cost_price }}"></div>
+        </div>
+
+        <div class="pack-actions">
+            <a href="{% url 'product-detail' base.product_id %}" class="pack-btn pack-btn-secondary">Cancel</a>
+            <button type="submit" class="pack-btn pack-btn-primary">Save selling unit</button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    const preview = document.getElementById('pack-preview');
+    const unit = document.getElementById('id_unit_name');
+    const per = document.getElementById('id_units_per_pack');
+    const sku = document.getElementById('id_sku');
+    const cost = document.getElementById('id_cost_price');
+    const baseName = preview.dataset.baseName;
+    const baseSku = preview.dataset.baseSku;
+    const baseCost = parseFloat(preview.dataset.baseCost) || 0;
+    let skuTouched = !!sku.value;
+
+    sku.addEventListener('input', function () { skuTouched = true; });
+
+    function render() {
+        const name = unit.value.trim();
+        const n = parseFloat(per.value);
+
+        if (!skuTouched && name) {
+            sku.value = baseSku + '-' + name.toUpperCase().replace(/[^A-Z0-9]+/g, '');
+        }
+        if (!name || !(n > 0)) {
+            preview.textContent = 'Fill in the unit name and how many ' + baseName + ' it contains.';
+            return;
+        }
+        let text = '1 ' + name + ' = ' + n + ' ' + baseName + '. Each sale of one ' + name + ' deducts ' + n + ' ' + baseName + ' from stock.';
+        if (!cost.value) text += ' Cost will default to KSH ' + (baseCost * n).toFixed(2) + '.';
+        preview.textContent = text;
+    }
+
+    [unit, per, cost].forEach(function (el) { el.addEventListener('input', render); });
+    render();
+})();
+</script>
+{% endwith %}
+{% endblock %}

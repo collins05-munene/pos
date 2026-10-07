@@ -114,7 +114,7 @@ class POSCart:
                     'name': item.get('name', ''),
                     'requested': requested_qty,
                     'available': 0,
-                    'reason': 'Product no longer exists.'
+                    'reason': 'Produc# typed a duplicate - just select the existing onet no longer exists.'
                 })
         return problems
 

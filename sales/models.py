@@ -17,7 +17,7 @@ def next_number(tenant, kind, prefix):
     if kind != "invoice":
         raise ValueError(f"Unknown number kind: {kind}")
     with transaction.atomic():
-        # Fixed-width zero-padded suffix => lexicographic max == numeric max
+        
         last = (
             Order.objects
             .filter(tenant=tenant, invoice_number__startswith=prefix)
