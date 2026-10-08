@@ -55,6 +55,7 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
 
         running_revenue = Decimal('0.00')
         running_cogs = Decimal('0.00')
+        sold_variants = []
 
         for loop_var in cart:
             if isinstance(loop_var, (tuple, list)):
@@ -95,6 +96,8 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
                 cost_price=cost_price
             ).save()
 
+            sold_variants.append(variant) 
+
             running_revenue += retail_price * quantity_sold
             running_cogs += cost_price * quantity_sold
 
@@ -113,4 +116,8 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
 
         order.save()
 
+        from notifications.checks import check_stock_after_sale
+        transaction.on_commit(
+            lambda: check_stock_after_sale(order.tenant, branch.pk, sold_variants))
+        
         return order

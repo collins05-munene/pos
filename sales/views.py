@@ -21,6 +21,8 @@ from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
 from inventory.models import Branch, StockLevel
+from notifications.models import Notification
+from notifications.utils import notify, who, MANAGEMENT
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +104,11 @@ class OpenRegisterView(CashierRequiredMixin, View):
             opening_balance=opening_float,
             status='OPEN'
         )
+        notify(request.tenant, "Register opened",
+            f"{who(request.user)} opened the register at {branch.name} "
+            f"with KSH {opening_float:,.2f}.",
+            roles=MANAGEMENT, exclude_user=request.user
+        )
 
         return redirect('pos_terminal')
 
@@ -132,8 +139,12 @@ class CloseRegisterView(CashierRequiredMixin, View):
 
         try:
             closing_balance = Decimal(request.POST.get('closing_balance', '0.00'))
-        except (ValueError, TypeError):
-            closing_balance = Decimal('0.00')
+            if not closing_balance.is_finite() or closing_balance < 0:
+                raise InvalidOperation
+            
+        except (InvalidOperation, ValueError, TypeError):
+            messages.error(request, "Enter the counted cash as a valid amount.")
+            return redirect(request.path)
 
         expected_cash = session.get_current_expected_cash()
         discrepancy = closing_balance - expected_cash
@@ -148,7 +159,21 @@ class CloseRegisterView(CashierRequiredMixin, View):
         session.closed_at = timezone.now()
 
         session.save()
-
+        
+        if discrepancy == 0:
+            level, title, tail = Notification.Level.SUCCESS, "Register closed: balanced", "Cash balanced."
+        elif discrepancy < 0:
+            level, title = Notification.Level.ERROR, "Register closed: cash SHORT"
+            tail = f"Short by KSH {abs(discrepancy):,.2f}."
+        else:
+            level, title = Notification.Level.WARNING, "Register closed: cash OVER"
+            tail = f"Over by KSH {discrepancy:,.2f}."
+        notify(request.tenant, title,
+               f"{who(request.user)} closed {branch.name}. Expected KSH {expected_cash:,.2f}, "
+               f"counted KSH {closing_balance:,.2f}. {tail}"
+               + (f" Note: {notes[:120]}" if notes else ""),
+               level=level, roles=MANAGEMENT, exclude_user=request.user)
+        
         messages.success(request, f"Register closed. Discrepancy: KSH {discrepancy:.2f}")
         return redirect('pos_terminal')
 

@@ -11,6 +11,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from .dashboard_live import get_version
+from django.core.cache import cache
 
 from .models import ActivityLog, User
 from .forms import StandardLoginForm, CashierPinLoginForm
@@ -19,7 +20,8 @@ from .dashboard import build_dashboard_context
 from tenants.services import compose_username
 from tenants.models import Tenant
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin, TenantScopedQuerysetMixin
-
+from notifications.models import Notification
+from notifications.utils import notify, MANAGEMENT
 
 # Create your views here.
 def get_post_username(group, request):
@@ -27,6 +29,7 @@ def get_post_username(group, request):
 
 def get_login_identifier(group, request):
     return request.POST.get('username', '').lower().strip()
+
 
 @method_decorator(
     ratelimit(key='ip', rate='10/m', method='POST', block=False), 
@@ -111,6 +114,18 @@ class CashierPINLoginView(FormView):
                 f"Failed PIN login attempt for username: {composed_username}",
                 request=self.request, tenant=tenant,
             )
+            if tenant:
+                key = f"pinfail:{tenant.pk}:{composed_username}"
+                cache.add(key, 0, timeout=15 * 60)
+                try:
+                    fails = cache.incr(key)
+                except ValueError:
+                    fails = 1
+                if fails == 5:   # fire once when the threshold is crossed
+                    notify(tenant, "Repeated failed PIN logins",
+                           f"5 failed PIN attempts for '{handle}' in the last 15 minutes. "
+                           "Someone may be guessing a PIN.",
+                           level=Notification.Level.WARNING, roles=MANAGEMENT)
             form.add_error(None, "Invalid Shop Code, Username, or PIN")
             return self.form_invalid(form)
         

@@ -17,6 +17,30 @@ from .forms import (
     CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm,
     ProductVariantFormSet, SellingUnitFormSet,
 )
+from notifications.models import Notification
+from notifications.utils import notify, MANAGEMENT
+
+_PRICE_FIELDS = (("retail_price", "retail"), ("cost_price", "cost"))
+
+def _price_changes(variants, packs):
+    """Compare submitted prices to what the forms were initialised with."""
+    lines = []
+    for f in variants.initial_forms:
+        if not getattr(f, "cleaned_data", None) or f.cleaned_data.get("DELETE"):
+            continue
+        for field, label in _PRICE_FIELDS:
+            if field in f.changed_data:
+                lines.append(f"{f.initial.get('sku', 'variant')}: {label} "
+                             f"{f.initial.get(field)} → {f.cleaned_data.get(field)}")
+    for f in packs.forms:
+        cd = getattr(f, "cleaned_data", None)
+        if not cd or not f.initial or cd.get("DELETE"):
+            continue
+        for field, label in _PRICE_FIELDS:
+            if field in f.changed_data:
+                lines.append(f"{f.initial.get('sku', 'pack')}: {label} "
+                             f"{f.initial.get(field)} → {cd.get(field)}")
+    return lines
 
 
 class _QuickCreateView(CashierRequiredMixin, View):
@@ -157,16 +181,10 @@ class ProductListView(CashierRequiredMixin, ListView):
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
 
 
-# --------------------------------------------------------------------------
-# One screen to set a product up completely:
-#   product details -> base variants -> selling units, then straight to the
-#   purchase form to bring the stock in.
-# --------------------------------------------------------------------------
 class ProductEditorMixin:
     template_name = 'products/product_form.html'
     form_class = ProductForm
 
-    # ---- formset construction ---------------------------------------------
     def base_variants_qs(self):
         if self.object is None:
             return ProductVariant.objects.none()
@@ -208,7 +226,6 @@ class ProductEditorMixin:
             ctx['packs'] = self.build_packs(data)
         return ctx
 
-    # ---- request handling --------------------------------------------------
     def get_editing_object(self):
         raise NotImplementedError
 
@@ -230,7 +247,6 @@ class ProductEditorMixin:
     def form_invalid(self, form, variants, packs):
         return self.render_to_response(self.get_context_data(form=form, variants=variants, packs=packs))
 
-    # ---- validation --------------------------------------------------------
     @staticmethod
     def live_variant_forms(variants):
         return {i: f for i, f in enumerate(variants.forms)
@@ -276,12 +292,10 @@ class ProductEditorMixin:
                 ok = False
         return ok
 
-    # ---- saving ------------------------------------------------------------
     def save_variants(self, variants):
         saved = variants.save(commit=False)
         for v in saved:
             v.save()
-        # Removed rows are deactivated, not deleted: purchases, stock and sales reference them.
         for v in variants.deleted_objects:
             v.is_active = False
             v.save(update_fields=['is_active'])
@@ -362,6 +376,8 @@ class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
         return self.get_object()
 
     def form_valid(self, form, variants, packs):
+        price_lines = _price_changes(variants, packs)
+
         with transaction.atomic():
             self.object = form.save(commit=False)
             self.object.save()
@@ -373,6 +389,13 @@ class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
 
             log_action(self.request.user, AuditAction.RECORD_UPDATE,
                        f"Product updated: {self.object.name}", self.request)
+            
+        if price_lines:
+            extra = f" (+{len(price_lines) - 5} more)" if len(price_lines) > 5 else ""
+            notify(self.request.tenant, f"Price changed: {self.object.name}",
+                f"{self.request.user.get_username()} changed: " + "; ".join(price_lines[:5]) + extra,
+                level=Notification.Level.WARNING, roles=MANAGEMENT,
+                exclude_user=self.request.user)
 
         messages.success(self.request, f"{self.object.name} updated.")
         return redirect('product-detail', pk=self.object.pk)
