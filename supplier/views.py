@@ -1,11 +1,12 @@
+from django.db.models import Q
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
-from django.db.models import Q
 
-from products.models import Product
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
+from products.models import Product
 from .models import Supplier
 from .forms import SupplierForm
+
 
 class SupplierListView(CashierRequiredMixin, ListView):
     model = Supplier
@@ -13,11 +14,13 @@ class SupplierListView(CashierRequiredMixin, ListView):
     context_object_name = 'suppliers'
     paginate_by = 15
 
+
 class SupplierCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     model = Supplier
     form_class = SupplierForm
     template_name = 'supplier/supplier_form.html'
     success_url = reverse_lazy('supplier-list')
+
 
 class SupplierUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     model = Supplier
@@ -25,10 +28,12 @@ class SupplierUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     template_name = 'supplier/supplier_form.html'
     success_url = reverse_lazy('supplier-list')
 
+
 class SupplierDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Supplier
     template_name = 'supplier/supplier_confirm_delete.html'
     success_url = reverse_lazy('supplier-list')
+
 
 class SupplierDetailView(CashierRequiredMixin, DetailView):
     model = Supplier
@@ -37,9 +42,13 @@ class SupplierDetailView(CashierRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # The supplier is now recorded on each purchase, so list the products bought from
+        # this supplier (plus any old products that still carry it as their default).
         context['products'] = (
             Product.objects.filter(is_active=True)
             .filter(Q(supplier=self.object) | Q(variants__po_items__purchase_order__supplier=self.object))
-            .select_related('category', 'brand').prefetch_related('variants').distinct()
+            .select_related('category', 'brand')
+            .prefetch_related('variants')
+            .distinct()
         )
         return context

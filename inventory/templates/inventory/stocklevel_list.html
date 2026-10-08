@@ -7,7 +7,7 @@
         <div class="page-header">
             <div class="header-text">
                 <h2>Stock Level</h2>
-                <p>Live quantity on hand across branches.</p>
+                <p>Live quantity on hand across branches. Stock is counted in each product's base unit and split into its selling units.</p>
             </div>
             <a href="{% url 'stock-adjust' %}" class="btn btn-primary">Log Adjustment</a>
         </div>
@@ -19,8 +19,9 @@
                         <th scope="col">SKU</th>
                         <th scope="col">Branch</th>
                         <th scope="col">Quantity</th>
+                        <th scope="col">Breakdown</th>
                         <th scope="col">Status</th>
-                        <th scope="col">Action</th>  
+                        <th scope="col">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -31,9 +32,8 @@
                                 <code style="font-family: monospace;">{{ level.variant.sku }}</code>
                             </td>
                             <td class="brand-name">{{ level.branch.name }}</td>
-                            <td class="brand-name">
-                                {% for name, count in level.breakdown %}{{ count|floatformat:"-3" }} {{ name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
-                            </td>                            
+                            <td class="brand-name">{{ level.quantity|floatformat:"-3" }} {{ level.variant.product.unit_of_measure.name }}</td>
+                            <td class="brand-name">{{ level.breakdown_display }}</td>
                             <td class="brand-name">
                                 {% if level.quantity <= 0 %}
                                     <span style="color: #991b1b; font-weight: 600;">Out of stock</span>
@@ -44,18 +44,18 @@
                                 {% endif %}
                             </td>
                             <td class="brand-name">
-                                <a href="{% url 'stock-adjust' %}?variant={{ level.variant.id }}&branch={{ level.branch.id }}" 
-                                class="action-link edit-link">
+                                <a href="{% url 'stock-adjust' %}?variant={{ level.variant.id }}&branch={{ level.branch.id }}"
+                                   class="action-link edit-link">
                                     Adjust
                                 </a>
                             </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="empty-state-row">  
+                            <td colspan="7" class="empty-state-row">
                                 <div class="empty-state">
                                     <h3>No Stock Records Yet.</h3>
-                                    <p>Stock levels are created automatically when purchase orders are received, or manually via adjustments.</p>
+                                    <p>Stock levels are created automatically when purchases are recorded, or manually via adjustments.</p>
                                     <a href="{% url 'stock-adjust' %}" class="btn btn-secondary">Log an adjustment.</a>
                                 </div>
                             </td>

@@ -11,6 +11,7 @@
         .btn-add-item { background: #eff6ff; color: #1d4ed8; border: 1px dashed #93c5fd; border-radius: 6px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
         .btn-add-item:hover { background: #dbeafe; }
         .inline-check { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+        .flow-banner { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1rem; font-size: 0.9rem; }
         .form-error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
 
     </style>
@@ -26,6 +27,14 @@
                     and cash payments are deducted from the branch cash pool.
                 </p>
             </div>
+
+            {% if request.GET.variants or request.GET.variant %}
+                <div class="flow-banner">
+                    <strong>Last step.</strong> Your product is saved. Enter how much you bought and what you paid
+                    &mdash; this is what brings it into stock. Bought by the box or packet? Pick that unit in the
+                    list; stock is converted to the base unit automatically.
+                </div>
+            {% endif %}
 
             <form method="POST" novalidate class="styled-form" id="purchase-form">
                 {% csrf_token %}
@@ -53,7 +62,7 @@
 
                 <div class="form-card-header" style="padding: 0 0 1rem 0; margin-bottom: 1rem;">
                     <h3 class="form-title">Items Purchased</h3>
-                    <p class="form-subtitle">Product variants, quantities and the cost price per unit you paid.</p>
+                    <p class="form-subtitle">Pick the unit you bought in (e.g. a Box), the quantity, and the cost <strong>per that unit</strong>. Stock is added in base units.</p>
                 </div>
 
                 {{ items.management_form }}

@@ -8,6 +8,7 @@ from products.models import ProductVariant
 
 
 def _variant_queryset():
+    # Includes selling units (box, packet ...) so a purchase can be entered in the unit it was bought in.
     return (ProductVariant.objects.filter(is_active=True)
             .select_related('product').order_by('product__name', 'sku'))
 
@@ -55,7 +56,7 @@ class PurchaseOrderForm(forms.ModelForm):
         model = PurchaseOrder
         fields = ['supplier', 'branch', 'notes']
         widgets = {
-            'supplier': forms.Select(attrs={'class': 'form-select', 'class': 'searchable'}),
+            'supplier': forms.Select(attrs={'class': 'form-select searchable'}),
             'branch': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3, 'placeholder': 'Optional notes'}),
         }
@@ -81,6 +82,11 @@ class PurchaseOrderItemForm(forms.ModelForm):
     class Meta:
         model = PurchaseOrderItem
         fields = ['variant', 'quantity_ordered', 'unit_cost']
+        labels = {
+            'variant': 'Product / unit bought',
+            'quantity_ordered': 'Quantity',
+            'unit_cost': 'Cost per unit',
+        }
         widgets = {
             'variant': forms.Select(attrs=SEARCHABLE_VARIANT),
             'quantity_ordered': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.001', 'min': '0.001', 'placeholder': 'Qty'}),
@@ -88,19 +94,24 @@ class PurchaseOrderItemForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.fields['variant'].queryset = _variant_queryset()
+        super().__init__(*args, **kwargs)
+        self.fields['variant'].queryset = _variant_queryset()
 
 
-PurchaseOrderItemFormSet = forms.inlineformset_factory(
-    PurchaseOrder,
-    PurchaseOrderItem,
-    form=PurchaseOrderItemForm,
-    extra=1,
-    can_delete=True,
-    min_num=1,
-    validate_min=True,
-)
+def make_purchase_item_formset(extra=1):
+    """`extra` lets the product screen open the purchase form with one row per new variant."""
+    return forms.inlineformset_factory(
+        PurchaseOrder,
+        PurchaseOrderItem,
+        form=PurchaseOrderItemForm,
+        extra=extra,
+        can_delete=True,
+        min_num=1,
+        validate_min=True,
+    )
+
+
+PurchaseOrderItemFormSet = make_purchase_item_formset(1)
 
 
 class StockAdjustmentForm(forms.ModelForm):
@@ -116,8 +127,12 @@ class StockAdjustmentForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.fields['variant'].queryset = _variant_queryset()
+        super().__init__(*args, **kwargs)
+        self.fields['variant'].queryset = _variant_queryset()
+        self.fields['quantity_changed'].help_text = (
+            "In the selected variant's own unit (e.g. 2 = two boxes). "
+            "For stock counts, pick the base unit (tablet, kg ...)."
+        )
 
 
 class PurchasePaymentForm(forms.Form):
@@ -136,7 +151,6 @@ class PurchasePaymentForm(forms.Form):
     )
 
 
-
 class OpeningStockForm(forms.Form):
     branch = forms.ModelChoiceField(
         queryset=Branch.objects.filter(is_active=True),
@@ -151,7 +165,8 @@ class OpeningStockForm(forms.Form):
 class OpeningStockItemForm(forms.Form):
     variant = forms.ModelChoiceField(queryset=_variant_queryset(), widget=forms.Select(attrs=SEARCHABLE_VARIANT))
     quantity = forms.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'),
-                                  label="Quantity on hand")
+                                  label="Quantity on hand",
+                                  help_text="In the selected variant's own unit (boxes, tablets, kg ...).")
     cost_price = forms.DecimalField(
         max_digits=12, decimal_places=2, min_value=Decimal('0'), required=False,
         label="Cost price (optional)",

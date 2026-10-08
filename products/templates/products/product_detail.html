@@ -1,28 +1,17 @@
 {% extends 'users/base.html' %}
 
-{% block title %} {{product.name}} - Product Details {% endblock %}
+{% block title %} {{ product.name }} - Product Details {% endblock %}
 
 {% block extra_head %}
     <style>
-        
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 15px;
-        background: #fff;
-    }
-    th, td {
-        border: 1px solid #ddd;
-        padding: 12px;
-        text-align: left;
-    }
-    th {
-        background-color: #f2f2f2;
-        color: #333;
-    }
-    tr:nth-child(even) {
-        background-color: #f9f9f9;
-    }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+    th { background-color: #f2f2f2; color: #333; }
+    tr.pack-line { background-color: #f8fafc; }
+    .detail-actions { display: flex; gap: 0.75rem; margin: 1rem 0; }
+    .detail-btn { padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+    .detail-btn.primary { background: #2563eb; color: #fff; }
+    .detail-btn.secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
     </style>
 {% endblock %}
 
@@ -35,61 +24,62 @@
             <p>{{ product.description|default:"<i>No description provided.</i>" }}</p>
         </div>
 
-        <div class="product-meta">
-            <div class="meta-item">
-                <strong>SKU Prefix</strong>
-                {{ product.sku_prefix }}
-            </div>
-            <div class="meta-item">
-                <strong>Category</strong>
-                {{ product.category.name }}
-            </div>
-            <div class="meta-item">
-                <strong>Brand</strong>
-                {{ product.brand.name|default:"N/A" }}
-            </div>
-            <div class="meta-item">
-                <strong>Unit of Measure</strong>
-                {{ product.unit_of_measure.name }}
-            </div>
-        
+        <div class="detail-actions">
+            <a href="{% url 'product-update' product.pk %}" class="detail-btn primary">Edit product, variants &amp; selling units</a>
         </div>
 
-        <h3>Available Variants</h3>
+        <div class="product-meta">
+            <div class="meta-item"><strong>SKU Prefix</strong> {{ product.sku_prefix }}</div>
+            <div class="meta-item"><strong>Category</strong> {{ product.category.name }}</div>
+            <div class="meta-item"><strong>Brand</strong> {{ product.brand.name|default:"N/A" }}</div>
+            <div class="meta-item"><strong>Base unit (stock counted in)</strong> {{ product.unit_of_measure.name }}</div>
+        </div>
+
+        <h3>Variants &amp; Selling Units</h3>
         <table>
             <thead>
                 <tr>
                     <th>SKU</th>
-                    <th>Size</th>
-                    <th>Color</th>
+                    <th>Sold as</th>
+                    <th>Size / Color</th>
                     <th>Cost Price</th>
                     <th>Retail Price</th>
-                    <th>Stock Alert Threshold</th>
+                    <th>Stock Alert</th>
                     <th>Status</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for variant in product.variants.all %}
-                    <tr>
-                        <td><strong>{{ variant.sku }}</strong></td>
-                        <td>{{ variant.size|default:"-" }}</td>
-                        <td>{{ variant.color|default:"-" }}</td>
-                        <td>kshs {{ variant.cost_price }}</td>
-                        <td>kshs {{ variant.retail_price }}</td>
-                        <td>{{ variant.low_stock_threshold }} units</td>
-                        <td>
-                            {% if variant.is_active %}
-                                <span class="status-active">Active</span>
-                            {% else %}
-                                <span class="status-inactive">Disabled</span>
+                    {% if not variant.base_variant_id %}
+                        <tr>
+                            <td><strong>{{ variant.sku }}</strong></td>
+                            <td>{{ product.unit_of_measure.name }} <small>(base unit)</small></td>
+                            <td>{{ variant.size|default:"-" }}{% if variant.color %} / {{ variant.color }}{% endif %}</td>
+                            <td>kshs {{ variant.cost_price }}</td>
+                            <td>kshs {{ variant.retail_price }}</td>
+                            <td>{{ variant.low_stock_threshold }} units</td>
+                            <td>{% if variant.is_active %}<span class="status-active">Active</span>{% else %}<span class="status-inactive">Disabled</span>{% endif %}</td>
+                            <td>{% if variant.is_active %}<a href="{% url 'purchase-order-create' %}?variant={{ variant.pk }}">Record purchase</a>{% endif %}</td>
+                        </tr>
+                        {% for pack in variant.packagings.all %}
+                            {% if pack.is_active %}
+                                <tr class="pack-line">
+                                    <td style="padding-left: 2rem;">&#8627; <strong>{{ pack.sku }}</strong></td>
+                                    <td>{{ pack.unit_name }} <small>(&times;{{ pack.units_per_pack|floatformat:"-3" }} {{ product.unit_of_measure.name }})</small></td>
+                                    <td>&mdash;</td>
+                                    <td>kshs {{ pack.cost_price }}</td>
+                                    <td>kshs {{ pack.retail_price }}</td>
+                                    <td>shared stock</td>
+                                    <td><span class="status-active">Active</span></td>
+                                    <td>&mdash;</td>
+                                </tr>
                             {% endif %}
-                        </td>
-                    </tr>
+                        {% endfor %}
+                    {% endif %}
                 {% empty %}
                     <tr>
-                        <td colspan="7" style="text-align: center; color: #666;">
-                            This product has no variations setup.
-                        </td>
+                        <td colspan="8" style="text-align: center; color: #666;">This product has no variations setup.</td>
                     </tr>
                 {% endfor %}
             </tbody>

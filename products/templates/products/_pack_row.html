@@ -1,0 +1,43 @@
+<div class="pack-row">
+    {{ f.id }}
+    <div class="pack-grid">
+        <div class="form-group pack-variant-wrap">
+            <label for="{{ f.variant_index.id_for_label }}">For variant</label>
+            <select name="{{ f.variant_index.html_name }}" id="{{ f.variant_index.id_for_label }}"
+                    class="form-select pack-variant-select"
+                    data-selected="{{ f.variant_index.value|default_if_none:'' }}"></select>
+            {{ f.variant_index.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ f.unit_name.id_for_label }}">Unit name *</label>
+            {{ f.unit_name }}
+            {{ f.unit_name.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ f.units_per_pack.id_for_label }}">Contains (base units) *</label>
+            {{ f.units_per_pack }}
+            {{ f.units_per_pack.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ f.sku.id_for_label }}">SKU / barcode *</label>
+            {{ f.sku }}
+            {{ f.sku.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ f.retail_price.id_for_label }}">Retail price *</label>
+            {{ f.retail_price }}
+            {{ f.retail_price.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ f.cost_price.id_for_label }}">Cost price</label>
+            {{ f.cost_price }}
+            {{ f.cost_price.errors }}
+        </div>
+        <div class="pack-remove">
+            <div style="display:none;">{{ f.DELETE }}</div>
+            <button type="button" class="btn-danger remove-pack-btn">Remove</button>
+        </div>
+    </div>
+    <div class="pack-preview"></div>
+    {{ f.non_field_errors }}
+</div>

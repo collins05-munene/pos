@@ -1,6 +1,7 @@
-from django.db import models
 from decimal import Decimal
+
 from django.core.exceptions import ValidationError
+from django.db import models
 
 from tenants.models import TenantOwnedModel
 
@@ -9,6 +10,11 @@ def _unique_per_tenant(model, *fields):
     """Constraint names must be unique database-wide, hence the model-qualified name."""
     return [models.UniqueConstraint(fields=["tenant", f], name=f"uniq_{model}_{f}_per_tenant")
             for f in fields]
+
+
+def fmt_qty(value):
+    """30.000 -> '30', 0.500 -> '0.5' (never exponent notation)."""
+    return format(Decimal(value).normalize(), 'f')
 
 
 class Category(TenantOwnedModel):
@@ -55,7 +61,9 @@ class Product(TenantOwnedModel):
     sku_prefix = models.CharField(max_length=50, help_text="Base SKU prefix for this product line")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    # Legacy: the supplier is now recorded on each purchase. Kept so old data isn't lost.
     supplier = models.ForeignKey('supplier.Supplier', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    # The BASE unit: stock is counted in this unit (Tablet, Kilogram, Piece ...).
     unit_of_measure = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, verbose_name="Unit of Measure")
     description = models.TextField(blank=True)
     has_variations = models.BooleanField(default=False)
@@ -72,6 +80,18 @@ class Product(TenantOwnedModel):
 
 
 class ProductVariant(TenantOwnedModel):
+    """
+    Two kinds of rows live in this table:
+
+    * BASE variant  (base_variant is NULL, units_per_pack == 1)
+        A size / colour / SKU of the product. It is the ONLY row that holds
+        stock, counted in the product's unit of measure (tablets, kg ...).
+
+    * SELLING UNIT  (base_variant -> a base variant)
+        Another way of selling the same stock: its own SKU, name and price,
+        but no stock of its own. One of it = `units_per_pack` base units.
+        A box of 30 tablets -> 30.   500 g of rice (base unit kg) -> 0.5.
+    """
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     sku = models.CharField(max_length=100)
     size = models.CharField(max_length=50, null=True, blank=True)
@@ -81,41 +101,65 @@ class ProductVariant(TenantOwnedModel):
     low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, default=10.000)
     is_active = models.BooleanField(default=True)
 
-    unit_name = models.CharField(max_length=30, blank=True, help_text="How it's sold: Tablet, Packet, Box")
-    base_variant = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
-                                     related_name='packagings',
-                                     help_text="Set only for packs; points at the unit that holds the stock.")
-    units_per_pack = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    unit_name = models.CharField(
+        max_length=30, blank=True,
+        help_text="How a selling unit is sold: Packet, Box, 500 g ... Blank on base variants.")
+    base_variant = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.PROTECT, related_name='packagings',
+        help_text="Set only on selling units; the base variant that holds the stock.")
+    units_per_pack = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal('1'),
+        help_text="How many base units one of this makes up.")
 
     class Meta:
         constraints = _unique_per_tenant("variant", "sku") + [
-            models.CheckConstraint(condition=models.Q(units_per_pack__gt=0), name="variant_units_per_pack_gt_0"),
+            models.CheckConstraint(condition=models.Q(units_per_pack__gt=0),
+                                   name="variant_units_per_pack_gt_0"),
         ]
+
+    # ---- helpers ---------------------------------------------------------
+    @property
+    def is_packaging(self):
+        return self.base_variant_id is not None
 
     @property
     def stock_variant(self):
+        """The base variant whose StockLevel this row sells from."""
         return self.base_variant if self.base_variant_id else self
 
+    @property
+    def unit_label(self):
+        """Name of the unit this row is sold in."""
+        return self.unit_name or self.product.unit_of_measure.name
+
+    @property
+    def base_unit_label(self):
+        return self.stock_variant.unit_label
+
+    @property
+    def pack_label(self):
+        return f"{self.unit_name} ×{fmt_qty(self.units_per_pack)}"
+
     def to_base_units(self, qty):
-        return Decimal(qty) * self.units_per_pack
+        return Decimal(qty) * Decimal(self.units_per_pack)
 
     def clean(self):
         super().clean()
         if self.base_variant_id:
-            b = self.base_variant
-            if b.pk == self.pk or b.base_variant_id:
-                raise ValidationError("A pack must point to a base unit, not to another pack.")
-            if b.product_id != self.product_id:
-                raise ValidationError("Base unit must belong to the same product.")
-        elif self.pk and self.units_per_pack != 1:
-            raise ValidationError("A base unit must have a pack size of 1.")
-    class Meta:
-        constraints = _unique_per_tenant("variant", "sku")
+            base = self.base_variant
+            if self.pk and base.pk == self.pk:
+                raise ValidationError("A selling unit cannot be its own base.")
+            if base.base_variant_id:
+                raise ValidationError("A selling unit must point at a base variant, not at another selling unit.")
+            if base.product_id != self.product_id:
+                raise ValidationError("The base variant must belong to the same product.")
+        elif Decimal(self.units_per_pack) != 1:
+            raise ValidationError("A base variant must have a pack size of 1.")
 
     def __str__(self):
         variant_info = f" - {self.size} " if self.size else ""
         variant_info += f" / {self.color}" if self.color else ""
+        label = f"{self.product.name}{variant_info} ({self.sku})"
         if self.base_variant_id:
-            variant_info = f" [{self.unit_name} x{self.units_per_pack.normalize()}]"
-        return f"{self.product.name}{variant_info} ({self.sku})"
-       
+            label += f" [{self.pack_label}]"
+        return label

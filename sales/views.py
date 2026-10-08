@@ -330,7 +330,7 @@ def _error_response(request, message, error_type, status=400):
 
 
 def _stock_error_response(request, error):
-    unit = f" {error.variant.unit_name}" if getattr(error.variant, 'unit_name', '') else ""
+    unit = f" {error.variant.unit_label}"
     message = (f"Only {error.available}{unit} of {error.variant.sku} available "
                f"(you asked for {error.requested}).")
     return _error_response(request, message, 'INSUFFICIENT_STOCK')
@@ -395,20 +395,6 @@ def cart_remove(request):
 
     if _is_ajax(request):
         return _cart_json_response(request)
-    return redirect(request.META.get('HTTP_REFERER', '/pos/'))
-
-
-@require_POST
-def cart_remove(request):
-    cart = POSCart(request)
-    variant_id = request.POST.get('variant_id')
-
-    if variant_id:
-        cart.remove(variant_id)
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return _cart_json_response(request)
-
     return redirect(request.META.get('HTTP_REFERER', '/pos/'))
 
 

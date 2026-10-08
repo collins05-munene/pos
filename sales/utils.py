@@ -3,7 +3,8 @@ from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal, ROUND_HALF_UP
 from .models import Order, OrderItem
-from inventory.models import StockLevel, Branch
+from inventory.models import Branch
+from inventory.stock import change_stock, available_units, InsufficientStock
 from products.models import ProductVariant
 from .exceptions import InsufficientStockError
 
@@ -11,9 +12,7 @@ from .exceptions import InsufficientStockError
 def resolve_user_branch(user):
     """
     The branch a user operates from, used to look up the ONE shared
-    cash-pool session for that branch. Sessions are no longer tied to
-    an individual cashier, so every view that needs "the active
-    session" should go through this instead of get_active_session(user).
+    cash-pool session for that branch.
 
     Branch.objects is tenant-scoped (TenantManager), so .first() here
     already only ever sees the current tenant's branches.
@@ -27,17 +26,17 @@ def resolve_user_branch(user):
 
 def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_received=None):
     """
-    amount_received is only meaningful for CASH sales. When provided,
-    it is validated against the cart total computed here (server-side,
-    not trusted from the client) and change_given is derived from it.
-    Raises ValueError if amount_received is less than the total due.
+    amount_received is only meaningful for CASH sales. When provided, it is
+    validated against the cart total computed here (server-side, not trusted
+    from the client) and change_given is derived from it. Raises ValueError if
+    amount_received is less than the total due.
 
-    The sale's branch is the branch the cash session actually belongs
-    to (falling back to resolve_user_branch for the rare case of a
-    sale with no session, e.g. a future non-cash flow) — NOT a
-    hardcoded "Main Branch". A cashier's register can be open for any
-    branch; stock must move in that same branch, not whichever branch
-    happens to be named "Main Branch" for this tenant.
+    The sale's branch is the branch the cash session belongs to.
+
+    Stock moves through change_stock(): selling 1 box of a 30-tablet pack
+    removes 30 base units from the single shared stock row, so tablets, packets
+    and boxes can never drift apart. Each order line stores the cost price of
+    the unit actually sold, so COGS and profit are right per unit.
     """
     with transaction.atomic():
         branch = cash_session.branch if cash_session else resolve_user_branch(cashier)
@@ -77,31 +76,24 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
                 variant = variant_obj
             else:
                 variant_id = getattr(item, 'variant_id', None) or item_key
-                variant = ProductVariant.objects.get(id=variant_id)
+                variant = ProductVariant.objects.select_related('base_variant').get(id=variant_id)
 
             retail_price = Decimal(str(raw_price))
             quantity_sold = int(raw_qty)
             cost_price = getattr(variant, 'cost_price', Decimal('0.00'))
 
-            stock_record, _ = StockLevel.objects.select_for_update().get_or_create(
-                branch=branch,
-                variant=variant,
-                defaults={'quantity': 0}
-            )
-            if stock_record.quantity < quantity_sold:
-                raise InsufficientStockError(variant, stock_record.quantity, quantity_sold)
+            try:
+                change_stock(branch, variant, -quantity_sold)
+            except InsufficientStock:
+                raise InsufficientStockError(variant, int(available_units(branch, variant)), quantity_sold)
 
-            stock_record.quantity -= quantity_sold
-            stock_record.save()
-
-            order_item = OrderItem(
+            OrderItem(
                 order=order,
                 variant=variant,
                 quantity=quantity_sold,
                 retail_price=retail_price,
                 cost_price=cost_price
-            )
-            order_item.save()
+            ).save()
 
             running_revenue += retail_price * quantity_sold
             running_cogs += cost_price * quantity_sold

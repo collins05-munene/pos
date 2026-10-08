@@ -3,8 +3,9 @@ from . import views
 
 urlpatterns = [
     path('categories/', views.CategoryListView.as_view(), name='category-list'),
+    path('categories/create/', views.CategoryCreateView.as_view(), name='category-create'),
     path('category/<int:pk>/update/', views.CategoryUpdateView.as_view(), name='category-update'),
-    path('category/<int:pk>/delete/', views.CategoryDeleteView.as_view(), name='category-delete'),path('categories/create/', views.CategoryCreateView.as_view(), name='category-create'),
+    path('category/<int:pk>/delete/', views.CategoryDeleteView.as_view(), name='category-delete'),
 
     path('brands/create/', views.BrandCreateView.as_view(), name='brand-create'),
     path('brands/', views.BrandListView.as_view(), name='brand-list'),
@@ -16,16 +17,12 @@ urlpatterns = [
     path('uoms/<int:pk>/update/', views.UoMUpdateView.as_view(), name='uom-update'),
     path('uoms/<int:pk>/delete/', views.UoMDeleteView.as_view(), name='uom-delete'),
 
-    path('products/', views.ProductListView.as_view(),name='product-list'),
-    path('products/create/',views.ProductCreateView.as_view(), name='product-create'),
-    path('product/<int:pk>/edit/',views.ProductUpdateView.as_view(),name='product-update'),
-    path('product/<int:pk>/delete/',views.ProductDeleteView.as_view(),name='product-delete'),
+    path('products/', views.ProductListView.as_view(), name='product-list'),
+    path('products/create/', views.ProductCreateView.as_view(), name='product-create'),
+    path('product/<int:pk>/edit/', views.ProductUpdateView.as_view(), name='product-update'),
+    path('product/<int:pk>/delete/', views.ProductDeleteView.as_view(), name='product-delete'),
     path('product/<int:pk>/detail/', views.ProductDetailView.as_view(), name='product-detail'),
 
     path('categories/quick-create/', views.CategoryQuickCreateView.as_view(), name='category-quick-create'),
     path('brands/quick-create/', views.BrandQuickCreateView.as_view(), name='brand-quick-create'),
-
-    path('variant/<int:pk>/packaging/add/', views.PackagingSaveView.as_view(creating=True), name='packaging-create'),
-    path('packaging/<int:pk>/edit/', views.PackagingSaveView.as_view(), name='packaging-update'),
-    path('packaging/<int:pk>/deactivate/', views.PackagingDeactivateView.as_view(), name='packaging-deactivate'),
 ]

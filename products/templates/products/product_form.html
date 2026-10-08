@@ -21,18 +21,37 @@
     .btn-secondary { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
     .btn-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 4px; padding: 0.35rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
     .empty-form-template { display: none; }
-    .stock-note { display: flex; gap: 0.6rem; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 0.85rem 1rem; font-size: 0.85rem; margin-top: 1.25rem; }
-    .stock-note strong { display: block; margin-bottom: 0.15rem; }
+    .info-note { display: flex; gap: 0.6rem; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 0.85rem 1rem; font-size: 0.85rem; margin-top: 1.25rem; }
+    .info-note strong { display: block; margin-bottom: 0.15rem; }
     .form-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
     .errorlist { list-style: none; margin: 0.25rem 0 0; padding: 0; color: #dc2626; font-size: 0.75rem; }
+
+    .steps { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; font-size: 0.8rem; }
+    .step { background: #f3f4f6; color: #6b7280; padding: 0.35rem 0.8rem; border-radius: 999px; }
+    .step.active { background: #2563eb; color: #fff; font-weight: 600; }
+
+    .pack-row { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; margin-bottom: 0.75rem; }
+    .pack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; align-items: end; }
+    .pack-remove { display: flex; align-items: flex-end; padding-bottom: 0.1rem; }
+    .pack-preview { font-size: 0.8rem; color: #166534; margin-top: 0.6rem; min-height: 1rem; }
+    .single-variant .pack-variant-wrap { display: none; }
+    .btn-add { background: #eff6ff; color: #1d4ed8; border: 1px dashed #93c5fd; border-radius: 6px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
+    .example-box { background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.8rem; color: #4b5563; margin-bottom: 1rem; }
 </style>
 
 <div class="form-page-container" style="max-width: 1000px; margin: 0 auto; padding: 2rem 1rem;">
-    <form method="POST" enctype="multipart/form-data" novalidate id="product-form">
+    <form method="POST" novalidate id="product-form">
         {% csrf_token %}
+
+        <div class="steps">
+            <span class="step active">1 &middot; Product &amp; variants</span>
+            <span class="step active">2 &middot; Selling units</span>
+            <span class="step">{% if object %}Save{% else %}3 &middot; Record purchase{% endif %}</span>
+        </div>
 
         {% for error in form.non_field_errors %}<div class="form-error">{{ error }}</div>{% endfor %}
         {% for error in variants.non_form_errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        {% for error in packs.non_form_errors %}<div class="form-error">{{ error }}</div>{% endfor %}
         {% for error in form.has_variations.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
 
         <div class="form-section">
@@ -64,7 +83,7 @@
                     {{ form.brand.errors }}
                 </div>
                 <div class="form-group">
-                    <label>Unit of Measure *</label>
+                    <label>Unit of Measure (the base unit you count stock in) *</label>
                     {{ form.unit_of_measure }}
                     {{ form.unit_of_measure.errors }}
                 </div>
@@ -87,13 +106,12 @@
             </div>
 
             {% if not object %}
-                <div class="stock-note">
+                <div class="info-note">
                     <span>&#9432;</span>
                     <div>
-                        <strong>No stock quantity here on purpose.</strong>
-                        Saving this product won't add any stock. After it's saved, you'll record a purchase for it —
-                        that's what brings it into inventory, with a cost, an optional supplier, and a payment trail attached.
-                        Packet/box selling units can be added from the product page afterwards.
+                        <strong>Stock is not entered here.</strong>
+                        Set up the product, its variants and selling units on this page. When you save you go
+                        straight to the purchase form, which is what brings the stock in (with cost, supplier and payment).
                     </div>
                 </div>
             {% endif %}
@@ -103,7 +121,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h3 class="form-section-title">Product Variants</h3>
-                    <p class="form-section-sub">Define SKU, pricing, and variant options (size / color).</p>
+                    <p class="form-section-sub" id="base-unit-note">Prices are per base unit (the Unit of Measure above).</p>
                 </div>
                 <button type="button" id="add-variant-btn" class="btn-action btn-secondary" style="display: none;">
                     + Add Another Variant
@@ -145,7 +163,30 @@
             </table>
         </div>
 
-        <!-- Hidden template used by JS to clone new rows -->
+        <div class="form-section" id="packs-section">
+            <h3 class="form-section-title">Selling Units <span style="font-weight:400; color:#6b7280;">(optional)</span></h3>
+            <p class="form-section-sub">
+                Other ways to sell the <strong>same stock</strong> &mdash; each with its own SKU and price.
+                Stock is kept once, in the base unit; selling one of these deducts the amount you enter.
+            </p>
+
+            <div class="example-box">
+                <strong>Examples.</strong>
+                Unit of Measure <em>Tablet</em>: add <em>Packet</em> = 10 and <em>Box</em> = 30 (3 packets &times; 10 tablets).
+                Unit of Measure <em>Kilogram</em>: add <em>500 g</em> = 0.5, <em>2 kg</em> = 2, <em>5 kg</em> = 5.
+                Leave the cost blank to use base cost &times; the amount it contains.
+            </div>
+
+            {{ packs.management_form }}
+            <div id="pack-rows">
+                {% for f in packs %}
+                    {% include 'products/_pack_row.html' with f=f %}
+                {% endfor %}
+            </div>
+            <button type="button" id="add-pack-btn" class="btn-add">+ Add selling unit</button>
+        </div>
+
+        <!-- Hidden template used by JS to clone new variant rows -->
         <table class="empty-form-template">
             <tr class="variant-row empty-form-row">
                 {{ variants.empty_form.id }}
@@ -162,89 +203,230 @@
             </tr>
         </table>
 
+        <!-- Hidden template used by JS to clone new selling-unit rows -->
+        <template id="empty-pack-form">
+            {% include 'products/_pack_row.html' with f=packs.empty_form %}
+        </template>
+
         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 2rem;">
             {% if not object %}
-                <span style="font-size: 0.8rem; color: #6b7280;">You'll be taken to record its purchase next.</span>
+                <span style="font-size: 0.8rem; color: #6b7280;">You'll be taken to record the purchase next.</span>
             {% endif %}
-            <a href="{% url 'product-list' %}" class="btn-action btn-secondary">Cancel</a>
-            <button type="submit" class="btn-action btn-primary">Save Product</button>
+            <a href="{% if object %}{% url 'product-detail' object.pk %}{% else %}{% url 'product-list' %}{% endif %}" class="btn-action btn-secondary">Cancel</a>
+            <button type="submit" class="btn-action btn-primary">{% if object %}Save Changes{% else %}Save &amp; Record Purchase{% endif %}</button>
         </div>
     </form>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const skuPrefixInput = document.querySelector('input[name="sku_prefix"]');
-        const hasVariationsCheckbox = document.querySelector('#toggle-variations');
-        const addVariantBtn = document.querySelector('#add-variant-btn');
-        const variantTbody = document.querySelector('#variant-tbody');
-        const totalFormsInput = document.querySelector('#id_variants-TOTAL_FORMS');
-        const emptyRowTemplate = document.querySelector('.empty-form-row');
+document.addEventListener('DOMContentLoaded', function () {
+    const skuPrefixInput = document.querySelector('input[name="sku_prefix"]');
+    const hasVariationsCheckbox = document.querySelector('#toggle-variations');
+    const uomSelect = document.querySelector('#id_unit_of_measure');
+    const addVariantBtn = document.querySelector('#add-variant-btn');
+    const variantTbody = document.querySelector('#variant-tbody');
+    const variantTotal = document.querySelector('#id_variants-TOTAL_FORMS');
+    const emptyRowTemplate = document.querySelector('.empty-form-row');
+    const packsSection = document.querySelector('#packs-section');
+    const packRows = document.querySelector('#pack-rows');
+    const packTotal = document.querySelector('#id_packs-TOTAL_FORMS');
+    const packTemplate = document.querySelector('#empty-pack-form');
+    const addPackBtn = document.querySelector('#add-pack-btn');
+    const baseUnitNote = document.querySelector('#base-unit-note');
 
-        function visibleRows() {
-            return Array.from(variantTbody.querySelectorAll('.variant-row'))
-                .filter(function (r) { return r.style.display !== 'none'; });
-        }
+    // ---------- helpers ----------
+    function baseUnitName() {
+        if (!uomSelect || !uomSelect.value) return 'base unit';
+        const text = uomSelect.options[uomSelect.selectedIndex].text;
+        return text.replace(/\s*\(.*\)\s*$/, '').trim() || 'base unit';
+    }
 
-        // The first row is ALWAYS shown. The checkbox only controls extra rows.
-        function syncUI() {
-            const multi = hasVariationsCheckbox.checked;
-            addVariantBtn.style.display = multi ? 'inline-block' : 'none';
-            variantTbody.querySelectorAll('.remove-variant-btn').forEach(function (b) {
-                b.style.display = multi ? '' : 'none';
+    function variantIndexOf(row) {
+        const el = row.querySelector('input[name$="-sku"]');
+        const m = el && el.name.match(/^variants-(\d+)-sku$/);
+        return m ? parseInt(m[1], 10) : null;
+    }
+
+    function liveVariantRows() {
+        return Array.from(variantTbody.querySelectorAll('.variant-row'))
+            .filter(function (r) { return r.style.display !== 'none'; });
+    }
+
+    function variantSkuByIndex(index) {
+        const row = liveVariantRows().find(function (r) { return variantIndexOf(r) === parseInt(index, 10); });
+        const el = row && row.querySelector('input[name$="-sku"]');
+        return el ? el.value.trim() : '';
+    }
+
+    // ---------- variant select inside each selling-unit row ----------
+    function refreshVariantOptions() {
+        const rows = liveVariantRows();
+        packsSection.classList.toggle('single-variant', rows.length <= 1);
+
+        packRows.querySelectorAll('.pack-variant-select').forEach(function (sel) {
+            const wanted = sel.options.length ? sel.value : sel.dataset.selected;
+            sel.innerHTML = '';
+            rows.forEach(function (r, n) {
+                const idx = variantIndexOf(r);
+                if (idx === null) return;
+                const sku = r.querySelector('input[name$="-sku"]').value.trim();
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = sku || ('Variant ' + (n + 1));
+                sel.appendChild(opt);
             });
-        }
-
-        // Product already has several variants but the box is unticked: tick it.
-        if (visibleRows().length > 1 && !hasVariationsCheckbox.checked) {
-            hasVariationsCheckbox.checked = true;
-        }
-
-        hasVariationsCheckbox.addEventListener('change', function () {
-            if (!this.checked && visibleRows().length > 1) {
-                this.checked = true;
-                alert('Remove the extra variant rows first, then untick this box.');
-                return;
+            if (wanted !== '' && Array.from(sel.options).some(function (o) { return o.value === String(wanted); })) {
+                sel.value = wanted;
             }
-            syncUI();
+            sel.dataset.selected = sel.value;
         });
+    }
 
-        addVariantBtn.addEventListener('click', function () {
-            const formCount = parseInt(totalFormsInput.value, 10);
+    // ---------- selling-unit rows ----------
+    function updatePreview(row) {
+        const name = row.querySelector('input[name$="-unit_name"]').value.trim();
+        const per = parseFloat(row.querySelector('input[name$="-units_per_pack"]').value);
+        const prev = row.querySelector('.pack-preview');
+        if (!name || !(per > 0)) { prev.textContent = ''; return; }
+        const u = baseUnitName();
+        prev.textContent = '1 ' + name + ' = ' + per + ' ' + u + '. Each sale of one ' + name +
+            ' takes ' + per + ' ' + u + ' out of stock.';
+    }
 
-            const newRow = emptyRowTemplate.cloneNode(true);
-            newRow.classList.remove('empty-form-row');
-            newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formCount);
+    function autoSku(row) {
+        const sku = row.querySelector('input[name$="-sku"]');
+        if (sku.value && sku.dataset.auto !== '1') return;
+        const name = row.querySelector('input[name$="-unit_name"]').value.trim();
+        const sel = row.querySelector('.pack-variant-select');
+        const base = sel ? variantSkuByIndex(sel.value) : '';
+        if (!name || !base) return;
+        sku.value = base + '-' + name.toUpperCase().replace(/[^A-Z0-9]+/g, '');
+        sku.dataset.auto = '1';
+    }
 
-            const prefixVal = skuPrefixInput && skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() : 'ITEM';
-            const skuInput = newRow.querySelector('input[name$="-sku"]');
-            if (skuInput) skuInput.value = prefixVal + '-VAR-' + (formCount + 1);
+    function updateAllPreviews() {
+        packRows.querySelectorAll('.pack-row').forEach(updatePreview);
+        baseUnitNote.textContent = 'Prices are per ' + baseUnitName() + ' (the Unit of Measure above).';
+    }
 
-            variantTbody.appendChild(newRow);
-            totalFormsInput.value = formCount + 1;
-            syncUI();
-        });
-
-        // Single remove handler; always keeps at least one variant.
-        variantTbody.addEventListener('click', function (e) {
-            if (!e.target.classList.contains('remove-variant-btn')) return;
-            if (visibleRows().length <= 1) return;
-            const row = e.target.closest('.variant-row');
-            const del = row.querySelector('input[name$="-DELETE"]');
-            if (del) { del.checked = true; row.style.display = 'none'; }
-            else { row.remove(); }
-        });
-
-        if (skuPrefixInput) {
-            skuPrefixInput.addEventListener('input', function () {
-                const firstSkuInput = variantTbody.querySelector('.variant-row input[name$="-sku"]');
-                if (firstSkuInput && (!firstSkuInput.value || firstSkuInput.value.includes('-DEFAULT'))) {
-                    firstSkuInput.value = skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() + '-DEFAULT' : '';
-                }
-            });
-        }
-
-        syncUI();
+    addPackBtn.addEventListener('click', function () {
+        const i = parseInt(packTotal.value, 10);
+        packRows.insertAdjacentHTML('beforeend', packTemplate.innerHTML.replace(/__prefix__/g, i));
+        packTotal.value = i + 1;
+        refreshVariantOptions();
     });
+
+    packRows.addEventListener('input', function (e) {
+        const row = e.target.closest('.pack-row');
+        if (!row) return;
+        const sku = row.querySelector('input[name$="-sku"]');
+        if (e.target === sku) sku.dataset.auto = '';
+        if (e.target.name && e.target.name.endsWith('-unit_name')) autoSku(row);
+        updatePreview(row);
+    });
+
+    packRows.addEventListener('change', function (e) {
+        const row = e.target.closest('.pack-row');
+        if (!row) return;
+        if (e.target.classList.contains('pack-variant-select')) {
+            e.target.dataset.selected = e.target.value;
+            autoSku(row);
+        }
+        updatePreview(row);
+    });
+
+    function removePackRow(row) {
+        const id = row.querySelector('input[name$="-id"]');
+        const del = row.querySelector('input[name$="-DELETE"]');
+        if (id && id.value && del) { del.checked = true; row.style.display = 'none'; }
+        else { row.remove(); }
+    }
+
+    packRows.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('remove-pack-btn')) return;
+        removePackRow(e.target.closest('.pack-row'));
+    });
+
+    // ---------- variant rows ----------
+    function syncVariantUI() {
+        const multi = hasVariationsCheckbox.checked;
+        addVariantBtn.style.display = multi ? 'inline-block' : 'none';
+        variantTbody.querySelectorAll('.remove-variant-btn').forEach(function (b) {
+            b.style.display = multi ? '' : 'none';
+        });
+        refreshVariantOptions();
+    }
+
+    // Product already has several variants but the box is unticked: tick it.
+    if (liveVariantRows().length > 1 && !hasVariationsCheckbox.checked) {
+        hasVariationsCheckbox.checked = true;
+    }
+
+    hasVariationsCheckbox.addEventListener('change', function () {
+        if (!this.checked && liveVariantRows().length > 1) {
+            this.checked = true;
+            alert('Remove the extra variant rows first, then untick this box.');
+            return;
+        }
+        syncVariantUI();
+    });
+
+    addVariantBtn.addEventListener('click', function () {
+        const formCount = parseInt(variantTotal.value, 10);
+        const newRow = emptyRowTemplate.cloneNode(true);
+        newRow.classList.remove('empty-form-row');
+        newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formCount);
+
+        const prefixVal = skuPrefixInput && skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() : 'ITEM';
+        const skuInput = newRow.querySelector('input[name$="-sku"]');
+        if (skuInput) skuInput.value = prefixVal + '-VAR-' + (formCount + 1);
+
+        variantTbody.appendChild(newRow);
+        variantTotal.value = formCount + 1;
+        syncVariantUI();
+    });
+
+    // Single remove handler; always keeps at least one variant.
+    variantTbody.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('remove-variant-btn')) return;
+        if (liveVariantRows().length <= 1) return;
+        const row = e.target.closest('.variant-row');
+        const idx = variantIndexOf(row);
+
+        const attached = Array.from(packRows.querySelectorAll('.pack-row')).filter(function (pr) {
+            const sel = pr.querySelector('.pack-variant-select');
+            return pr.style.display !== 'none' && sel && String(sel.value) === String(idx);
+        });
+        if (attached.length && !confirm('This variant has selling units. Removing the variant removes them too. Continue?')) {
+            return;
+        }
+        attached.forEach(removePackRow);
+
+        const del = row.querySelector('input[name$="-DELETE"]');
+        if (del) { del.checked = true; row.style.display = 'none'; }
+        else { row.remove(); }
+        syncVariantUI();
+    });
+
+    // Keep the "For variant" lists in step with the SKUs being typed.
+    variantTbody.addEventListener('input', function (e) {
+        if (e.target.name && e.target.name.endsWith('-sku')) refreshVariantOptions();
+    });
+
+    if (skuPrefixInput) {
+        skuPrefixInput.addEventListener('input', function () {
+            const firstSkuInput = variantTbody.querySelector('.variant-row input[name$="-sku"]');
+            if (firstSkuInput && (!firstSkuInput.value || firstSkuInput.value.includes('-DEFAULT'))) {
+                firstSkuInput.value = skuPrefixInput.value ? skuPrefixInput.value.toUpperCase() + '-DEFAULT' : '';
+                refreshVariantOptions();
+            }
+        });
+    }
+
+    if (uomSelect) uomSelect.addEventListener('change', updateAllPreviews);
+
+    syncVariantUI();
+    updateAllPreviews();
+});
 </script>
 {% endblock %}

@@ -1,20 +1,21 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from decimal import Decimal
+
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
 from django.views import View
 from django.utils.text import slugify
 from django.contrib import messages
-from django.http import JsonResponse, Http404
-
+from django.http import JsonResponse
 
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from users.utils import log_action, AuditAction
 
-from .models import Category, Brand, ProductVariant, UnitOfMeasure, Product
+from .models import Category, Brand, ProductVariant, UnitOfMeasure, Product, fmt_qty
 from .forms import (
     CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm,
-    ProductVariantFormSet, PackagingForm,
+    ProductVariantFormSet, SellingUnitFormSet,
 )
 
 
@@ -157,17 +158,125 @@ class ProductListView(CashierRequiredMixin, ListView):
 
 
 # --------------------------------------------------------------------------
-# Product create / update (the mixin MUST come before the views that use it)
+# One screen to set a product up completely:
+#   product details -> base variants -> selling units, then straight to the
+#   purchase form to bring the stock in.
 # --------------------------------------------------------------------------
-class VariantRulesMixin:
+class ProductEditorMixin:
+    template_name = 'products/product_form.html'
+    form_class = ProductForm
+
+    # ---- formset construction ---------------------------------------------
+    def base_variants_qs(self):
+        if self.object is None:
+            return ProductVariant.objects.none()
+        return (ProductVariant.objects
+                .filter(product=self.object, is_active=True, base_variant__isnull=True)
+                .order_by('pk'))
+
+    def build_variants(self, data=None):
+        return ProductVariantFormSet(data, instance=self.object, prefix='variants',
+                                     queryset=self.base_variants_qs())
+
+    def pack_initial(self):
+        """Existing selling units as rows. variant_index = position of the base variant in the variants formset."""
+        if self.object is None:
+            return []
+        position = {v.pk: i for i, v in enumerate(self.base_variants_qs())}
+        packs = (ProductVariant.objects
+                 .filter(product=self.object, is_active=True, base_variant_id__in=list(position))
+                 .order_by('base_variant_id', 'units_per_pack'))
+        return [{
+            'id': p.pk,
+            'variant_index': position[p.base_variant_id],
+            'unit_name': p.unit_name,
+            'units_per_pack': fmt_qty(p.units_per_pack),
+            'sku': p.sku,
+            'retail_price': p.retail_price,
+            'cost_price': p.cost_price,
+        } for p in packs]
+
+    def build_packs(self, data=None):
+        return SellingUnitFormSet(data, prefix='packs', initial=self.pack_initial())
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        data = self.request.POST if self.request.method == 'POST' else None
+        if ctx.get('variants') is None:
+            ctx['variants'] = self.build_variants(data)
+        if ctx.get('packs') is None:
+            ctx['packs'] = self.build_packs(data)
+        return ctx
+
+    # ---- request handling --------------------------------------------------
+    def get_editing_object(self):
+        raise NotImplementedError
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_editing_object()
+        form = self.get_form()
+        variants = self.build_variants(request.POST)
+        packs = self.build_packs(request.POST)
+
+        form_ok = form.is_valid()
+        variants_ok = variants.is_valid()
+        packs_ok = packs.is_valid()
+        if (form_ok and variants_ok and packs_ok
+                and self.variants_ok(form, variants)
+                and self.packs_ok(variants, packs)):
+            return self.form_valid(form, variants, packs)
+        return self.form_invalid(form, variants, packs)
+
+    def form_invalid(self, form, variants, packs):
+        return self.render_to_response(self.get_context_data(form=form, variants=variants, packs=packs))
+
+    # ---- validation --------------------------------------------------------
+    @staticmethod
+    def live_variant_forms(variants):
+        return {i: f for i, f in enumerate(variants.forms)
+                if getattr(f, 'cleaned_data', None) and not f.cleaned_data.get('DELETE')}
+
     def variants_ok(self, form, variants):
-        live = [f for f in variants.forms if f.cleaned_data and not f.cleaned_data.get('DELETE')]
+        live = self.live_variant_forms(variants)
         if not form.cleaned_data.get('has_variations') and len(live) > 1:
             form.add_error('has_variations',
-                "More than one variant row was submitted. Tick 'multiple variants' or remove the extra rows.")
+                           "More than one variant row was submitted. Tick 'multiple variants' or remove the extra rows.")
             return False
         return True
 
+    def packs_ok(self, variants, packs):
+        ok = True
+        live_variants = self.live_variant_forms(variants)
+        variant_skus = {f.cleaned_data['sku'].lower() for f in live_variants.values()}
+        existing_ids = set()
+        if self.object is not None:
+            existing_ids = set(ProductVariant.objects
+                               .filter(product=self.object, base_variant__isnull=False)
+                               .values_list('pk', flat=True))
+
+        for f in packs.live_forms():
+            cd = f.cleaned_data
+            sku, pack_id, index = cd['sku'], cd.get('id'), cd['variant_index']
+
+            if index not in live_variants:
+                f.add_error('variant_index', "Choose which variant this selling unit belongs to.")
+                ok = False
+            if pack_id and pack_id not in existing_ids:
+                f.add_error(None, "This selling unit no longer exists. Remove the row and add it again.")
+                ok = False
+            if sku.lower() in variant_skus:
+                f.add_error('sku', "This SKU is already used by a variant of this product.")
+                ok = False
+                continue
+            clash = ProductVariant.objects.filter(sku__iexact=sku)
+            if pack_id:
+                clash = clash.exclude(pk=pack_id)
+            if clash.exists():
+                f.add_error('sku', "This SKU is already in use.")
+                ok = False
+        return ok
+
+    # ---- saving ------------------------------------------------------------
     def save_variants(self, variants):
         saved = variants.save(commit=False)
         for v in saved:
@@ -179,105 +288,94 @@ class VariantRulesMixin:
             v.packagings.update(is_active=False)
         return saved
 
+    def save_packs(self, variants, packs):
+        existing = {p.pk: p for p in ProductVariant.objects.filter(product=self.object, base_variant__isnull=False)}
+        count = 0
+        for f in packs.forms:
+            cd = getattr(f, 'cleaned_data', None)
+            if not cd:
+                continue
+            pack_id = cd.get('id')
+            if cd.get('DELETE'):
+                pack = existing.get(pack_id)
+                if pack:
+                    pack.is_active = False
+                    pack.save(update_fields=['is_active'])
+                continue
 
-class ProductCreateView(VariantRulesMixin, CashierRequiredMixin, CreateView):
+            base = variants.forms[cd['variant_index']].instance
+            pack = existing.get(pack_id) or ProductVariant(product=self.object)
+            cost = cd.get('cost_price')
+            if cost is None:
+                cost = (base.cost_price * cd['units_per_pack']).quantize(Decimal('0.01'))
+
+            pack.base_variant = base
+            pack.unit_name = cd['unit_name']
+            pack.units_per_pack = cd['units_per_pack']
+            pack.sku = cd['sku']
+            pack.retail_price = cd['retail_price']
+            pack.cost_price = cost
+            pack.is_active = True
+            pack.save()
+            count += 1
+        return count
+
+
+class ProductCreateView(ProductEditorMixin, CashierRequiredMixin, CreateView):
     """
-    Creates the catalog entry (product + variants) only. Stock enters via a purchase
-    or opening stock. Single-variant products go straight to "record a purchase".
+    Product + variants + selling units in one save. Stock is never created here;
+    afterwards the user lands on the purchase form with the new variants preselected.
     """
     model = Product
-    form_class = ProductForm
-    template_name = 'products/product_form.html'
-    success_url = reverse_lazy('product-list')
 
-    def get_context_data(self, **kwargs):
-        data = super().get_context_data(**kwargs)
-        if self.request.POST:
-            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object, prefix='variants')
-        else:
-            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants')
-        return data
+    def get_editing_object(self):
+        return None
 
-    def post(self, request, *args, **kwargs):
-        self.object = None
-        form = self.get_form()
-        variants = self.get_context_data()['variants']
-
-        form_ok, variants_ok = form.is_valid(), variants.is_valid()
-        if form_ok and variants_ok and self.variants_ok(form, variants):
-            return self.form_valid(form, variants)
-        return self.form_invalid(form, variants)
-
-    def form_valid(self, form, variants):
+    def form_valid(self, form, variants, packs):
         with transaction.atomic():
             self.object = form.save(commit=False)
-            self.object.is_active = True
             self.object.save()
             form.save_m2m()
 
             variants.instance = self.object
             saved_variants = self.save_variants(variants)
+            pack_count = self.save_packs(variants, packs)
 
             log_action(self.request.user, AuditAction.RECORD_CREATE,
-                       f"Product created: {self.object.name} ({len(saved_variants)} variant(s))",
+                       f"Product created: {self.object.name} "
+                       f"({len(saved_variants)} variant(s), {pack_count} selling unit(s))",
                        self.request)
 
+        base_ids = [str(f.instance.pk) for f in self.live_variant_forms(variants).values()]
         messages.success(
             self.request,
-            f"{self.object.name} created. It has no stock yet — record a purchase to bring it into inventory."
+            f"{self.object.name} saved with {len(saved_variants)} variant(s) and {pack_count} selling unit(s). "
+            f"Now record the purchase to bring it into stock."
         )
-
-        if len(saved_variants) == 1:
-            return redirect(f"{reverse('purchase-order-create')}?variant={saved_variants[0].pk}")
-        return redirect(self.get_success_url())
-
-    def form_invalid(self, form, variants):
-        return self.render_to_response(self.get_context_data(form=form, variants=variants))
+        return redirect(f"{reverse('purchase-order-create')}?variants={','.join(base_ids)}")
 
 
-class ProductUpdateView(VariantRulesMixin, CashierRequiredMixin, UpdateView):
+class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
     model = Product
-    form_class = ProductForm
-    template_name = 'products/product_form.html'
-    success_url = reverse_lazy('product-list')
 
-    def get_context_data(self, **kwargs):
-        data = super().get_context_data(**kwargs)
-        # Only live base variants are edited here; packs are managed on the product page.
-        qs = ProductVariant.objects.filter(is_active=True, base_variant__isnull=True)
-        if self.request.POST:
-            data['variants'] = ProductVariantFormSet(self.request.POST, instance=self.object,
-                                                     prefix='variants', queryset=qs)
-        else:
-            data['variants'] = ProductVariantFormSet(instance=self.object, prefix='variants', queryset=qs)
-        return data
+    def get_editing_object(self):
+        return self.get_object()
 
-    def post(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        form = self.get_form()
-        variants = self.get_context_data()['variants']
-
-        form_ok, variants_ok = form.is_valid(), variants.is_valid()
-        if form_ok and variants_ok and self.variants_ok(form, variants):
-            return self.form_valid(form, variants)
-        return self.form_invalid(form, variants)
-
-    def form_valid(self, form, variants):
+    def form_valid(self, form, variants, packs):
         with transaction.atomic():
             self.object = form.save(commit=False)
-            self.object.is_active = True
             self.object.save()
             form.save_m2m()
 
             variants.instance = self.object
             self.save_variants(variants)
+            pack_count = self.save_packs(variants, packs)
 
             log_action(self.request.user, AuditAction.RECORD_UPDATE,
                        f"Product updated: {self.object.name}", self.request)
-        return redirect(self.get_success_url())
 
-    def form_invalid(self, form, variants):
-        return self.render_to_response(self.get_context_data(form=form, variants=variants))
+        messages.success(self.request, f"{self.object.name} updated.")
+        return redirect('product-detail', pk=self.object.pk)
 
 
 class ProductDeleteView(AdminRequiredMixin, DeleteView):
@@ -293,50 +391,3 @@ class ProductDetailView(CashierRequiredMixin, DetailView):
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related('variants__packagings')
-
-
-# --------------------------------------------------------------------------
-# Selling units (packet / box ...) of a base variant
-# --------------------------------------------------------------------------
-class PackagingSaveView(CashierRequiredMixin, View):
-    """Add (pk = base variant) or edit (pk = existing pack) a selling unit."""
-    creating = False
-    template_name = 'products/packaging_form.html'
-
-    def _load(self, pk):
-        obj = get_object_or_404(ProductVariant.objects.select_related('product', 'base_variant'), pk=pk)
-        if self.creating:
-            if obj.base_variant_id:
-                raise Http404
-            return obj, None
-        if not obj.base_variant_id:
-            raise Http404
-        return obj.base_variant, obj
-
-    def get(self, request, pk):
-        base, inst = self._load(pk)
-        return render(request, self.template_name,
-                      {'form': PackagingForm(instance=inst, base_variant=base), 'base': base})
-
-    def post(self, request, pk):
-        base, inst = self._load(pk)
-        form = PackagingForm(request.POST, instance=inst, base_variant=base)
-        if form.is_valid():
-            pack = form.save(commit=False)
-            pack.product, pack.base_variant, pack.is_active = base.product, base, True
-            pack.save()
-            log_action(request.user,
-                       AuditAction.RECORD_UPDATE if inst else AuditAction.RECORD_CREATE,
-                       f"Selling unit {pack.unit_name} x{pack.units_per_pack} for {base.sku}", request)
-            messages.success(request, f"{pack.unit_name} saved.")
-            return redirect('product-detail', pk=base.product_id)
-        return render(request, self.template_name, {'form': form, 'base': base})
-
-
-class PackagingDeactivateView(CashierRequiredMixin, View):
-    def post(self, request, pk):
-        pack = get_object_or_404(ProductVariant, pk=pk, base_variant__isnull=False)
-        pack.is_active = False
-        pack.save(update_fields=['is_active'])
-        messages.success(request, f"{pack.unit_name} removed from sale.")
-        return redirect('product-detail', pk=pack.product_id)

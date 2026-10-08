@@ -27,8 +27,7 @@
         <form method="POST" class="delete-form">
             {% csrf_token %}
             <div class="delete-actions">
-                <a href="{% url 'product
-                -list' %}" class="btn-cancel">No, Abort Operations</a>
+                <a href="{% url 'product-list' %}" class="btn-cancel">No, Abort Operations</a>
                 <button type="submit" class="btn-danger">Yes, Permanently Delete</button>
             </div>
         </form>

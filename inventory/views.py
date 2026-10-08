@@ -11,27 +11,17 @@ from django.views.generic import ListView, CreateView, DetailView
 
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from sales.models import CashRegisterSession, CashTransaction
+from products.models import ProductVariant
 
 from .models import (
     PurchaseOrder, PurchaseOrderItem, PurchasePayment, StockLevel, StockAdjustment,
 )
 from .forms import (
-    PurchaseOrderForm, PurchaseOrderItemFormSet, StockAdjustmentForm, PurchasePaymentForm,
+    PurchaseOrderForm, PurchaseOrderItemFormSet, make_purchase_item_formset,
+    StockAdjustmentForm, PurchasePaymentForm, OpeningStockForm, OpeningStockFormSet,
 )
-from products.models import ProductVariant
+from .stock import change_stock, InsufficientStock
 
-
-def get_initial(self):
-    initial = super().get_initial()
-    branch_id = self.request.GET.get('branch')
-    if branch_id:
-        initial['branch'] = branch_id
-    variant_id = self.request.GET.get('variant')
-    if variant_id:
-        v = ProductVariant.objects.select_related('product').filter(pk=variant_id).first()
-        if v and v.product.supplier_id:
-            initial['supplier'] = v.product.supplier_id
-    return initial
 
 def _cash_pool_check(branch, amount):
     """
@@ -77,7 +67,9 @@ class StockLevelListView(CashierRequiredMixin, ListView):
     template_name = 'inventory/stocklevel_list.html'
     context_object_name = 'stock_levels'
     paginate_by = 25
-    queryset = StockLevel.objects.select_related('branch', 'variant', 'variant__product')
+    queryset = (StockLevel.objects
+                .select_related('branch', 'variant', 'variant__product', 'variant__product__unit_of_measure')
+                .prefetch_related('variant__packagings'))
 
 
 class PurchaseOrderListView(CashierRequiredMixin, ListView):
@@ -92,19 +84,35 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
     """
     Records a stock purchase as one transaction: items + costs, optional
     supplier, payment (none / partial / full) and, by default, immediate
-    receipt into inventory. Cash payments are withdrawn from the branch
-    cash pool and linked to the payment record.
+    receipt into inventory. Items can be bought in any selling unit; stock is
+    added in base units. Cash payments are withdrawn from the branch cash pool.
+
+    Arrives here from the product screen as ?variants=1,2,3 (the new base variants).
     """
     model = PurchaseOrder
     form_class = PurchaseOrderForm
     template_name = 'inventory/purchase_order_form.html'
     success_url = reverse_lazy('purchase-order-list')
 
+    def _requested_variant_ids(self):
+        raw = self.request.GET.get('variants') or self.request.GET.get('variant') or ''
+        return [int(p) for p in raw.split(',') if p.strip().isdigit()][:20]
+
+    def _requested_variants(self):
+        ids = self._requested_variant_ids()
+        found = {v.pk: v for v in ProductVariant.objects.select_related('product').filter(pk__in=ids, is_active=True)}
+        return [found[i] for i in ids if i in found]
+
     def get_initial(self):
         initial = super().get_initial()
         branch_id = self.request.GET.get('branch')
         if branch_id:
             initial['branch'] = branch_id
+        # Older products may still carry a default supplier; use it as a convenience.
+        for variant in self._requested_variants():
+            if variant.product.supplier_id:
+                initial['supplier'] = variant.product.supplier_id
+                break
         return initial
 
     def get_context_data(self, **kwargs):
@@ -112,11 +120,15 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
         if self.request.POST:
             data['items'] = PurchaseOrderItemFormSet(self.request.POST, instance=self.object)
         else:
-            formset = PurchaseOrderItemFormSet(instance=self.object)
-            variant_id = self.request.GET.get('variant')
-            if variant_id and formset.forms:
-                formset.forms[0].initial['variant'] = variant_id
-            data['items'] = formset
+            variants = self._requested_variants()
+            if variants:
+                FormSet = make_purchase_item_formset(extra=len(variants))
+                data['items'] = FormSet(
+                    instance=self.object,
+                    initial=[{'variant': v.pk, 'unit_cost': v.cost_price} for v in variants],
+                )
+            else:
+                data['items'] = PurchaseOrderItemFormSet(instance=self.object)
         return data
 
     def form_valid(self, form):
@@ -157,17 +169,11 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
             items.save()
 
             if receive_now:
-                for item in self.object.items.select_related('variant'):
+                for item in self.object.items.select_related('variant', 'variant__base_variant'):
                     item.quantity_received = item.quantity_ordered
                     item.save(update_fields=['quantity_received'])
-
-                    stock_level, _ = StockLevel.objects.select_for_update().get_or_create(
-                        branch=self.object.branch,
-                        variant=item.variant,
-                        defaults={'quantity': 0},
-                    )
-                    stock_level.quantity += item.quantity_ordered
-                    stock_level.save(update_fields=['quantity'])
+                    # Converts boxes/packets to base units and updates the single stock row.
+                    change_stock(self.object.branch, item.variant, item.quantity_ordered)
 
             if amount_paid > 0:
                 _record_payment(self.object, self.request.user, amount_paid, method, reference, session)
@@ -265,14 +271,7 @@ class ReceivePurchaseOrderView(AdminRequiredMixin, View):
                     any_received = True
                     item.quantity_received += receive_qty
                     item.save(update_fields=['quantity_received'])
-
-                    stock_level, _ = StockLevel.objects.select_for_update().get_or_create(
-                        branch=po.branch,
-                        variant=item.variant,
-                        defaults={'quantity': 0},
-                    )
-                    stock_level.quantity += receive_qty
-                    stock_level.save(update_fields=['quantity'])
+                    change_stock(po.branch, item.variant, receive_qty)
 
                 if item.quantity_received < item.quantity_ordered:
                     fully_received = False
@@ -352,28 +351,58 @@ class StockAdjustmentCreateView(CashierRequiredMixin, CreateView):
             adjustment = form.save(commit=False)
             adjustment.user = self.request.user
 
-            adj_type = getattr(adjustment, 'adjustment_type', getattr(adjustment, 'reason', None))
-
-            if adj_type in self.SUBTRACTION_TYPES:
+            if adjustment.adjustment_type in self.SUBTRACTION_TYPES:
                 adjustment.quantity_changed = -abs(adjustment.quantity_changed)
 
-            stock_level, _ = StockLevel.objects.select_for_update().get_or_create(
-                branch=adjustment.branch,
-                variant=adjustment.variant,
-                defaults={'quantity': 0}
-            )
-
-            new_quantity = stock_level.quantity + adjustment.quantity_changed
-
-            if new_quantity < 0:
+            try:
+                change_stock(adjustment.branch, adjustment.variant, adjustment.quantity_changed)
+            except InsufficientStock as e:
                 form.add_error(
                     'quantity_changed',
-                    f'This adjustment would reduce stock below zero (current level: {stock_level.quantity}).'
+                    f'This adjustment would reduce stock below zero (current level: {e.available} '
+                    f'{adjustment.variant.base_unit_label}).'
                 )
                 return self.form_invalid(form)
 
-            stock_level.quantity = new_quantity
-            stock_level.save(update_fields=['quantity'])
             adjustment.save()
 
-        return super().form_valid(form)
+        self.object = adjustment
+        messages.success(self.request, "Stock adjustment recorded.")
+        return redirect(self.get_success_url())
+
+
+class OpeningStockCreateView(AdminRequiredMixin, View):
+    """
+    Starting stock for a branch. Quantities are in the selected variant's own unit
+    (10 boxes, 300 tablets, 100 kg ...) and are converted to base units. No purchase or
+    payment is created and nothing leaves the cash pool; each line is logged as an
+    OPENING stock adjustment for the audit trail.
+    """
+    template_name = 'inventory/opening_stock_form.html'
+
+    def get(self, request):
+        return render(request, self.template_name, {'form': OpeningStockForm(), 'items': OpeningStockFormSet()})
+
+    def post(self, request):
+        form = OpeningStockForm(request.POST)
+        items = OpeningStockFormSet(request.POST)
+        if form.is_valid() and items.is_valid():
+            branch = form.cleaned_data['branch']
+            notes = form.cleaned_data.get('notes') or 'Opening stock'
+            with transaction.atomic():
+                for f in items.forms:
+                    if not f.has_changed() or items._should_delete_form(f):
+                        continue
+                    cd = f.cleaned_data
+                    variant, qty, cost = cd['variant'], cd['quantity'], cd.get('cost_price')
+                    if cost is not None:
+                        variant.cost_price = cost
+                        variant.save(update_fields=['cost_price'])
+                    change_stock(branch, variant, qty)
+                    StockAdjustment.objects.create(
+                        branch=branch, variant=variant, adjustment_type='OPENING',
+                        quantity_changed=qty, reason=notes, user=request.user,
+                    )
+            messages.success(request, "Opening stock saved.")
+            return redirect('stock-level-list')
+        return render(request, self.template_name, {'form': form, 'items': items})

@@ -8,17 +8,22 @@ from django.utils import timezone
 
 from sales.models import Order, OrderItem
 from inventory.models import StockLevel
-from .models import User, ActivityLog
+from .models import User
 from .dashboard_live import get_version
 
 CACHE_TTL_SECONDS = 90
+
+# A cashier counts as "active" if seen in the last 5 minutes, "idle" up to 30, else "offline".
+ACTIVE_WINDOW = timedelta(minutes=5)
+IDLE_WINDOW = timedelta(minutes=30)
 
 
 def _cache_key(tenant):
     # Per tenant (never share), per live-version (a sale changes the key),
     # per local date (so "today" can't carry over past midnight).
+    # v4: top_products now groups by product in base units.
     today = timezone.localdate().isoformat()
-    return f"pos:admin_dashboard:v3:{tenant.pk}:{today}:{get_version(tenant.pk)}"
+    return f"pos:admin_dashboard:v4:{tenant.pk}:{today}:{get_version(tenant.pk)}"
 
 
 def _day_bounds(dt):
@@ -109,21 +114,40 @@ def _top_categories(tenant, start, end, limit=6):
 
 
 def _top_products(tenant, start, end, limit=10):
+    """
+    Grouped by PRODUCT, not by variant row: a tablet, a packet and a box of the same
+    medicine are one product, so they are added together. Quantities are converted to
+    base units (tablets, kg ...) because "2 boxes + 5 tablets" can't be summed raw.
+    Ranked by revenue (units of different products aren't comparable).
+
+    Row keys are unchanged for the template, plus `unit`:
+      sku (product SKU prefix), name, units_sold (base units), unit, revenue
+    """
     return list(
         _order_items(tenant, start, end)
-        .values(sku=F("variant__sku"), name=F("variant__product__name"))
-        .annotate(units_sold=Sum("quantity"), revenue=Sum("revenue_line"))
-        .order_by("-units_sold")[:limit]
+        .values(
+            sku=F("variant__product__sku_prefix"),
+            name=F("variant__product__name"),
+            unit=F("variant__product__unit_of_measure__name"),
+        )
+        .annotate(
+            units_sold=Sum(F("quantity") * F("variant__units_per_pack")),
+            revenue=Sum("revenue_line"),
+        )
+        .order_by("-revenue")[:limit]
     )
 
 
 def _low_stock_alerts(tenant, limit=15):
+    # StockLevel rows exist only for base variants (selling units share their stock),
+    # so no unit is double counted. `alert.breakdown_display` gives e.g. "2 Box, 1 Packet".
     return list(
         StockLevel.objects.filter(
             branch__tenant_id=tenant.pk,
             quantity__lte=F("variant__low_stock_threshold"),
         )
-        .select_related("branch", "variant", "variant__product")
+        .select_related("branch", "variant", "variant__product", "variant__product__unit_of_measure")
+        .prefetch_related("variant__packagings")
         .order_by("quantity")[:limit]
     )
 
@@ -137,45 +161,38 @@ def _recent_transactions(tenant, limit=10):
 
 
 def _cashier_status(tenant, start, end):
-    # FIX: User.objects is unscoped (auth needs that). Always filter by tenant here.
+    # User.objects is unscoped (auth needs that). Always filter by tenant here.
     cashiers = list(
-        User.objects.filter(
-            tenant_id=tenant.pk, role=User.Roles.CASHIER, is_active=True
-        )
+        User.objects.filter(tenant_id=tenant.pk, role=User.Roles.CASHIER, is_active=True)
     )
     if not cashiers:
         return []
 
-    cashier_ids = [c.id for c in cashiers]
-
     sales_by_cashier = {
         row["cashier_id"]: row
         for row in _orders(tenant, start, end)
-        .filter(cashier_id__in=cashier_ids)
+        .filter(cashier_id__in=[c.id for c in cashiers])
         .values("cashier_id")
         .annotate(total=Sum("total_revenue"), transactions=Count("id"))
     }
 
-    last_actions = {}
-    for row in (
-        ActivityLog.objects.filter(tenant_id=tenant.pk, user_id__in=cashier_ids)
-        .order_by("-timestamp")
-        .values("user_id", "action")[:500]
-    ):
-        last_actions.setdefault(row["user_id"], row["action"])
-
+    now = timezone.now()
     results = []
     for cashier in cashiers:
         sales_row = sales_by_cashier.get(cashier.id, {})
-        last_action = last_actions.get(cashier.id, "") or ""
-        results.append(
-            {
-                "cashier": cashier,
-                "shift_sales": sales_row.get("total") or Decimal("0"),
-                "shift_transactions": sales_row.get("transactions") or 0,
-                "is_logged_in": ("Login" in last_action) or ("PIN" in last_action.upper()),
-            }
-        )
+        age = (now - cashier.last_seen) if cashier.last_seen else None
+        if age is not None and age <= ACTIVE_WINDOW:
+            status = "active"
+        elif age is not None and age <= IDLE_WINDOW:
+            status = "idle"
+        else:
+            status = "offline"
+        results.append({
+            "cashier": cashier,
+            "status": status,
+            "shift_sales": sales_row.get("total") or Decimal("0"),
+            "shift_transactions": sales_row.get("transactions") or 0,
+        })
     results.sort(key=lambda r: r["shift_sales"], reverse=True)
     return results
 
@@ -221,41 +238,3 @@ def build_dashboard_context(tenant, use_cache=True):
         cache.set(key, context, CACHE_TTL_SECONDS)
 
     return context
-
-
-ACTIVE_WINDOW = timedelta(minutes=5)
-IDLE_WINDOW = timedelta(minutes=30)
-def _cashier_status(tenant, start, end):
-    cashiers = list(
-        User.objects.filter(tenant_id=tenant.pk, role=User.Roles.CASHIER, is_active=True)
-    )
-    if not cashiers:
-        return []
-
-    sales_by_cashier = {
-        row["cashier_id"]: row
-        for row in _orders(tenant, start, end)
-        .filter(cashier_id__in=[c.id for c in cashiers])
-        .values("cashier_id")
-        .annotate(total=Sum("total_revenue"), transactions=Count("id"))
-    }
-
-    now = timezone.now()
-    results = []
-    for cashier in cashiers:
-        sales_row = sales_by_cashier.get(cashier.id, {})
-        age = (now - cashier.last_seen) if cashier.last_seen else None
-        if age is not None and age <= ACTIVE_WINDOW:
-            status = "active"
-        elif age is not None and age <= IDLE_WINDOW:
-            status = "idle"
-        else:
-            status = "offline"
-        results.append({
-            "cashier": cashier,
-            "status": status,
-            "shift_sales": sales_row.get("total") or Decimal("0"),
-            "shift_transactions": sales_row.get("transactions") or 0,
-        })
-    results.sort(key=lambda r: r["shift_sales"], reverse=True)
-    return results

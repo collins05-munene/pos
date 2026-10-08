@@ -1,12 +1,10 @@
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.contrib.auth import get_user_model
-from django.db.models.constraints import UniqueConstraint
 
 from supplier.models import Supplier
-from products.models import ProductVariant
+from products.models import ProductVariant, fmt_qty
 from tenants.models import TenantOwnedModel
 
 User = get_user_model()
@@ -21,7 +19,7 @@ class Branch(TenantOwnedModel):
         verbose_name_plural = "Branches"
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "name"], 
+                fields=["tenant", "name"],
                 name="unique_tenant_branch_name"
             )
         ]
@@ -31,6 +29,11 @@ class Branch(TenantOwnedModel):
 
 
 class StockLevel(TenantOwnedModel):
+    """
+    Stock on hand for a BASE variant at a branch, counted in the product's base unit
+    (tablets, kg ...). Selling units (packet, box ...) have no row of their own: they
+    draw on their base variant's row (see inventory/stock.py).
+    """
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stock_levels')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
@@ -38,15 +41,23 @@ class StockLevel(TenantOwnedModel):
     class Meta:
         unique_together = ('branch', 'variant')
         ordering = ['-branch']
-        
+
+    @property
+    def is_low_stock(self):
+        return self.quantity <= self.variant.low_stock_threshold
+
     def breakdown(self):
-        """Stock split from the biggest unit down: [('Box', 9), ('Packet', 2), ('Tablet', 8)]"""
-        base_name = self.variant.unit_name or self.variant.product.unit_of_measure.short_name
-        units = [(p.unit_name, p.units_per_pack) for p in self.variant.packagings.all() if p.is_active]
-        units.append((base_name, Decimal('1')))
+        """
+        The quantity split from the biggest selling unit down, e.g.
+        298 tablets with Box=30, Packet=10 -> [('Box', 9), ('Packet', 2), ('Tablet', 8)].
+        Use prefetch_related('variant__packagings') on the queryset to avoid extra queries.
+        """
+        units = [(p.unit_name, Decimal(p.units_per_pack))
+                 for p in self.variant.packagings.all() if p.is_active]
+        units.append((self.variant.unit_label, Decimal('1')))
         units.sort(key=lambda u: u[1], reverse=True)
 
-        remaining, parts = self.quantity, []
+        remaining, parts = Decimal(self.quantity), []
         for name, size in units:
             count, remaining = divmod(remaining, size)
             if count:
@@ -54,13 +65,16 @@ class StockLevel(TenantOwnedModel):
         return parts
 
     @property
-    def is_low_stock(self):
-        return self.quantity <= self.variant.low_stock_threshold
+    def breakdown_display(self):
+        parts = self.breakdown()
+        if not parts:
+            return f"0 {self.variant.unit_label}"
+        return ", ".join(f"{fmt_qty(count)} {name}" for name, count in parts)
 
 
 class StockAdjustment(TenantOwnedModel):
     ADJUSTMENT_TYPES = (
-        ('OPENING', 'Opening Stock (Initial Setup)'), 
+        ('OPENING', 'Opening Stock (Initial Setup)'),
         ('COUNT', 'Stock Count / Audit'),
         ('DAMAGE', 'Damaged Items Written Off'),
         ('THEFT', 'Stolen / Missing'),
@@ -82,22 +96,15 @@ class StockAdjustment(TenantOwnedModel):
 class PurchaseOrder(TenantOwnedModel):
     """
     A stock-procurement transaction: what was purchased, from whom (if
-    anyone — supplier is optional since goods are often bought from a
+    anyone - supplier is optional since goods are often bought from a
     market, an individual, or another informal source), at what cost,
     and how it was paid for.
 
-    By default (see PurchaseOrderCreateView), creating one of these
-    immediately increases inventory — it represents "we just bought
-    this stock" rather than a formal advance order. The DRAFT/ORDERED
-    statuses remain available for the less common case of ordering
-    ahead and receiving later via ReceivePurchaseOrderView.
+    Items can be bought in any selling unit (a box, a packet...); receiving
+    converts to base units automatically.
 
-    Payment is tracked separately via the related PurchasePayment
-    ledger (see below) rather than a single field here, so a purchase
-    can be paid in full immediately, left entirely on credit, or paid
-    off in installments over time — total_cost, total_paid,
-    balance_payable and payment_status below are always derived from
-    that ledger plus the line items, never duplicated/cached here.
+    Payment is tracked via the related PurchasePayment ledger, so total_cost,
+    total_paid, balance_payable and payment_status are always derived, never cached.
     """
     STATUS_CHOICES = (
         ('DRAFT', 'Draft'),
@@ -110,7 +117,7 @@ class PurchaseOrder(TenantOwnedModel):
     supplier = models.ForeignKey(
         Supplier, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='purchase_orders',
-        help_text="Optional — leave blank for market/individual/other informal purchases."
+        help_text="Optional - leave blank for market/individual/other informal purchases."
     )
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='purchase_orders', help_text='Destination branch')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
@@ -122,38 +129,31 @@ class PurchaseOrder(TenantOwnedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "po_number"], 
+                fields=["tenant", "po_number"],
                 name="unique_tenant_po_number"
             )
         ]
         ordering = ['-created_at']
 
-
     def __str__(self):
         return f"{self.po_number} - {self.supplier.name if self.supplier else 'No supplier'}"
 
+    # These read self.items.all() / self.payments.all() so they use the prefetch cache
+    # on list pages (no per-row aggregate queries) and fall back to a query elsewhere.
     @property
     def total_cost(self):
         """Total purchase cost: sum of quantity_ordered * unit_cost across line items."""
-        result = self.items.aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F('quantity_ordered') * F('unit_cost'),
-                    output_field=DecimalField(max_digits=14, decimal_places=2)
-                )
-            )
-        )['total']
-        return result or Decimal('0.00')
+        total = sum((i.quantity_ordered * i.unit_cost for i in self.items.all()), Decimal('0'))
+        return total.quantize(Decimal('0.01'))
 
     @property
     def total_paid(self):
         """Sum of every PurchasePayment recorded against this purchase, regardless of method."""
-        result = self.payments.aggregate(total=Sum('amount'))['total']
-        return result or Decimal('0.00')
+        return sum((p.amount for p in self.payments.all()), Decimal('0.00'))
 
     @property
     def balance_payable(self):
-        """What's still owed — the supplier liability (or self-liability for informal purchases)."""
+        """What's still owed - the supplier liability (or self-liability for informal purchases)."""
         return self.total_cost - self.total_paid
 
     @property
@@ -171,17 +171,19 @@ class PurchaseOrder(TenantOwnedModel):
         'PARTIAL': 'Partially Paid',
         'PAID': 'Fully Paid',
     }
+
     @property
     def payment_status_display(self):
         return self.PAYMENT_STATUS_LABELS[self.payment_status]
 
-        
+
 class PurchaseOrderItem(TenantOwnedModel):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='po_items')
+    # Quantities and unit_cost are in the unit of `variant` (e.g. 10 boxes at KSH 600 per box).
     quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3)
     quantity_received = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
-    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, help_text='Cost price locked in at time of order')
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, help_text='Cost price per unit, locked in at time of order')
 
     @property
     def quantity_remaining(self):
@@ -198,24 +200,12 @@ class PurchaseOrderItem(TenantOwnedModel):
 
 class PurchasePayment(TenantOwnedModel):
     """
-    One payment event against a PurchaseOrder. Multiple rows per order
-    are expected and normal — a credit purchase settled in installments
-    is just several of these over time; a purchase paid in full at
-    receipt is exactly one.
+    One payment event against a PurchaseOrder. A CASH payment is linked to the
+    CashTransaction it created in the branch's shared cash pool (see inventory/views.py).
+    BANK and MPESA payments don't touch the till, so cash_transaction stays null for those.
 
-    A CASH payment is linked to the CashTransaction it created in the
-    branch's shared cash pool (see inventory/views.py), giving a direct,
-    queryable trail from "money left the till" to "this specific stock
-    purchase" — rather than a generic, uncategorized cash withdrawal.
-    BANK and MPESA payments don't touch the till, so cash_transaction
-    stays null for those.
-
-    Referencing 'sales.CashTransaction' as a lazy string (instead of
-    importing the class) avoids a circular import: sales/models.py
-    already imports Branch from this module, so this module can't
-    import back from sales/models.py at module load time. The actual
-    CashTransaction class is only imported where instances are
-    created — inventory/views.py, which nothing in sales imports.
+    'sales.CashTransaction' is a lazy string reference to avoid a circular import
+    (sales/models.py imports Branch from this module).
     """
     PAYMENT_METHODS = (
         ('CASH', 'Cash'),
@@ -260,15 +250,15 @@ class InventoryTransfer(TenantOwnedModel):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='initiated_transfers')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "transfer_number"], 
+                fields=["tenant", "transfer_number"],
                 name="unique_tenant_transfer_number"
             )
         ]
-        
+
     def __str__(self):
         return f"Transfer {self.transfer_number}: {self.from_branch} -> {self.to_branch}"
 

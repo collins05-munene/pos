@@ -42,13 +42,14 @@
                                 {% endif %}
                             </td>
                             <td class="brand-name">
-                                {% if po.payment_status == 'PAID' %}
-                                    <span style="color: #166534; font-weight: 600;">{{ po.payment_status_display }}</span>
-                                {% elif po.payment_status == 'PARTIAL' %}
-                                    <span style="color: #b45309; font-weight: 600;">{{ po.payment_status_display }}</span>
-                                {% else %}
-                                    <span style="color: #991b1b; font-weight: 600;">{{ po.payment_status_display }}</span>
-                                {% endif %}
+                                {% with status=po.payment_status %}
+                                    <span style="font-weight: 600; color: {% if status == 'PAID' %}#166534{% elif status == 'PARTIAL' %}#b45309{% else %}#991b1b{% endif %};">
+                                        {{ po.payment_status_display }}
+                                    </span>
+                                    {% if status != 'PAID' %}
+                                        <br><small style="color: #6b7280;">Balance KSH {{ po.balance_payable }}</small>
+                                    {% endif %}
+                                {% endwith %}
                             </td>
                             <td class="brand-name">{{ po.created_at|date:"d M Y" }}</td>
                             <td class="brand-name">
