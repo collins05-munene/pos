@@ -15,7 +15,8 @@ from users.utils import log_action
 from .forms import BackupScheduleForm
 from .models import Backup, BackupSchedule
 from .services import BackupError, build_export_zip, create_backup, read_backup_gzip
-
+from notifications.models import Notification
+from notifications.utils import notify, ADMINS
 
 def _schedule(tenant):
     return BackupSchedule.objects.get_or_create(tenant=tenant)[0]
@@ -25,7 +26,13 @@ def _password_ok(request, what):
     """Downloads/exports hand over the whole business: re-check the admin's password."""
     if request.user.check_password(request.POST.get("password", "")):
         return True
+    
     log_action(request.user, "Backup Access Denied", f"Wrong password on {what}", request)
+
+    notify(request.tenant, "Failed backup access attempt",
+           f"{request.user.get_username()} entered a wrong password on {what}.",
+           level=Notification.Level.WARNING, roles=ADMINS, dedupe_hours=1)
+
     messages.error(request, "Incorrect password. Nothing was downloaded.")
     return False
 
@@ -61,6 +68,10 @@ class BackupCreateView(AdminRequiredMixin, View):
             log_action(request.user, "Backup Created", f"Manual backup #{backup.pk}", request)
             messages.success(request, "Backup created. You can download it below.")
         else:
+            notify(request.tenant, "Backup failed",
+                   f"A manual backup started by {request.user.get_username()} failed. "
+                   "Your data is not protected by this run.",
+                   level=Notification.Level.ERROR, roles=ADMINS)
             messages.error(request, "Backup failed. Please try again or contact support.")
         return redirect("backup-list")
 
@@ -92,6 +103,9 @@ class BackupDownloadView(AdminRequiredMixin, View):
             messages.error(request, str(exc))
             return redirect("backup-list")
         log_action(request.user, "Backup Downloaded", f"Backup #{backup.pk}", request)
+        notify(request.tenant, "Backup downloaded",
+               f"{request.user.get_username()} downloaded backup #{backup.pk}.",
+               roles=ADMINS, exclude_user=request.user)
         name = f"{request.tenant.slug}-backup-{backup.created_at:%Y%m%d-%H%M}.json.gz"
         return _file_response(data, "application/gzip", name)
 
@@ -105,6 +119,9 @@ class BackupExportView(AdminRequiredMixin, View):
             return redirect("backup-list")
         data = build_export_zip(request.tenant)
         log_action(request.user, "Data Exported", "Spreadsheet export (CSV zip)", request)
+        notify(request.tenant, "Data exported",
+               f"{request.user.get_username()} exported all business data as spreadsheets.",
+               roles=ADMINS, exclude_user=request.user)
         name = f"{request.tenant.slug}-data-export-{date.today():%Y%m%d}.zip"
         return _file_response(data, "application/zip", name)
 

@@ -16,6 +16,8 @@ from .services import (
     create_staff_user, list_staff, register_business, set_staff_active,
     set_staff_credential, staff_handle,
 )
+from notifications.models import Notification
+from notifications.utils import notify, MANAGEMENT
 
 
 @method_decorator(ratelimit(key="ip", rate="5/h", method="POST", block=True), name="post")
@@ -44,6 +46,14 @@ class SignupView(View):
             return JsonResponse({"errors": {"__all__": exc.messages}}, status=400)
 
         login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
+
+        notify(tenant, f"Welcome to {tenant.name}",
+               "Next steps: add your products, record a purchase to bring stock in, "
+               "then add your cashiers.", user=owner)
+        notify(tenant, "Invoice awaiting payment",
+               f"Invoice {invoice.number} for KSH {invoice.total} is ready. Pay from Billing to activate your subscription.",
+               level=Notification.Level.WARNING, user=owner)
+        
         return JsonResponse({
             "tenant": {"name": tenant.name, "business_code": tenant.slug},
             "invoice": {"number": invoice.number, "total": str(invoice.total),

@@ -7,7 +7,8 @@ from sales.cart import POSCart
 from sales.models import CashRegisterSession
 from sales.exceptions import InsufficientStockError
 from sales.utils import complete_pos_sale, resolve_user_branch
-
+from notifications.models import Notification
+from notifications.utils import notify, MANAGEMENT
 
 @require_GET
 def payment_select(request):
@@ -61,7 +62,11 @@ def process_payment(request):
         )
     except InsufficientStockError as e:
         messages.error(request, str(e))
+        notify(request.tenant, "Sale blocked: stock mismatch",
+               f"{request.user.get_username()} could not complete a sale. {e}",
+               level=Notification.Level.WARNING, roles=MANAGEMENT, dedupe_hours=6)
         return redirect('payment_select')
+    
     except ValueError as e:
         messages.error(request, str(e))
         return redirect('payment_select')
