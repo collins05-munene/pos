@@ -25,23 +25,14 @@
   function renderInvoiceRows(invoices) {
     rowsEl.innerHTML = '';
     if (!invoices || invoices.length === 0) {
-      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '6', text: 'No invoices yet.' })));
+      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '5', text: 'No invoices yet.' })));
       return;
     }
     invoices.forEach(inv => {
-      let expiryDate = inv.period_end || inv.expires_at;
-
-      if (!expiryDate && inv.issued_at) {
-        const issueDate = new Date(inv.issued_at);
-        issueDate.setMonth(issueDate.getMonth() + Number(inv.term_months || 1));
-        expiryDate = issueDate.toISOString();
-      }
-
       const tr = Duka.el('tr', {}, [
         Duka.el('td', { text: inv.number }),
         Duka.el('td', { text: `${inv.term_months} mo` }),
         Duka.el('td', { text: Duka.dt(inv.issued_at) }),
-        Duka.el('td', { text: Duka.dt(inv.expiryDate) }),
         Duka.el('td', {}, Duka.statusBadge(inv.status)),
         Duka.el('td', { class: 'num', text: Duka.money(inv.total) }),
       ]);
