@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap sp-wide">
+  {% include "support/_messages.html" %}
+  <h1>Support queue</h1>
+  <div class="sp-tabs">
+    <a href="?view=active"{% if view == 'active' %} aria-current="true"{% endif %}>Active ({{ counts.active }})</a>
+    <a href="?view=unassigned"{% if view == 'unassigned' %} aria-current="true"{% endif %}>Unassigned ({{ counts.unassigned }})</a>
+    <a href="?view=mine"{% if view == 'mine' %} aria-current="true"{% endif %}>Mine ({{ counts.mine }})</a>
+    <a href="?view=closed"{% if view == 'closed' %} aria-current="true"{% endif %}>Resolved</a>
+    <a href="?view=all"{% if view == 'all' %} aria-current="true"{% endif %}>All</a>
+    {% if counts.critical %}<span class="sp-badge sp-sev-critical">{{ counts.critical }} critical</span>{% endif %}
+  </div>
+  <form method="get" class="sp-filters">
+    <input type="hidden" name="view" value="{{ view }}">
+    <input type="search" name="q" value="{{ q }}" class="sp-input" placeholder="TKT number, subject, shop code or username" aria-label="Search tickets">
+    <select name="priority" class="sp-input" aria-label="Priority"><option value="">Any priority</option>{% for v, l in priority_choices %}{% if v %}<option value="{{ v }}"{% if priority == v %} selected{% endif %}>{{ l }}</option>{% endif %}{% endfor %}</select>
+    <select name="kind" class="sp-input" aria-label="Type"><option value="">Any type</option>{% for v, l in kind_choices %}<option value="{{ v }}"{% if kind == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    <button class="sp-btn" type="submit">Filter</button>
+  </form>
+  <table class="sp-table">
+    <thead><tr><th>Ticket</th><th>Business</th><th>Subject</th><th>Priority</th><th>Status</th><th>Agent</th><th>Updated</th></tr></thead>
+    <tbody>
+    {% for t in tickets %}
+      <tr>
+        <td><a href="{{ t.get_staff_url }}">{{ t.reference }}</a></td><td>{{ t.tenant }}</td><td>{{ t.subject }}</td>
+        <td><span class="sp-badge sp-sev-{{ t.priority|lower }}">{{ t.get_priority_display }}</span></td>
+        <td><span class="sp-badge sp-st-{{ t.status|lower }}">{{ t.get_status_display }}</span></td>
+        <td>{{ t.agent_name }}</td><td>{{ t.updated_at|timesince }} ago</td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="sp-empty">Nothing in this view.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% include "support/_pager.html" %}
+</div>
+{% endblock %}

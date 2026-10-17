@@ -1,0 +1,6 @@
+<div class="sp-field{% if field.errors %} sp-has-error{% endif %}">
+  <label for="{{ field.id_for_label }}">{{ field.label }}{% if not field.field.required %} <span class="sp-optional">(optional)</span>{% endif %}</label>
+  {{ field }}
+  {% if field.help_text %}<p class="sp-help">{{ field.help_text }}</p>{% endif %}
+  {% for e in field.errors %}<p class="sp-error">{{ e }}</p>{% endfor %}
+</div>

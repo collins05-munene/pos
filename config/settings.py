@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     "platform_admin",
     "backups",
     "notifications",
+    "support"
 ]
 
 MIDDLEWARE = [
@@ -247,3 +248,10 @@ MPESA_BILLING_CALLBACK_SECRET = env("MPESA_BILLING_CALLBACK_SECRET")
 BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]  
 
 BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
+
+
+APP_VERSION = "2026.10.1"                    # shown on every issue report
+SITE_URL = "https://pos-wctc.onrender.com"       # links inside emails
+SUPPORT_EMAIL = "collinsgitonga.dev@gmail.com"      # team inbox for new tickets and customer replies
+SUPPORT_WHATSAPP_NUMBER = "254790342156"     # digits only, international format
+SUPPORT_UPLOAD_ROOT = "/var/app/private_uploads" 

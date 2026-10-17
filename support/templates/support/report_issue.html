@@ -1,0 +1,40 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap sp-narrow">
+  {% include "support/_nav.html" with active="report" %}
+  {% include "support/_messages.html" %}
+  <h1>Report an issue</h1>
+  <p class="sp-lead">Tell us what went wrong. Your browser, device and app version are attached automatically, so you don't need to look them up.</p>
+
+  <form method="post" enctype="multipart/form-data" class="sp-form" data-support-form
+        data-suggest-url="{% url 'support:suggest' %}" data-suggest-scope="articles">
+    {% csrf_token %}
+    {{ form.client_env }}
+    {% for e in form.non_field_errors %}<p class="sp-error">{{ e }}</p>{% endfor %}
+
+    {% include "support/_field.html" with field=form.category %}
+
+    <fieldset class="sp-field">
+      <legend>How serious is it?</legend>
+      {% for radio in form.severity %}<label class="sp-radio">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}
+      {% for e in form.severity.errors %}<p class="sp-error">{{ e }}</p>{% endfor %}
+    </fieldset>
+
+    {% include "support/_field.html" with field=form.subject %}
+    {% include "support/_field.html" with field=form.description %}
+    <div class="sp-suggestions" data-suggestions hidden aria-live="polite"></div>
+    {% include "support/_field.html" with field=form.steps_to_reproduce %}
+    {% include "support/_field.html" with field=form.attachments %}
+    <p class="sp-note" data-file-note></p>
+
+    <p class="sp-note">Sent with your report: browser, operating system, device type, screen size and app version. Nothing else from your computer.</p>
+    <div class="sp-actions-row">
+      <button type="submit" class="sp-btn sp-btn-primary">Send report</button>
+      <a class="sp-btn" href="{% url 'support:home' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+<script src="{% static 'support/support.js' %}" defer></script>
+{% endblock %}

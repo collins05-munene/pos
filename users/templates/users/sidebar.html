@@ -116,6 +116,13 @@
         <li><a href="{% url 'staff:staff-list' %}">Users</a></li>
         <li><a href="{% url 'backup-list' %}">Backups</a></li>
         <li><a href="{% url 'activity-logs' %}">Audit Logs</a></li>
+        <li class="menu-title">Support</li>
+        <li><a href="{% url 'support:home' %}">Help &amp; Support</a></li>
+        <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
+        <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
+        <li><a href="{% url 'support:feature-list' %}">Feature Requests</a></li>
+        <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
+        {% if user.is_staff %}<li><a href="{% url 'support:staff-queue' %}">Support Queue</a></li>{% endif %}
     </ul>
     <div class="sidebar-footer">
         <strong>{{ user.username }}</strong>
@@ -140,7 +147,10 @@
         <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
         <li class="menu-title">Register</li>
         <li><a href="{% url 'close_register' %}">Close Register</a></li>
-        
+        <li class="menu-title">Support</li>
+        <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
+        <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
+        <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
     </ul>
     <div class="sidebar-footer">
         <strong>{{ user.first_name }} {{user.last_name}}</strong>

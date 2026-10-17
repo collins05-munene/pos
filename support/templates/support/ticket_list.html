@@ -1,0 +1,29 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="tickets" %}
+  {% include "support/_messages.html" %}
+  <h1>My tickets</h1>
+  <div class="sp-tabs">
+    <a href="?show=open"{% if show == 'open' %} aria-current="true"{% endif %}>Open</a>
+    <a href="?show=closed"{% if show == 'closed' %} aria-current="true"{% endif %}>Resolved and closed</a>
+    <a href="?show=all"{% if show == 'all' %} aria-current="true"{% endif %}>All</a>
+  </div>
+  {% if tickets %}
+  <table class="sp-table">
+    <thead><tr><th>Ticket</th><th>Subject</th><th>Type</th><th>Status</th><th>Updated</th></tr></thead>
+    <tbody>
+    {% for t in tickets %}
+      <tr><td><a href="{{ t.get_absolute_url }}">{{ t.reference }}</a></td><td>{{ t.subject }}</td><td>{{ t.get_kind_display }}</td>
+      <td><span class="sp-badge sp-st-{{ t.status|lower }}">{{ t.get_status_display }}</span></td><td>{{ t.updated_at|timesince }} ago</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% include "support/_pager.html" %}
+  {% else %}
+  <p class="sp-empty">No tickets here yet. <a href="{% url 'support:report-issue' %}">Report an issue</a> or <a href="{% url 'support:contact' %}">message support</a> and it will show up in this list.</p>
+  {% endif %}
+</div>
+{% endblock %}

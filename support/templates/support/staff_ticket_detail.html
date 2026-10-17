@@ -1,0 +1,74 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap sp-wide">
+  {% include "support/_messages.html" %}
+  <p class="sp-ref"><a href="{% url 'support:staff-queue' %}">Support queue</a> / {{ ticket.reference }}</p>
+  <h1>{{ ticket.subject }}</h1>
+  <p class="sp-badges">
+    <span class="sp-badge sp-st-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span>
+    <span class="sp-badge sp-sev-{{ ticket.priority|lower }}">Priority: {{ ticket.get_priority_display }}</span>
+    <span class="sp-badge">Customer severity: {{ ticket.get_severity_display }}</span>
+    <span class="sp-badge">{{ ticket.get_kind_display }}</span>{% if ticket.category %}<span class="sp-badge">{{ ticket.get_category_display }}</span>{% endif %}
+  </p>
+
+  <div class="sp-cols">
+    <div>
+      <section class="sp-thread" aria-label="Conversation">
+        <article class="sp-bubble sp-from-you">
+          <header>{{ ticket.customer_name }} <time>{{ ticket.created_at|date:"j M Y, g:i A" }}</time></header>
+          <p>{{ ticket.description|linebreaksbr }}</p>
+          {% if ticket.steps_to_reproduce %}<h3>Steps to reproduce</h3><p>{{ ticket.steps_to_reproduce|linebreaksbr }}</p>{% endif %}
+          {% include "support/_attachments.html" with attachments=first_attachments %}
+        </article>
+        {% for m in thread %}
+        <article class="sp-bubble {% if m.is_internal %}sp-internal{% elif m.is_staff_reply %}sp-from-support{% else %}sp-from-you{% endif %}">
+          <header>{% if m.is_internal %}Internal note, only your team sees this. {% endif %}{{ m.author_full_name }} <time>{{ m.created_at|date:"j M, g:i A" }}</time></header>
+          <p>{{ m.body|linebreaksbr }}</p>
+          {% include "support/_attachments.html" with attachments=m.attachments.all %}
+        </article>
+        {% endfor %}
+      </section>
+
+      <form method="post" enctype="multipart/form-data" class="sp-form" data-support-form>
+        {% csrf_token %}<input type="hidden" name="action" value="reply">
+        {% include "support/_field.html" with field=reply_form.body %}
+        {% include "support/_field.html" with field=reply_form.attachments %}
+        <p class="sp-note" data-file-note></p>
+        <label class="sp-check">{{ reply_form.is_internal }} {{ reply_form.is_internal.label }}</label>
+        <button type="submit" class="sp-btn sp-btn-primary">Send</button>
+      </form>
+    </div>
+
+    <aside class="sp-side">
+      <form method="post" class="sp-form sp-panel">
+        {% csrf_token %}<input type="hidden" name="action" value="manage">
+        <h2>Manage</h2>
+        {% include "support/_field.html" with field=manage_form.status %}
+        {% include "support/_field.html" with field=manage_form.priority %}
+        {% include "support/_field.html" with field=manage_form.assigned_to %}
+        {% include "support/_field.html" with field=manage_form.resolution_summary %}
+        <button type="submit" class="sp-btn sp-btn-primary">Save changes</button>
+      </form>
+      {% if ticket.assigned_to != user %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="assign_me"><button class="sp-btn" type="submit">Assign to me</button></form>
+      {% endif %}
+
+      <h2>Customer</h2>
+      <dl class="sp-dl"><dt>Business</dt><dd>{{ ticket.tenant }}</dd><dt>User</dt><dd>{{ ticket.customer_name }}</dd><dt>Role</dt><dd>{{ ticket.created_by.get_role_display|default:"-" }}</dd><dt>Email</dt><dd>{{ ticket.created_by.email|default:"-" }}</dd></dl>
+      {% if whatsapp_url %}<a class="sp-btn sp-btn-wa" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>{% endif %}
+
+      {% if ticket.environment %}
+      <h2>Environment</h2>
+      <dl class="sp-dl">{% for k, v in ticket.environment.items %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+      {% endif %}
+
+      <h2>History</h2>
+      <ol class="sp-history">{% for e in events %}<li>{{ e.detail }}{% if not e.visible_to_customer %} (internal){% endif %} <time>{{ e.created_at|date:"j M, g:i A" }}</time></li>{% endfor %}</ol>
+      {% if ticket.first_response_at %}<p class="sp-note">First reply {{ ticket.first_response_at|timesince:ticket.created_at }} after it was opened.</p>{% endif %}
+    </aside>
+  </div>
+</div>
+<script src="{% static 'support/support.js' %}" defer></script>
+{% endblock %}

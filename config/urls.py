@@ -44,6 +44,8 @@ urlpatterns = [
     path("backups/", include("backups.urls")),
 
     path("", include("notifications.urls")),
+
+    path('support/', include('support.urls'))
 ]
 
 

@@ -1,0 +1,23 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="help" %}
+  <div class="sp-cols">
+    <article class="sp-article">
+      <p class="sp-ref"><a href="{% url 'support:help-center' %}">Help center</a> / {{ article.get_topic_display }}</p>
+      <h1>{{ article.title }}</h1>
+      <p class="sp-lead">{{ article.summary }}</p>
+      {% if article.embed_url %}
+      <div class="sp-video"><iframe src="{{ article.embed_url }}" title="{{ article.title }}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+      {% endif %}
+      <div class="sp-prose">{{ article.body|safe }}</div>
+      <p class="sp-note">Updated {{ article.updated_at|date:"j M Y" }}. Still stuck? <a href="{% url 'support:report-issue' %}">Report an issue</a> or <a href="{% url 'support:contact' %}">message support</a>.</p>
+    </article>
+    <aside class="sp-side">
+      {% if related %}<h2>More on {{ article.get_topic_display }}</h2><ul class="sp-list">{% for r in related %}<li><a href="{{ r.get_absolute_url }}">{{ r.title }}</a></li>{% endfor %}</ul>{% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

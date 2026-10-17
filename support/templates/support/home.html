@@ -1,0 +1,42 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="home" %}
+  {% include "support/_messages.html" %}
+  <h1>How can we help?</h1>
+  <form class="sp-search" method="get" action="{% url 'support:help-center' %}" role="search">
+    <input type="search" name="q" class="sp-input" placeholder="Search the help center, e.g. close register" aria-label="Search the help center">
+    <button class="sp-btn sp-btn-primary" type="submit">Search</button>
+  </form>
+  {% include "support/_availability.html" %}
+
+  <div class="sp-tiles">
+    <a class="sp-tile" href="{% url 'support:report-issue' %}"><strong>Report an issue</strong><span>Something isn't working. We'll capture your browser and app version for you.</span></a>
+    {% if user.role == 'ADMIN' or user.role == 'MANAGER' or user.is_superuser %}<a class="sp-tile" href="{% url 'support:feature-list' %}"><strong>Request a feature</strong><span>Suggest an improvement or vote on what others asked for.</span></a>{% endif %}
+    <a class="sp-tile" href="{% url 'support:contact' %}"><strong>Message support</strong><span>Ask a question and attach files. We reply here and by email.</span></a>
+    {% if whatsapp_url %}<a class="sp-tile" href="{{ whatsapp_url }}" target="_blank" rel="noopener"><strong>Chat on WhatsApp</strong><span>Opens WhatsApp with your shop name filled in.</span></a>{% endif %}
+  </div>
+
+  {% if featured %}
+  <h2>Popular guides</h2>
+  <ul class="sp-list">
+    {% for a in featured %}<li><a href="{{ a.get_absolute_url }}">{{ a.title }}</a><span>{{ a.summary }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if recent_tickets %}
+  <h2>Your recent tickets</h2>
+  <table class="sp-table">
+    <thead><tr><th>Ticket</th><th>Subject</th><th>Status</th><th>Updated</th></tr></thead>
+    <tbody>
+    {% for t in recent_tickets %}
+      <tr><td><a href="{{ t.get_absolute_url }}">{{ t.reference }}</a></td><td>{{ t.subject }}</td>
+      <td><span class="sp-badge sp-st-{{ t.status|lower }}">{{ t.get_status_display }}</span></td><td>{{ t.updated_at|timesince }} ago</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="contact" %}
+  {% include "support/_messages.html" %}
+  <h1>Contact support</h1>
+  {% include "support/_availability.html" %}
+
+  <div class="sp-cols">
+    <form method="post" enctype="multipart/form-data" class="sp-form" data-support-form>
+      {% csrf_token %}
+      {{ form.client_env }}
+      {% for e in form.non_field_errors %}<p class="sp-error">{{ e }}</p>{% endfor %}
+      {% include "support/_field.html" with field=form.subject %}
+      {% include "support/_field.html" with field=form.message %}
+      {% include "support/_field.html" with field=form.attachments %}
+      <p class="sp-note" data-file-note></p>
+      <button type="submit" class="sp-btn sp-btn-primary">Send message</button>
+    </form>
+
+    <aside class="sp-side">
+      {% if whatsapp_url %}<a class="sp-btn sp-btn-wa" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Chat on WhatsApp</a>{% endif %}
+      <h2>Expected first reply</h2>
+      <dl class="sp-dl">{% for label, text in availability.targets %}<dt>{{ label }}</dt><dd>{{ text }}</dd>{% endfor %}</dl>
+      <h2>Support hours</h2>
+      <dl class="sp-dl">{% for day, hours in availability.schedule %}<dt>{{ day }}</dt><dd>{{ hours }}</dd>{% endfor %}</dl>
+      <p class="sp-note">Times are {{ availability.timezone }}. Replies also arrive by email.</p>
+    </aside>
+  </div>
+</div>
+<script src="{% static 'support/support.js' %}" defer></script>
+{% endblock %}
