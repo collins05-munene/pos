@@ -22,6 +22,7 @@ class Category(TenantOwnedModel):
     slug = models.SlugField(max_length=120)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subcategories')
     created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
@@ -35,6 +36,7 @@ class Category(TenantOwnedModel):
 class Brand(TenantOwnedModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
@@ -47,6 +49,7 @@ class Brand(TenantOwnedModel):
 class UnitOfMeasure(TenantOwnedModel):
     name = models.CharField(max_length=100)
     short_name = models.CharField(max_length=10)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
@@ -61,9 +64,7 @@ class Product(TenantOwnedModel):
     sku_prefix = models.CharField(max_length=50, help_text="Base SKU prefix for this product line")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    # Legacy: the supplier is now recorded on each purchase. Kept so old data isn't lost.
     supplier = models.ForeignKey('supplier.Supplier', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    # The BASE unit: stock is counted in this unit (Tablet, Kilogram, Piece ...).
     unit_of_measure = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, verbose_name="Unit of Measure")
     description = models.TextField(blank=True)
     has_variations = models.BooleanField(default=False)
@@ -117,7 +118,6 @@ class ProductVariant(TenantOwnedModel):
                                    name="variant_units_per_pack_gt_0"),
         ]
 
-    # ---- helpers ---------------------------------------------------------
     @property
     def is_packaging(self):
         return self.base_variant_id is not None

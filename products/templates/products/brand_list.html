@@ -16,8 +16,7 @@
             Add New Brand
         </a>
     </div>
-
-   
+    
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
@@ -29,25 +28,42 @@
             </thead>
             <tbody>
                 {% for brand in brands %}
-                <tr>
-                    <td class="brand-name">{{ brand.name }}</td>
-                    <td class="brand-desc">{{ brand.description|default:"No description provided." }}</td>
-                    <td class="brand-actions">
-                        <a href="{% url 'brand-update' brand.id %}" class="action-link edit-link">Update</a>
-                        <a href="{% url 'brand-delete' brand.id %}" class="action-link delete-link">Delete</a>
-                    </td>
-                </tr>
+                    <tr>
+                        <td class="brand-name"            display: inline-flex;
+            gap: 4px;
+            padding: 4px;
+            margin: 0 0 1rem;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }>{{ brand.name }}</td>
+                        <td class="brand-desc">{{ brand.description|default:"No description provided." }}</td>
+                        <td class="brand-actions">
+                            {% if show_archived %}
+                                <form method="post" action="{% url 'brand-restore' brand.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="action-link edit-link">Restore</button>
+                                </form>
+                            {% else %}
+                                <a href="{% url 'brand-update' brand.id %}" class="action-link edit-link">Update</a>
+                                <a href="{% url 'brand-delete' brand.id %}" class="action-link delete-link">Delete</a>
+                            {% endif %}
+                        </td>
+                    </tr>
                 {% empty %}
-                
-                <tr>
-                    <td colspan="3" class="empty-state-row">
-                        <div class="empty-state">
-                            <h3>No brands registered</h3>
-                            <p>Get started by adding your first brand manufacture to the system.</p>
-                            <a href="{% url 'brand-create' %}" class="btn btn-secondary">Add one now</a>
-                        </div>
-                    </td>
-                </tr>
+                    <tr>
+                        <td colspan="3" class="empty-state-row">
+                            <div class="empty-state">
+                                {% if show_archived %}
+                                    <h3>No archived brands</h3>
+                                {% else %}
+                                    <h3>No brands registered</h3>
+                                    <p>Get started by adding your first brand manufacture to the system.</p>
+                                    <a href="{% url 'brand-create' %}" class="btn btn-secondary">Add one now</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -66,7 +82,7 @@
                 
                     {% if page_obj.has_previous %}
                         <li class="pagination-item">
-                            <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
+                            <a href="?page={{ page_obj.previous_page_number }}{% if show_archived %}&show=archived{% endif %}" class="pagination-link">Previous</a>
                         </li>
                     {% else %}
                         <li class="pagination-item">
@@ -82,7 +98,7 @@
             
                     {% if page_obj.has_next %}
                         <li class="pagination-item">
-                            <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
+                            <a href="?page={{ page_obj.next_page_number }}{% if show_archived %}&show=archived{% endif %}" class="pagination-link">Next</a>
                         </li>
                     {% else %}
                         <li class="pagination-item">
