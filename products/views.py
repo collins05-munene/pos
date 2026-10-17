@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, DetailView
 from django.db import transaction
@@ -19,6 +19,7 @@ from .forms import (
 )
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
+from .mixins import ArchiveFilterMixin, SafeDeleteMixin
 
 _PRICE_FIELDS = (("retail_price", "retail"), ("cost_price", "cost"))
 
@@ -43,6 +44,37 @@ def _price_changes(variants, packs):
     return lines
 
 
+    
+class RestoreView(View):
+    """POST-only restore. Subclasses set `model`, `list_url_name`, `label`."""
+    model = None
+    list_url_name = None
+    label = "Item"
+
+    def get_object(self, request, pk):
+        return get_object_or_404(self.model, pk=pk, tenant=request.tenant)
+
+    def check_restorable(self, obj):
+        """Return an error message if the object can't be restored yet, else None."""
+        return None
+
+    def post(self, request, pk):
+        if request.user.role != 'ADMIN':   
+            messages.error(request, f"You don't have permission to restore {self.label.lower()}s.")
+            return redirect(self.list_url_name)
+
+        obj = self.get_object(request, pk)
+        error = self.check_restorable(obj)
+        if error:
+            messages.error(request, error)
+            return redirect(f"{reverse(self.list_url_name)}?show=archived")
+
+        obj.is_active = True
+        obj.save(update_fields=['is_active'])
+        messages.success(request, f"{self.label} '{obj}' was restored.")
+        return redirect(self.list_url_name)
+
+    
 class _QuickCreateView(CashierRequiredMixin, View):
     model = None
     label = ""
@@ -67,7 +99,7 @@ class _QuickCreateView(CashierRequiredMixin, View):
         return JsonResponse({"id": obj.pk, "name": obj.name}, status=201)
 
 
-class CategoryListView(CashierRequiredMixin, ListView):
+class CategoryListView(ArchiveFilterMixin,CashierRequiredMixin, ListView):
     model = Category
     template_name = 'products/category_list.html'
     context_object_name = 'categories'
@@ -94,7 +126,7 @@ class CategoryUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     success_url = reverse_lazy('category-list')
 
 
-class CategoryDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
+class CategoryDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Category
     template_name = 'products/category_confirm_delete.html'
     success_url = reverse_lazy('category-list')
@@ -140,13 +172,13 @@ class BrandUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     success_url = reverse_lazy('brand-list')
 
 
-class BrandDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
+class BrandDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = Brand
     template_name = 'products/brand_confirm_delete.html'
     success_url = reverse_lazy('brand-list')
 
 
-class UoMListView(CashierRequiredMixin, ListView):
+class UoMListView(ArchiveFilterMixin, CashierRequiredMixin, ListView):
     model = UnitOfMeasure
     context_object_name = 'uoms'
     template_name = 'products/uom_list.html'
@@ -167,7 +199,7 @@ class UoMUpdateView(AuditLogMixin, CashierRequiredMixin, UpdateView):
     success_url = reverse_lazy('uom-list')
 
 
-class UoMDeleteView(AuditLogMixin, AdminRequiredMixin, DeleteView):
+class UoMDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, DeleteView):
     model = UnitOfMeasure
     template_name = 'products/uom_confirm_delete.html'
     success_url = reverse_lazy('uom-list')
@@ -179,6 +211,18 @@ class ProductListView(CashierRequiredMixin, ListView):
     context_object_name = 'products'
     paginate_by = 15
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
+
+
+    def get_queryset(self):
+        qs = super().get_queryset()     
+        if self.request.GET.get('show') == 'archived':
+            return qs.filter(is_active=False)
+        return qs.filter(is_active=True)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['show_archived'] = self.request.GET.get('show') == 'archived'
+        return ctx
 
 
 class ProductEditorMixin:
@@ -401,10 +445,15 @@ class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
         return redirect('product-detail', pk=self.object.pk)
 
 
-class ProductDeleteView(AdminRequiredMixin, DeleteView):
+class ProductDeleteView(SafeDeleteMixin, AdminRequiredMixin, DeleteView):
     model = Product
     template_name = 'products/product_confirm_delete.html'
     success_url = reverse_lazy('product-list')
+
+    def archive(self, obj):
+        with transaction.atomic():
+            obj.variants.update(is_active=False)  
+            super().archive(obj)
 
 
 class ProductDetailView(CashierRequiredMixin, DetailView):
@@ -414,3 +463,54 @@ class ProductDetailView(CashierRequiredMixin, DetailView):
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related('variants__packagings')
+
+
+class ProductRestoreView(View):
+    """POST-only: restoring changes data, so it shouldn't happen on a GET."""
+
+    def post(self, request, pk):
+        product = get_object_or_404(Product, pk=pk, tenant=request.tenant)
+
+        if request.user.role != 'ADMIN':   
+            messages.error(request, "You don't have permission to restore products.")
+            return redirect('product-list')
+
+        blockers = []
+        if not product.category.is_active:
+            blockers.append(f"category '{product.category}'")
+        if not product.unit_of_measure.is_active:
+            blockers.append(f"unit of measure '{product.unit_of_measure}'")
+        if blockers:
+            messages.error(
+                request,
+                f"Restore the {' and '.join(blockers)} first, or edit the product to use another."
+            )
+            return redirect(f"{reverse('product-list')}?show=archived")
+
+        with transaction.atomic():
+            product.is_active = True
+            product.save(update_fields=['is_active'])
+            product.variants.update(is_active=True)   
+
+        messages.success(request, f"'{product.name}' was restored.")
+        return redirect('product-list')
+
+
+
+class CategoryRestoreView(RestoreView):
+    model = Category
+    list_url_name = 'category-list'
+    label = "Category"
+
+    def check_restorable(self, obj):
+        if obj.parent_id and not obj.parent.is_active:
+            return f"Restore the parent category '{obj.parent}' first."
+        return None
+
+class UoMRestoreView(RestoreView):
+    model = UnitOfMeasure
+    list_url_name = 'uom-list'
+    label = "Unit of Measure"
+
+ 
+

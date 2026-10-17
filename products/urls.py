@@ -25,4 +25,8 @@ urlpatterns = [
 
     path('categories/quick-create/', views.CategoryQuickCreateView.as_view(), name='category-quick-create'),
     path('brands/quick-create/', views.BrandQuickCreateView.as_view(), name='brand-quick-create'),
+
+    path('<int:pk>/restore/', views.ProductRestoreView.as_view(), name='product-restore'),
+    path('categories/<int:pk>/restore/', views.CategoryRestoreView.as_view(), name='category-restore'),
+    path('uoms/<int:pk>/restore/', views.UoMRestoreView.as_view(), name='uom-restore'),
 ]

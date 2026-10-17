@@ -104,17 +104,6 @@
                     <span>Active in POS</span>
                 </label>
             </div>
-
-            {% if not object %}
-                <div class="info-note">
-                    <span>&#9432;</span>
-                    <div>
-                        <strong>Stock is not entered here.</strong>
-                        Set up the product, its variants and selling units on this page. When you save you go
-                        straight to the purchase form, which is what brings the stock in (with cost, supplier and payment).
-                    </div>
-                </div>
-            {% endif %}
         </div>
 
         <div class="form-section" id="variants-section">
@@ -186,7 +175,6 @@
             <button type="button" id="add-pack-btn" class="btn-add">+ Add selling unit</button>
         </div>
 
-        <!-- Hidden template used by JS to clone new variant rows -->
         <table class="empty-form-template">
             <tr class="variant-row empty-form-row">
                 {{ variants.empty_form.id }}
@@ -203,7 +191,6 @@
             </tr>
         </table>
 
-        <!-- Hidden template used by JS to clone new selling-unit rows -->
         <template id="empty-pack-form">
             {% include 'products/_pack_row.html' with f=packs.empty_form %}
         </template>
@@ -234,7 +221,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const addPackBtn = document.querySelector('#add-pack-btn');
     const baseUnitNote = document.querySelector('#base-unit-note');
 
-    // ---------- helpers ----------
     function baseUnitName() {
         if (!uomSelect || !uomSelect.value) return 'base unit';
         const text = uomSelect.options[uomSelect.selectedIndex].text;
@@ -258,7 +244,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return el ? el.value.trim() : '';
     }
 
-    // ---------- variant select inside each selling-unit row ----------
     function refreshVariantOptions() {
         const rows = liveVariantRows();
         packsSection.classList.toggle('single-variant', rows.length <= 1);
@@ -282,7 +267,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // ---------- selling-unit rows ----------
     function updatePreview(row) {
         const name = row.querySelector('input[name$="-unit_name"]').value.trim();
         const per = parseFloat(row.querySelector('input[name$="-units_per_pack"]').value);
@@ -347,7 +331,6 @@ document.addEventListener('DOMContentLoaded', function () {
         removePackRow(e.target.closest('.pack-row'));
     });
 
-    // ---------- variant rows ----------
     function syncVariantUI() {
         const multi = hasVariationsCheckbox.checked;
         addVariantBtn.style.display = multi ? 'inline-block' : 'none';
@@ -357,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
         refreshVariantOptions();
     }
 
-    // Product already has several variants but the box is unticked: tick it.
+    
     if (liveVariantRows().length > 1 && !hasVariationsCheckbox.checked) {
         hasVariationsCheckbox.checked = true;
     }
@@ -386,7 +369,6 @@ document.addEventListener('DOMContentLoaded', function () {
         syncVariantUI();
     });
 
-    // Single remove handler; always keeps at least one variant.
     variantTbody.addEventListener('click', function (e) {
         if (!e.target.classList.contains('remove-variant-btn')) return;
         if (liveVariantRows().length <= 1) return;
@@ -408,7 +390,6 @@ document.addEventListener('DOMContentLoaded', function () {
         syncVariantUI();
     });
 
-    // Keep the "For variant" lists in step with the SKUs being typed.
     variantTbody.addEventListener('input', function (e) {
         if (e.target.name && e.target.name.endsWith('-sku')) refreshVariantOptions();
     });

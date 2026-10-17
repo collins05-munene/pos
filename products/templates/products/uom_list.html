@@ -16,7 +16,11 @@
             Add New Unit of Measure
         </a>
     </div>
-
+    <div class="list-filter" style="margin-bottom: 10px;">
+         <a href="{% url 'product-list' %}" class="action-link {% if not show_archived %}active{% endif %}" style="border: 1px solid #000000;">Active</a>
+    
+        <a href="{% url 'product-list' %}?show=archived" class="action-link {% if show_archived %}active{% endif %}" style=" background-color: #d4d7da; border: 1px solid #000000;">Deleted</a>
+    </div>
    
     <div class="table-wrapper">
         <table class="data-table">
@@ -34,22 +38,32 @@
                     <td class="brand-desc">{{ uom.short_name|default:"No short name provided." }}</td>
                     
                     <td class="brand-actions">
-                        <a href="{% url 'uom-update' uom.id %}" class="action-link edit-link">Update</a>
-                        <a href="{% url 'uom-delete' uom.id %}" class="action-link delete-link">Delete</a>
+                        {% if show_archived %}
+                            <form method="post" action="{% url 'uom-restore' uom.id %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="action-link edit-link">Restore</button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'uom-update' uom.id %}" class="action-link edit-link">Update</a>
+                            <a href="{% url 'uom-delete' uom.id %}" class="action-link delete-link">Delete</a>
+                        {% endif %}
                     </td>
                 </tr>
-                {% empty %}
-                
+            {% empty %}
                 <tr>
                     <td colspan="3" class="empty-state-row">
                         <div class="empty-state">
-                            <h3>No unit of measure registered</h3>
-                            <p>Get started by adding your first unit of measure to the system.</p>
-                            <a href="{% url 'uom-create' %}" class="btn btn-secondary">Add one now</a>
+                            {% if show_archived %}
+                                <h3>No archived Units of Measure</h3>
+                            {% else %}
+                                <h3>No brands registered</h3>
+                                <p>Get started by adding your first brand manufacture to the system.</p>
+                                <a href="{% url 'brand-create' %}" class="btn btn-secondary">Add one now</a>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
-                {% endfor %}
+            {% endfor %}
             </tbody>
         </table>
     </div>

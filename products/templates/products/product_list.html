@@ -18,7 +18,12 @@
         
     </div>
 
-   
+    <div class="list-filter" style="margin-bottom: 10px;">
+         <a href="{% url 'product-list' %}" class="action-link {% if not show_archived %}active{% endif %}" style="border: 1px solid #000000;">Active</a>
+    
+        <a href="{% url 'product-list' %}?show=archived" class="action-link {% if show_archived %}active{% endif %}" style=" background-color: #d4d7da; border: 1px solid #000000;">Deleted</a>
+    </div>
+
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
@@ -49,11 +54,18 @@
                     </td>
                     
                     <td class="brand-actions">
-                        {% if user.role == 'ADMIN' %}
+                        {% if show_archived %}
+                            {% if user.role == 'ADMIN' %}
+                                <form method="post" action="{% url 'product-restore' product.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="action-link edit-link">Restore</button>
+                                </form>
+                            {% endif %}
+                            <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
+                        {% elif user.role == 'ADMIN' %}
                             <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
                             <a href="{% url 'product-delete' product.id %}" class="action-link delete-link">Delete</a>
                             <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
-                            
                         {% elif user.role == 'CASHIER' %}
                             <a href="{% url 'product-update' product.id %}" class="action-link edit-link">Update</a>
                             <a href="{% url 'product-detail' product.id %}" class="action-link edit-link">View</a>
@@ -61,16 +73,19 @@
                     </td>
                 </tr>
                 {% empty %}
-                
-                <tr>
-                    <td colspan="8" class="empty-state-row">
-                        <div class="empty-state">
-                            <h3>No Products registered</h3>
-                            <p>Get started by adding your first product to the system.</p>
-                            <a href="{% url 'product-create' %}" class="btn btn-secondary">Add one now</a>
-                        </div>
-                    </td>
-                </tr>
+                    <tr>
+                        <td colspan="7" class="empty-state-row">
+                            <div class="empty-state">
+                                {% if show_archived %}
+                                    <h3>No deleted products</h3>
+                                {% else %}
+                                    <h3>No Products registered</h3>
+                                    <p>Get started by adding your first product to the system.</p>
+                                    <a href="{% url 'product-create' %}" class="btn btn-secondary">Add one now</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -88,7 +103,7 @@
             
                 {% if page_obj.has_previous %}
                     <li class="pagination-item">
-                        <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
+                        <a href="?page={{ page_obj.previous_page_number }}{% if show_archived %}&show=archived{% endif %}" class="pagination-link">Previous</a>
                     </li>
                 {% else %}
                     <li class="pagination-item">
@@ -104,7 +119,7 @@
            
                 {% if page_obj.has_next %}
                     <li class="pagination-item">
-                        <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
+                       <a href="?page={{ page_obj.next_page_number }}{% if show_archived %}&show=archived{% endif %}" class="pagination-link">Next</a>
                     </li>
                 {% else %}
                     <li class="pagination-item">
