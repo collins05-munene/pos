@@ -1,5 +1,4 @@
-/* Support module. Everything is prefixed .sp- so it can't collide with the app's own CSS.
-   Palette follows the POS: slate text, indigo accent, emerald/amber/rose for state. */
+
 .sp-wrap{max-width:980px;margin:0 auto;padding:8px 4px 56px;color:#0f172a;line-height:1.5}
 .sp-wrap.sp-narrow{max-width:720px}
 .sp-wrap.sp-wide{max-width:1180px}
@@ -25,7 +24,6 @@
 .sp-flash-success{background:#ecfdf5;color:#065f46}
 .sp-flash-error{background:#fff1f2;color:#9f1239}
 
-/* Availability: the one element that changes with the clock */
 .sp-availability{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:8px;margin:14px 0;border:1px solid #e2e8f0;background:#f8fafc}
 .sp-availability p{margin:0}
 .sp-dot{width:10px;height:10px;border-radius:50%;background:#94a3b8;margin-top:7px;flex:none}
@@ -83,7 +81,6 @@
 .sp-history{margin:0;padding-left:18px;font-size:.88rem;color:#334155}
 .sp-history time,.sp-bubble time{display:block;color:#94a3b8;font-size:.78rem}
 
-/* Forms */
 .sp-form{margin:12px 0}
 .sp-field{margin:0 0 16px;border:0;padding:0}
 .sp-field label,.sp-field legend{display:block;font-weight:600;margin-bottom:6px;padding:0}
@@ -99,7 +96,6 @@
 .sp-suggestions ul{margin:0;padding-left:18px}
 .sp-suggestions li span{display:block;color:#475569;font-size:.86rem}
 
-/* Conversation: the part people actually read */
 .sp-thread{display:flex;flex-direction:column;gap:12px;margin:8px 0 20px}
 .sp-bubble{border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;background:#fff;max-width:92%}
 .sp-bubble header{font-weight:600;font-size:.9rem;margin-bottom:4px}

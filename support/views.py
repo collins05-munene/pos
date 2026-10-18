@@ -37,7 +37,6 @@ def _wa_message(request, ticket=None):
     return whatsapp_url(text)
 
 
-# ------------------------------------------------------------------ customer
 class SupportHomeView(CashierRequiredMixin, TenantRequiredMixin, TemplateView):
     template_name = "support/home.html"
 
@@ -163,7 +162,6 @@ class TicketDetailView(
         return self.render_to_response(self.get_context_data(object=ticket, reply_form=form))
 
 
-# ----------------------------------------------------------- feature requests
 class FeatureListView(AdminRequiredMixin, ListView):
     template_name = "support/feature_list.html"
     context_object_name = "features"
@@ -230,7 +228,6 @@ class FeatureVoteView(AdminRequiredMixin, PostRateLimitMixin, View):
         return redirect(nxt)
 
 
-# ---------------------------------------------------------------- help center
 class HelpCenterView(CashierRequiredMixin, TemplateView):
     template_name = "support/help_center.html"
 
@@ -323,7 +320,6 @@ class AttachmentDownloadView(LoginRequiredMixin, View):
         return resp
 
 
-# ----------------------------------------------------------------- team queue
 _CLOSED = [Ticket.Status.RESOLVED, Ticket.Status.CLOSED]
 
 

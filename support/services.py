@@ -28,7 +28,6 @@ log = logging.getLogger(__name__)
 _UNSET = object()
 
 
-# ---------------------------------------------------------------- environment
 _BROWSERS = [
     ("Edge", r"Edg(?:e|A|iOS)?/([\d.]+)"),
     ("Opera", r"OPR/([\d.]+)"),
@@ -91,7 +90,6 @@ def capture_environment(request, raw_client=""):
     return env
 
 
-# -------------------------------------------------------------------- helpers
 def _clip(text, n):
     text = (text or "").strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "..."
@@ -146,7 +144,6 @@ def _save_attachments(ticket, message, user, files):
         )
 
 
-# ------------------------------------------------------------- notifications
 def _notify_customer(ticket, title, body, level=None):
     ticket_id = ticket.pk
 
@@ -189,7 +186,6 @@ def _notify_team(ticket, headline, extra=""):
     transaction.on_commit(run)
 
 
-# --------------------------------------------------------------------- tickets
 @transaction.atomic
 def create_ticket(*, tenant, user, kind, subject, description, category="",
                   severity=Severity.MEDIUM, steps="", environment=None, files=()):
@@ -306,7 +302,6 @@ def update_ticket(ticket, *, actor, status=_UNSET, priority=_UNSET, assigned_to=
     return ticket
 
 
-# ------------------------------------------------------------ feature requests
 @transaction.atomic
 def create_feature_request(*, tenant, user, title, description, module):
     fr = FeatureRequest.objects.create(

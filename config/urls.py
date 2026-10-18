@@ -45,7 +45,8 @@ urlpatterns = [
 
     path("", include("notifications.urls")),
 
-    path('support/', include('support.urls'))
+    path('support/', include('support.urls')),
+    path("platform/helpdesk/", include("platform_admin.helpdesk_urls")),
 ]
 
 

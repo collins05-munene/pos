@@ -21,14 +21,6 @@ class Severity(models.TextChoices):
     CRITICAL = "CRITICAL", "Critical"
 
 
-# --------------------------------------------------------------------------
-# Tickets
-#
-# Ticket is deliberately a plain model with an explicit `tenant` FK instead of
-# TenantOwnedModel: your support team must see tickets across every tenant, and
-# a tenant-scoped default manager would hide them. Customer-facing views scope
-# explicitly with TenantScopedQuerysetMixin; staff views use _base_manager.
-# --------------------------------------------------------------------------
 class Ticket(models.Model):
     class Kind(models.TextChoices):
         ISSUE = "ISSUE", "Issue report"
@@ -66,7 +58,6 @@ class Ticket(models.Model):
     description = models.TextField()
     steps_to_reproduce = models.TextField(blank=True)
 
-    # Severity is what the customer says; priority is what your team decides.
     severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.MEDIUM)
     priority = models.CharField(max_length=10, choices=Severity.choices, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
@@ -104,7 +95,6 @@ class Ticket(models.Model):
             self.priority = self.severity
         super().save(*args, **kwargs)
         if creating and self.number is None:
-            # pk is unique and race-free, so TKT numbers can't collide.
             self.number = 1000 + self.pk
             type(self)._base_manager.filter(pk=self.pk).update(number=self.number)
 
@@ -112,7 +102,7 @@ class Ticket(models.Model):
     def reference(self):
         return f"TKT-{self.number}" if self.number else "TKT-?"
 
-    # Null-safe names for templates (users can be deleted, tickets can be unassigned).
+    
     @property
     def customer_name(self):
         u = self.created_by
@@ -147,8 +137,6 @@ class TicketMessage(models.Model):
     )
     body = models.TextField()
     is_staff_reply = models.BooleanField(default=False)
-    # Internal notes are never shown to customers, never emailed, and their
-    # attachments are blocked from customer downloads.
     is_internal = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -229,9 +217,6 @@ class TicketEvent(models.Model):
         ordering = ["created_at", "pk"]
 
 
-# --------------------------------------------------------------------------
-# Feature requests (one public board shared by all customers)
-# --------------------------------------------------------------------------
 class FeatureRequest(models.Model):
     class Module(models.TextChoices):
         SALES = "SALES", "Sales and POS terminal"
@@ -255,16 +240,13 @@ class FeatureRequest(models.Model):
     description = models.TextField()
     module = models.CharField(max_length=14, choices=Module.choices, default=Module.OTHER)
     status = models.CharField(max_length=14, choices=Status.choices, default=Status.UNDER_REVIEW)
-    # Shown publicly next to the status, e.g. "Planned for the December release".
     status_note = models.CharField(max_length=200, blank=True)
-    # Sent to everyone who voted when the status becomes Released.
     release_notes = models.TextField(blank=True)
 
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="feature_requests",
     )
-    # Origin business. Never shown to other customers.
     tenant = models.ForeignKey(Tenant, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     ticket = models.OneToOneField(
         Ticket, null=True, blank=True, on_delete=models.SET_NULL, related_name="feature_request",
@@ -301,9 +283,6 @@ class FeatureVote(models.Model):
         ]
 
 
-# --------------------------------------------------------------------------
-# Help center (global content, written by your team in the admin)
-# --------------------------------------------------------------------------
 _YT = re.compile(r"^https://(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)([\w-]{11})")
 _VIMEO = re.compile(r"^https://(?:player\.)?vimeo\.com/(?:video/)?(\d+)")
 

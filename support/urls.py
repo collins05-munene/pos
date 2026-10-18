@@ -17,7 +17,7 @@ urlpatterns = [
     path("help/<slug:slug>/", views.HelpArticleView.as_view(), name="help-article"),
     path("suggest/", views.SuggestView.as_view(), name="suggest"),
     path("attachments/<int:pk>/", views.AttachmentDownloadView.as_view(), name="attachment"),
-    # Your support team
+
     path("team/", views.StaffTicketListView.as_view(), name="staff-queue"),
     path("team/tickets/<int:number>/", views.StaffTicketDetailView.as_view(), name="staff-ticket"),
 ]
