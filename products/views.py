@@ -15,11 +15,12 @@ from users.utils import log_action, AuditAction
 from .models import Category, Brand, ProductVariant, UnitOfMeasure, Product, fmt_qty
 from .forms import (
     CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm,
-    ProductVariantFormSet, SellingUnitFormSet,
+ SellingUnitFormSet,
 )
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
 from .mixins import ArchiveFilterMixin, SafeDeleteMixin
+from users.mixins import LiveSearchMixin, action_link, action_post
 
 _PRICE_FIELDS = (("retail_price", "retail"), ("cost_price", "cost"))
 
@@ -99,11 +100,23 @@ class _QuickCreateView(CashierRequiredMixin, View):
         return JsonResponse({"id": obj.pk, "name": obj.name}, status=201)
 
 
-class CategoryListView(ArchiveFilterMixin,CashierRequiredMixin, ListView):
+class CategoryListView(LiveSearchMixin, ArchiveFilterMixin, CashierRequiredMixin, ListView):
     model = Category
     template_name = 'products/category_list.html'
     context_object_name = 'categories'
     paginate_by = 20
+    search_fields = ('name', 'slug', 'parent__name')
+    empty_noun = 'categories'
+    create_url_name = 'category-create'
+
+    def serialize_row(self, c):
+        if self.archived:
+            actions = [action_post('Restore', reverse('category-restore', args=[c.pk]))]
+        else:
+            actions = [action_link('Update', reverse('category-update', args=[c.pk])),
+                       action_link('Delete', reverse('category-delete', args=[c.pk]), 'delete-link')]
+        return {'cells': [c.name, c.slug or 'No slug provided.', str(c.parent) if c.parent_id else ''],
+                'actions': actions}
 
 
 class CategoryQuickCreateView(_QuickCreateView):
@@ -153,11 +166,20 @@ class BrandCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
     success_url = reverse_lazy('brand-list')
 
 
-class BrandListView(CashierRequiredMixin, ListView):
+class BrandListView(LiveSearchMixin, CashierRequiredMixin, ListView):
     model = Brand
     template_name = 'products/brand_list.html'
     context_object_name = 'brands'
     paginate_by = 10
+    search_fields = ('name', 'description')
+    empty_noun = 'brands'
+    create_url_name = 'brand-create'
+
+    def serialize_row(self, b):
+        return {'cells': [b.name, b.description or 'No description provided.'],
+                'actions': [action_link('Update', reverse('brand-update', args=[b.pk])),
+                            action_link('Delete', reverse('brand-delete', args=[b.pk]), 'delete-link')]}
+
 
 
 class BrandQuickCreateView(_QuickCreateView):
@@ -178,11 +200,22 @@ class BrandDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, Delete
     success_url = reverse_lazy('brand-list')
 
 
-class UoMListView(ArchiveFilterMixin, CashierRequiredMixin, ListView):
+class UoMListView(LiveSearchMixin, ArchiveFilterMixin, CashierRequiredMixin, ListView):
     model = UnitOfMeasure
     context_object_name = 'uoms'
     template_name = 'products/uom_list.html'
     paginate_by = 5
+    search_fields = ('name', 'short_name')
+    empty_noun = 'units of measure'
+    create_url_name = 'uom-create'
+
+    def serialize_row(self, u):
+        if self.archived:
+            actions = [action_post('Restore', reverse('uom-restore', args=[u.pk]))]
+        else:
+            actions = [action_link('Update', reverse('uom-update', args=[u.pk])),
+                       action_link('Delete', reverse('uom-delete', args=[u.pk]), 'delete-link')]
+        return {'cells': [u.name, u.short_name or 'No short name provided.'], 'actions': actions}
 
 
 class UoMCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
@@ -204,25 +237,39 @@ class UoMDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, DeleteVi
     template_name = 'products/uom_confirm_delete.html'
     success_url = reverse_lazy('uom-list')
 
+    search_fields = ('name', 'sku_prefix', 'category__name', 'brand__name', 'variants__sku')
+    search_distinct = True   
+    partial_template_name = 'products/partials/product_results.html'
 
-class ProductListView(CashierRequiredMixin, ListView):
+
+class ProductListView(LiveSearchMixin, CashierRequiredMixin, ListView):
     model = Product
     template_name = 'products/product_list.html'
     context_object_name = 'products'
     paginate_by = 15
     queryset = Product.objects.select_related('category', 'brand', 'unit_of_measure', 'supplier')
+    search_fields = ('name', 'sku_prefix', 'category__name', 'brand__name', 'variants__sku')
+    search_distinct = True           
+    empty_noun = 'products'
+    create_url_name = 'product-create'
 
 
-    def get_queryset(self):
-        qs = super().get_queryset()     
-        if self.request.GET.get('show') == 'archived':
-            return qs.filter(is_active=False)
-        return qs.filter(is_active=True)
+    def serialize_row(self, p):
+        pk, role = [p.pk], self.request.user.role
+        view = action_link('View', reverse('product-detail', args=pk))
+        update = action_link('Update', reverse('product-update', args=pk))
+        if self.archived:
+            actions = ([action_post('Restore', reverse('product-restore', args=pk))] if role == 'ADMIN' else []) + [view]
+        elif role == 'ADMIN':
+            actions = [update, action_link('Delete', reverse('product-delete', args=pk), 'delete-link'), view]
+        elif role == 'CASHIER':
+            actions = [update, view]
+        else:
+            actions = []
+        return {'cells': [p.name, p.sku_prefix, p.category.name, p.unit_of_measure.name,
+                          p.brand.name if p.brand_id else '', 'True' if p.has_variations else 'False'],
+                'actions': actions}
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['show_archived'] = self.request.GET.get('show') == 'archived'
-        return ctx
 
 
 class ProductEditorMixin:

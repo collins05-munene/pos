@@ -1,27 +1,28 @@
 {% extends 'users/base.html' %}
+{% load static %}
 
 {% block title %} Units of Measure Directory {% endblock %}
 
-
 {% block content %}
 <div class="directory-container">
-    
-  
+
     <div class="page-header">
         <div class="header-text">
             <h2>Units of Measure Directory</h2>
             <p>Manage units of measure.</p>
         </div>
-        <a href="{% url 'uom-create' %}" class="btn btn-primary">
-            Add New Unit of Measure
-        </a>
+        <a href="{% url 'uom-create' %}" class="btn btn-primary">Add New Unit of Measure</a>
     </div>
+
     <div class="list-filter" style="margin-bottom: 10px;">
-         <a href="{% url 'product-list' %}" class="action-link {% if not show_archived %}active{% endif %}" style="border: 1px solid #000000;">Active</a>
-    
-        <a href="{% url 'product-list' %}?show=archived" class="action-link {% if show_archived %}active{% endif %}" style=" background-color: #d4d7da; border: 1px solid #000000;">Deleted</a>
+        <a href="{% url 'uom-list' %}" class="action-link {% if not show_archived %}active{% endif %}" style="border: 1px solid #000000;">Active</a>
+        <a href="{% url 'uom-list' %}?show=archived" class="action-link {% if show_archived %}active{% endif %}" style="background-color: #d4d7da; border: 1px solid #000000;">Deleted</a>
     </div>
-   
+
+    {% include 'users/partials/live_search.html' with placeholder='Search units of measure...' %}
+
+    <div id="live-csrf" hidden>{% csrf_token %}</div>
+
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
@@ -31,83 +32,12 @@
                     <th scope="col" style="width: 30%; text-align: right;">Actions</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for uom in uoms %}
-                <tr>
-                    <td class="brand-name">{{ uom.name }}</td>
-                    <td class="brand-desc">{{ uom.short_name|default:"No short name provided." }}</td>
-                    
-                    <td class="brand-actions">
-                        {% if show_archived %}
-                            <form method="post" action="{% url 'uom-restore' uom.id %}" style="display:inline;">
-                                {% csrf_token %}
-                                <button type="submit" class="action-link edit-link">Restore</button>
-                            </form>
-                        {% else %}
-                            <a href="{% url 'uom-update' uom.id %}" class="action-link edit-link">Update</a>
-                            <a href="{% url 'uom-delete' uom.id %}" class="action-link delete-link">Delete</a>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="3" class="empty-state-row">
-                        <div class="empty-state">
-                            {% if show_archived %}
-                                <h3>No archived Units of Measure</h3>
-                            {% else %}
-                                <h3>No brands registered</h3>
-                                <p>Get started by adding your first brand manufacture to the system.</p>
-                                <a href="{% url 'brand-create' %}" class="btn btn-secondary">Add one now</a>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-            {% endfor %}
+            <tbody id="live-body">
+                <tr><td colspan="3" class="empty-state-row"><div class="empty-state"><p>Loading…</p></div></td></tr>
             </tbody>
         </table>
     </div>
-{% if is_paginated %}
-    <div class="pagination-container">
-       
-        <span class="pagination-info">
-            Showing page <strong>{{ page_obj.number }}</strong> of <strong>{{ paginator.num_pages }}</strong>
-        </span>
-        
-        
-        <nav class="pagination-nav">
-            <ul class="pagination-list">
-            
-                {% if page_obj.has_previous %}
-                    <li class="pagination-item">
-                        <a href="?page={{ page_obj.previous_page_number }}" class="pagination-link">Previous</a>
-                    </li>
-                {% else %}
-                    <li class="pagination-item">
-                        <span class="pagination-link disabled">Previous</span>
-                    </li>
-                {% endif %}
-
-         
-                <li class="pagination-item">
-                    <span class="pagination-link active">{{ page_obj.number }}</span>
-                </li>
-
-           
-                {% if page_obj.has_next %}
-                    <li class="pagination-item">
-                        <a href="?page={{ page_obj.next_page_number }}" class="pagination-link">Next</a>
-                    </li>
-                {% else %}
-                    <li class="pagination-item">
-                        <span class="pagination-link disabled">Next</span>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
-{% endif %}
-
-
+    <div id="live-pager"></div>
 </div>
+<script src="{% static 'js/live-search.js' %}" defer></script>
 {% endblock %}

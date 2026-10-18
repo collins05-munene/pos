@@ -8,8 +8,15 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, CreateView, DetailView
-
-from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
+from django.db.models import Sum, F, OuterRef, Subquery, Value, DecimalField, ExpressionWrapper
+from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
+from django.urls import reverse, reverse_lazy
+from django.template.defaultfilters import floatformat, date as date_filter
+from users.mixins import (AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin,
+                          LiveSearchMixin, action_link)
+                          
+from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin, LiveSearchMixin
 from sales.models import CashRegisterSession, CashTransaction
 from products.models import ProductVariant
 
@@ -62,7 +69,7 @@ def _record_payment(po, user, amount, method, reference, session):
     )
 
 
-class StockLevelListView(CashierRequiredMixin, ListView):
+class StockLevelListView(LiveSearchMixin, CashierRequiredMixin, ListView):
     model = StockLevel
     template_name = 'inventory/stocklevel_list.html'
     context_object_name = 'stock_levels'
@@ -70,15 +77,98 @@ class StockLevelListView(CashierRequiredMixin, ListView):
     queryset = (StockLevel.objects
                 .select_related('branch', 'variant', 'variant__product', 'variant__product__unit_of_measure')
                 .prefetch_related('variant__packagings'))
+    search_fields = ('variant__product__name', 'variant__sku', 'branch__name')
+    empty_noun = 'stock records'
+    create_url_name = 'stock-adjust'
+    create_label = 'Log an adjustment'
+
+    def serialize_row(self, lv):
+        if lv.quantity <= 0:
+            status = {'t': 'Out of stock', 'c': '#991b1b', 'b': True}
+        elif lv.is_low_stock:
+            status = {'t': 'Low Stock', 'c': '#b45309', 'b': True}
+        else:
+            status = {'t': 'In Stock', 'c': '#166534', 'b': True}
+        qty = f"{floatformat(lv.quantity, '-3')} {lv.variant.product.unit_of_measure.name}"
+        adjust = f"{reverse('stock-adjust')}?variant={lv.variant_id}&branch={lv.branch_id}"
+        return {'cells': [lv.variant.product.name, {'t': lv.variant.sku, 'code': True}, lv.branch.name,
+                          qty, lv.breakdown_display, status],
+                'actions': [action_link('Adjust', adjust)]}
 
 
-class PurchaseOrderListView(CashierRequiredMixin, ListView):
+
+class PurchaseOrderListView(LiveSearchMixin, CashierRequiredMixin, ListView):
     model = PurchaseOrder
     template_name = 'inventory/purchase_order_list.html'
     context_object_name = 'purchase_orders'
     paginate_by = 20
     queryset = PurchaseOrder.objects.select_related('supplier', 'branch').prefetch_related('items', 'payments')
+    search_fields = ('po_number', 'supplier__name')
+    empty_noun = 'stock purchases'
+    create_url_name = 'purchase-order-create'
+    create_label = 'Record one now'
 
+    STATUS_COLOURS = {'RECEIVED': '#166534', 'PARTIAL': '#b45309', 'CANCELLED': '#6b7280'}
+    PAYMENT_COLOURS = {'PAID': '#166534', 'PARTIAL': '#b45309'}
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        g = self.request.GET
+
+        if g.get('status') in dict(PurchaseOrder._meta.get_field('status').choices):
+            qs = qs.filter(status=g['status'])
+        if g.get('supplier', '').isdigit():
+            qs = qs.filter(supplier_id=g['supplier'])
+        if g.get('branch', '').isdigit():
+            qs = qs.filter(branch_id=g['branch'])
+        if d := parse_date(g.get('date_from', '')):
+            qs = qs.filter(created_at__date__gte=d)
+        if d := parse_date(g.get('date_to', '')):
+            qs = qs.filter(created_at__date__lte=d)
+
+        payment = g.get('payment')
+        if payment in ('PAID', 'PARTIAL', 'UNPAID'):
+            money = DecimalField(max_digits=14, decimal_places=2)
+            items = (PurchaseOrderItem.objects.filter(purchase_order=OuterRef('pk'))
+                     .values('purchase_order')
+                     .annotate(t=Sum(ExpressionWrapper(F('quantity_ordered') * F('unit_cost'),
+                                                       output_field=money))).values('t'))
+            paid = (PurchasePayment.objects.filter(purchase_order=OuterRef('pk'))
+                    .values('purchase_order').annotate(t=Sum('amount')).values('t'))
+            qs = qs.annotate(
+                agg_total=Coalesce(Subquery(items), Value(Decimal('0')), output_field=money),
+                agg_paid=Coalesce(Subquery(paid), Value(Decimal('0')), output_field=money),
+            )
+            if payment == 'PAID':
+                qs = qs.filter(agg_paid__gte=F('agg_total'))
+            elif payment == 'UNPAID':
+                qs = qs.filter(agg_paid__lte=0)
+            else:
+                qs = qs.filter(agg_paid__gt=0, agg_paid__lt=F('agg_total'))
+        return qs
+
+    def get_context_data(self, **kwargs):      
+        ctx = super().get_context_data(**kwargs)
+        ctx['status_choices'] = PurchaseOrder._meta.get_field('status').choices
+        ctx['suppliers'] = PurchaseOrder._meta.get_field('supplier').related_model.objects.all()
+        ctx['branches'] = PurchaseOrder._meta.get_field('branch').related_model.objects.all()
+        return ctx
+
+    def serialize_row(self, po):
+        pay = po.payment_status
+        payment = {'t': po.payment_status_display, 'b': True, 'c': self.PAYMENT_COLOURS.get(pay, '#991b1b')}
+        if pay != 'PAID':
+            payment['s'] = f'Balance KSH {po.balance_payable}'
+        actions = [action_link('View', reverse('purchase-order-detail', args=[po.pk]))]
+        if po.status not in ('RECEIVED', 'CANCELLED'):
+            actions.append(action_link('Receive', reverse('purchase-order-receive', args=[po.pk])))
+        return {'cells': [{'t': po.po_number, 'b': True},
+                          po.supplier.name if po.supplier else 'No supplier',
+                          po.branch.name,
+                          {'t': po.get_status_display(), 'b': True, 'c': self.STATUS_COLOURS.get(po.status, '#1e40af')},
+                          payment,
+                          date_filter(po.created_at, 'd M Y')],
+                'actions': actions}
 
 class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
     """

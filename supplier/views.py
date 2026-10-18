@@ -2,17 +2,29 @@ from django.db.models import Q
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 
-from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from products.models import Product
 from .models import Supplier
 from .forms import SupplierForm
+from django.urls import reverse, reverse_lazy
+from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin, LiveSearchMixin, action_link
 
 
-class SupplierListView(CashierRequiredMixin, ListView):
+class SupplierListView(LiveSearchMixin, CashierRequiredMixin, ListView):
     model = Supplier
     template_name = 'suppliers/supplier_list.html'
     context_object_name = 'suppliers'
     paginate_by = 15
+    search_fields = ('name', 'contact_person', 'phone', 'email')
+    empty_noun = 'suppliers'
+    create_url_name = 'supplier-create'
+
+    def serialize_row(self, s):
+        pk = [s.pk]
+        return {'cells': [s.name, s.contact_person, s.phone, s.email],
+                'actions': [action_link('Update', reverse('supplier-update', args=pk)),
+                            action_link('View', reverse('supplier-detail', args=pk)),
+                            action_link('Delete', reverse('supplier-delete', args=pk), 'delete-link')]}
+
 
 
 class SupplierCreateView(AuditLogMixin, CashierRequiredMixin, CreateView):
@@ -42,8 +54,6 @@ class SupplierDetailView(CashierRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # The supplier is now recorded on each purchase, so list the products bought from
-        # this supplier (plus any old products that still carry it as their default).
         context['products'] = (
             Product.objects.filter(is_active=True)
             .filter(Q(supplier=self.object) | Q(variants__po_items__purchase_order__supplier=self.object))
