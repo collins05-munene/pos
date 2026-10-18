@@ -1,6 +1,8 @@
 from django.urls import path
 
-from . import views
+from sales.receipts_views import receipt_printed
+
+from . import views, receipts_views
 
 urlpatterns = [
     path('terminal/', views.PosTerminalView.as_view(), name='pos_terminal'),
@@ -13,4 +15,8 @@ urlpatterns = [
     path('register/close/', views.CloseRegisterView.as_view(), name='close_register'),
     path('register/cash-transaction/', views.CashTransactionView.as_view(), name='cash_transaction'),
     path('cash-out/', views.RecordCashOutView.as_view(), name='record-cash-out'),
+
+    path('receipts/', receipts_views.ReceiptListView.as_view(), name='receipt-list'),
+    path('receipts/<int:pk>/', receipts_views.ReceiptDetailView.as_view(), name='receipt-detail'),
+    path('receipts/<int:pk>/printed/', receipts_views.receipt_printed, name='receipt-printed'),
 ]

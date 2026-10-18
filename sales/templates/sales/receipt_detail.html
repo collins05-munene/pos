@@ -1,0 +1,125 @@
+{% extends 'users/base.html' %}
+{% block extra_head %}
+<style>
+    .receipt-page { max-width: 420px; margin: 2rem auto; }
+    .receipt-banner {
+        background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;
+        border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .95rem;
+    }
+    .receipt-actions { display: flex; gap: .75rem; margin-bottom: 1rem; }
+    .receipt-actions .btn-print,
+    .receipt-actions .btn-secondary {
+        flex: 1 1 0;
+        box-sizing: border-box;
+        display: flex; align-items: center; justify-content: center;
+        height: 44px; margin: 0; padding: 0 1rem;
+        border: none; border-radius: 8px;
+        font: inherit; font-size: .95rem; font-weight: 600; line-height: 1;
+        text-align: center; text-decoration: none; cursor: pointer;
+    }
+    .btn-print { background: #2563eb; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #475569; }
+
+    .receipt-paper {
+        background: #fff; width: 80mm; max-width: 100%; margin: 0 auto; padding: 6mm 5mm;
+        border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,.05);
+        font-family: "Courier New", Courier, monospace; font-size: 12px; color: #111; line-height: 1.45;
+        position: relative;
+    }
+    .receipt-paper .center { text-align: center; }
+    .receipt-paper h2 { margin: 0; font-size: 16px; }
+    .receipt-paper .muted { color: #555; }
+    .receipt-paper hr { border: none; border-top: 1px dashed #888; margin: 8px 0; }
+    .receipt-paper table { width: 100%; border-collapse: collapse; }
+    .receipt-paper td { padding: 1px 0; vertical-align: top; }
+    .receipt-paper td.num { text-align: right; white-space: nowrap; }
+    .receipt-paper .row { display: flex; justify-content: space-between; }
+    .receipt-paper .grand { font-weight: bold; font-size: 14px; }
+    .reprint-tag {
+        text-align: center; font-weight: bold; letter-spacing: 1px; border: 1px solid #111;
+        padding: 2px 0; margin-bottom: 8px;
+    }
+
+    @media print {
+        @page { size: 80mm auto; margin: 0; }
+        body * { visibility: hidden; }
+        .receipt-paper, .receipt-paper * { visibility: visible; }
+        .receipt-paper { position: absolute; left: 0; top: 0; width: 80mm; border: none; box-shadow: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="receipt-page">
+    {% if just_sold %}
+        <div class="receipt-banner">Sale complete. Print the receipt for the customer or start the next sale.</div>
+    {% endif %}
+
+    <div class="receipt-actions">
+        <button type="button" class="btn-print" id="print-btn">Print receipt</button>
+        {% if just_sold %}
+            <a href="{% url 'pos_terminal' %}" class="btn-secondary">New sale</a>
+        {% else %}
+            <a href="{% url 'receipt-list' %}" class="btn-secondary">All receipts</a>
+        {% endif %}
+    </div>
+
+    <div class="receipt-paper">
+        {% if is_reprint %}<div class="reprint-tag">DUPLICATE COPY</div>{% endif %}
+
+        <div class="center">
+            <h2>{{ receipt.shop_name }}</h2>
+            {% if receipt.branch_name %}<div>{{ receipt.branch_name }}</div>{% endif %}
+        </div>
+        <hr>
+        <div class="row"><span>Receipt</span><span>{{ receipt.receipt_number }}</span></div>
+        <div class="row"><span>Invoice</span><span>{{ receipt.order.invoice_number }}</span></div>
+        <div class="row"><span>Date</span><span>{{ receipt.issued_at|date:"d/m/Y H:i" }}</span></div>
+        <div class="row"><span>Served by</span><span>{{ receipt.cashier_name }}</span></div>
+        <hr>
+
+        <table>
+            {% for line in receipt.lines %}
+            <tr><td colspan="2">{{ line.name }}</td></tr>
+            <tr>
+                <td class="muted">{{ line.quantity }} x {{ line.unit_price }}</td>
+                <td class="num">{{ line.line_total }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <hr>
+
+        <div class="row grand"><span>TOTAL (KSH)</span><span>{{ receipt.total }}</span></div>
+        {% if receipt.amount_received is not None %}
+            <div class="row"><span>{{ receipt.payment_method|title }} received</span><span>{{ receipt.amount_received }}</span></div>
+            <div class="row"><span>Change</span><span>{{ receipt.change_given }}</span></div>
+        {% else %}
+            <div class="row"><span>Paid by</span><span>{{ receipt.payment_method|title }}</span></div>
+        {% endif %}
+        <hr>
+        <div class="center">Thank you for shopping with us.</div>
+    </div>
+
+    <form id="printed-form" method="POST" action="{% url 'receipt-printed' receipt.pk %}" style="display:none;">{% csrf_token %}</form>
+</div>
+
+<script>
+(function () {
+    const csrf = document.querySelector('#printed-form [name=csrfmiddlewaretoken]').value;
+    let recorded = false;
+
+    function recordPrint() {
+        if (recorded) return;
+        recorded = true;
+        fetch("{% url 'receipt-printed' receipt.pk %}", {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+            keepalive: true
+        }).catch(function () {});
+    }
+
+    window.addEventListener('afterprint', recordPrint);
+    document.getElementById('print-btn').addEventListener('click', function () { window.print(); });
+})();
+</script>
+{% endblock %}

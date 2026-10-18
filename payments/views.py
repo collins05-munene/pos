@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib import messages
 
@@ -79,4 +80,4 @@ def process_payment(request):
         request,
         f"Sale Completed! Received KSH {order.amount_received}, Change Given: KSH {order.change_given}"
     )
-    return redirect('pos_terminal')
+    return redirect(f"{reverse('receipt-detail', args=[order.receipt.pk])}?new=1")

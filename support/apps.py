@@ -6,3 +6,6 @@ class SupportConfig(AppConfig):
     name = "support"
     verbose_name = "Support"
     app_name = 'support'
+
+
+

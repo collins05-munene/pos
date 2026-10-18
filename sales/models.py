@@ -240,3 +240,35 @@ class OrderItem(TenantOwnedModel):
 
     def __str__(self):
         return f"{self.variant.sku} X {self.quantity}"
+
+class Receipt(TenantOwnedModel):
+    """Frozen, customer-facing copy of a completed sale. See sales/receipts.py."""
+    order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name='receipt')
+    receipt_number = models.CharField(max_length=30)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='receipts', null=True)
+    cashier = models.ForeignKey(User, on_delete=models.PROTECT, related_name='receipts')
+ 
+    # Snapshot fields: what the customer's paper receipt said at the time.
+    shop_name = models.CharField(max_length=150)
+    branch_name = models.CharField(max_length=150, blank=True, default="")
+    cashier_name = models.CharField(max_length=150)
+    payment_method = models.CharField(max_length=10, default='CASH')
+    lines = models.JSONField(default=list)
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_received = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    change_given = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+ 
+    issued_at = models.DateTimeField(default=timezone.now)
+    print_count = models.PositiveIntegerField(default=0)
+    last_printed_at = models.DateTimeField(null=True, blank=True)
+ 
+    class Meta:
+        ordering = ['-issued_at']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'receipt_number'], name='uniq_tenant_receipt_number'),
+        ]
+        indexes = [models.Index(fields=['tenant', '-issued_at'])]
+ 
+    def __str__(self):
+        return f"Receipt {self.receipt_number}"
+ 

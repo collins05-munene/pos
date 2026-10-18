@@ -1,0 +1,85 @@
+{% extends 'users/base.html' %}
+{% block extra_head %}
+<style>
+    .receipts-wrap { max-width: 1000px; margin: 1.5rem auto; padding: 0 1rem; }
+    .receipts-wrap h1 { margin: 0 0 1rem 0; color: #111827; font-size: 1.4rem; }
+    .receipt-filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-bottom: 1rem; }
+    .receipt-filters label { display: block; font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .25rem; }
+    .receipt-filters input { padding: .5rem .65rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: .9rem; }
+    .receipt-filters button, .receipt-filters a.reset {
+        padding: .55rem 1rem; border-radius: 6px; border: none; font-size: .9rem; cursor: pointer; text-decoration: none;
+    }
+    .receipt-filters button { background: #2563eb; color: #fff; font-weight: 600; }
+    .receipt-filters a.reset { background: #e2e8f0; color: #475569; }
+    .receipts-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .receipts-table th, .receipts-table td { padding: .7rem .9rem; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: .92rem; }
+    .receipts-table th { background: #f8fafc; color: #475569; font-weight: 600; }
+    .receipts-table td.num, .receipts-table th.num { text-align: right; }
+    .receipts-table a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    .receipts-empty { text-align: center; padding: 2rem; color: #6b7280; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .receipts-pager { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: .9rem; color: #475569; }
+    .receipts-pager a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    @media (max-width: 640px) { .col-branch, .col-cashier { display: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="receipts-wrap">
+    <h1>Receipts</h1>
+
+    <form method="GET" class="receipt-filters">
+        <div>
+            <label for="q">Receipt or invoice no.</label>
+            <input type="text" id="q" name="q" value="{{ q }}" placeholder="RCT-000123">
+        </div>
+        <div>
+            <label for="from">From</label>
+            <input type="date" id="from" name="from" value="{{ date_from }}">
+        </div>
+        <div>
+            <label for="to">To</label>
+            <input type="date" id="to" name="to" value="{{ date_to }}">
+        </div>
+        <button type="submit">Filter</button>
+        <a href="{% url 'receipt-list' %}" class="reset">Reset</a>
+    </form>
+
+    {% if page_obj.object_list %}
+    <table class="receipts-table">
+        <thead>
+            <tr>
+                <th>Receipt</th>
+                <th>Date</th>
+                <th class="col-branch">Branch</th>
+                <th class="col-cashier">Cashier</th>
+                <th class="num">Total (KSH)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in page_obj %}
+            <tr>
+                <td>{{ r.receipt_number }}</td>
+                <td>{{ r.issued_at|date:"d M Y, H:i" }}</td>
+                <td class="col-branch">{{ r.branch_name }}</td>
+                <td class="col-cashier">{{ r.cashier_name }}</td>
+                <td class="num">{{ r.total }}</td>
+                <td class="num"><a href="{% url 'receipt-detail' r.pk %}">View</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="receipts-pager">
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <span>
+            {% if page_obj.has_previous %}<a href="?{% if qs_without_page %}{{ qs_without_page }}&{% endif %}page={{ page_obj.previous_page_number }}">&larr; Previous</a>{% endif %}
+            {% if page_obj.has_previous and page_obj.has_next %}&nbsp;&nbsp;{% endif %}
+            {% if page_obj.has_next %}<a href="?{% if qs_without_page %}{{ qs_without_page }}&{% endif %}page={{ page_obj.next_page_number }}">Next &rarr;</a>{% endif %}
+        </span>
+    </div>
+    {% else %}
+        <div class="receipts-empty">No receipts found. Receipts appear here after each completed sale.</div>
+    {% endif %}
+</div>
+{% endblock %}
