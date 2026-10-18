@@ -1,0 +1,11 @@
+{% if attachments %}
+<ul class="sp-files">
+  {% for a in attachments %}
+  <li>
+    {% if a.is_image %}<a href="{% url 'support:attachment' a.pk %}" target="_blank" rel="noopener"><img src="{% url 'support:attachment' a.pk %}" alt="{{ a.original_name }}" loading="lazy"></a>
+    {% elif a.is_video %}<video controls preload="metadata" src="{% url 'support:attachment' a.pk %}"></video>
+    {% else %}<a class="sp-file" href="{% url 'support:attachment' a.pk %}">{{ a.original_name }} <span>{{ a.size|filesizeformat }}</span></a>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

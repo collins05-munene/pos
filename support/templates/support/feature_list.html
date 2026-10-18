@@ -1,0 +1,51 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="features" %}
+  {% include "support/_messages.html" %}
+  <div class="sp-title-row">
+    <h1>Feature requests</h1>
+    <a class="sp-btn sp-btn-primary" href="{% url 'support:feature-new' %}">Request a feature</a>
+  </div>
+  <p class="sp-lead">Vote for what you'd like us to build next. We email everyone who voted when a feature is released.</p>
+
+  <form method="get" class="sp-filters">
+    <input type="search" name="q" value="{{ q }}" class="sp-input" placeholder="Search requests" aria-label="Search requests">
+    <select name="status" class="sp-input" aria-label="Status">
+      <option value="">Active requests</option>
+      {% for value, label in status_choices %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      <option value="all"{% if status == 'all' %} selected{% endif %}>Everything</option>
+    </select>
+    <select name="module" class="sp-input" aria-label="Module">
+      <option value="">All modules</option>
+      {% for value, label in module_choices %}<option value="{{ value }}"{% if module == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="sort" class="sp-input" aria-label="Sort"><option value="top">Most votes</option><option value="new"{% if sort == 'new' %} selected{% endif %}>Newest</option></select>
+    <button class="sp-btn" type="submit">Apply</button>
+  </form>
+
+  {% for f in features %}
+  <article class="sp-feature" id="f{{ f.pk }}">
+    <form method="post" action="{% url 'support:feature-vote' f.pk %}" class="sp-vote">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="sp-votebtn{% if f.pk in voted_ids %} is-voted{% endif %}" {% if not f.voting_open %}disabled{% endif %}
+              aria-pressed="{% if f.pk in voted_ids %}true{% else %}false{% endif %}"
+              aria-label="{% if f.pk in voted_ids %}Remove your vote from{% else %}Vote for{% endif %} {{ f.title }}">
+        <strong>{{ f.vote_count }}</strong><span>{% if f.pk in voted_ids %}Voted{% else %}Vote{% endif %}</span>
+      </button>
+    </form>
+    <div class="sp-feature-body">
+      <h2>{{ f.title }}</h2>
+      <p class="sp-badges"><span class="sp-badge sp-fs-{{ f.status|lower }}">{{ f.get_status_display }}</span><span class="sp-badge">{{ f.get_module_display }}</span>{% if f.status_note %}<span class="sp-meta">{{ f.status_note }}</span>{% endif %}</p>
+      <p>{{ f.description|truncatewords:45 }}</p>
+    </div>
+  </article>
+  {% empty %}
+  <p class="sp-empty">Nothing matches. <a href="{% url 'support:feature-new' %}">Be the first to ask for it.</a></p>
+  {% endfor %}
+  {% include "support/_pager.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Help desk -- Sellify</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+<link rel="stylesheet" href="{% static 'duka/css/helpdesk.css' %}">
+<style>
+  .wrap.pf { max-width: 1180px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap pf">
+    <div class="wordmark">Sell<span>ify</span> <span style="font-family:var(--mono);font-size:13px;color:var(--ink-soft);">help desk</span></div>
+    <div class="masthead-meta"><a href="/platform/" style="text-decoration:underline;">All shops</a></div>
+    <div class="masthead-meta" id="refreshed-at">&nbsp;</div>
+  </div>
+</header>
+
+<main id="helpdesk" data-api="{{ api_base }}" data-tenant-base="{{ tenant_base }}" data-landing="{{ landing }}">
+  {% csrf_token %}
+  <div class="wrap pf">
+    <h1>Help desk</h1>
+    <p class="lede">Client tickets, help articles, video tutorials and feature requests.</p>
+
+    <div class="kpis" id="hd-kpis">
+      <div class="kpi"><div class="label">Open tickets</div><div class="value" data-kpi="open">--</div></div>
+      <div class="kpi"><div class="label">Unassigned</div><div class="value" data-kpi="unassigned">--</div></div>
+      <div class="kpi"><div class="label">High or critical</div><div class="value" data-kpi="urgent">--</div></div>
+      <div class="kpi"><div class="label">Typical first reply (30 days)</div><div class="value" data-kpi="reply">--</div></div>
+    </div>
+
+    <div id="hd-flash" class="hd-flash" role="status" hidden></div>
+
+    <div class="hd-tabs" role="tablist" aria-label="Help desk sections">
+      <button type="button" role="tab" id="tab-tickets" aria-controls="panel-tickets" data-tab="tickets">Tickets</button>
+      <button type="button" role="tab" id="tab-articles" aria-controls="panel-articles" data-tab="articles">Articles and videos <span class="hd-count" data-count="draft_articles"></span></button>
+      <button type="button" role="tab" id="tab-features" aria-controls="panel-features" data-tab="features">Feature requests <span class="hd-count" data-count="features_to_review"></span></button>
+    </div>
+
+    <!-- Tickets -->
+    <section id="panel-tickets" role="tabpanel" aria-labelledby="tab-tickets" hidden>
+      <div class="filter-bar">
+        <input id="t-search" type="search" placeholder="TKT number, subject, shop or username&hellip;" aria-label="Search tickets">
+        <select id="t-view" aria-label="Queue">
+          <option value="active">Active</option><option value="unassigned">Unassigned</option>
+          <option value="mine">Mine</option><option value="closed">Resolved and closed</option><option value="all">All</option>
+        </select>
+        <select id="t-priority" aria-label="Priority"><option value="">Any priority</option></select>
+        <select id="t-kind" aria-label="Type"><option value="">Any type</option></select>
+      </div>
+      <table class="ledger">
+        <thead><tr><th>Ticket</th><th>Shop</th><th>Subject</th><th>Priority</th><th>Status</th><th>Agent</th><th>Updated</th></tr></thead>
+        <tbody id="t-rows"><tr class="empty-row"><td colspan="7">Loading&hellip;</td></tr></tbody>
+      </table>
+      <div class="hd-pager" id="t-pager"></div>
+    </section>
+
+    <!-- Articles and videos -->
+    <section id="panel-articles" role="tabpanel" aria-labelledby="tab-articles" hidden>
+      <div class="filter-bar">
+        <input id="a-search" type="search" placeholder="Search articles&hellip;" aria-label="Search articles">
+        <select id="a-status" aria-label="Status"><option value="">Drafts and published</option><option value="draft">Drafts</option><option value="published">Published</option></select>
+        <select id="a-kind" aria-label="Type"><option value="">Any type</option></select>
+        <select id="a-topic" aria-label="Topic"><option value="">Any topic</option></select>
+        <button type="button" class="hd-primary" id="a-new">New article</button>
+      </div>
+      <table class="ledger">
+        <thead><tr><th>Title</th><th>Type</th><th>Topic</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+        <tbody id="a-rows"><tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr></tbody>
+      </table>
+      <div class="hd-pager" id="a-pager"></div>
+    </section>
+
+    <!-- Feature requests -->
+    <section id="panel-features" role="tabpanel" aria-labelledby="tab-features" hidden>
+      <div class="filter-bar">
+        <input id="f-search" type="search" placeholder="Search feature requests&hellip;" aria-label="Search feature requests">
+        <select id="f-status" aria-label="Status"><option value="">Any status</option></select>
+      </div>
+      <table class="ledger">
+        <thead><tr><th class="num">Votes</th><th>Request</th><th>Module</th><th>Status</th><th>From</th><th>Submitted</th></tr></thead>
+        <tbody id="f-rows"><tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr></tbody>
+      </table>
+      <div class="hd-pager" id="f-pager"></div>
+    </section>
+  </div>
+</main>
+
+<div class="hd-backdrop" id="hd-backdrop" hidden></div>
+<aside class="hd-drawer" id="hd-drawer" role="dialog" aria-modal="true" aria-labelledby="hd-drawer-title" hidden>
+  <header class="hd-drawer-head">
+    <h2 id="hd-drawer-title">Details</h2>
+    <button type="button" id="hd-close" aria-label="Close">&times;</button>
+  </header>
+  <div id="hd-drawer-body"></div>
+</aside>
+
+{{ choices|json_script:"hd-choices" }}
+<script src="{% static 'duka/js/helpdesk.js' %}"></script>
+</body>
+</html>

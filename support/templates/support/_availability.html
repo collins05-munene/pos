@@ -1,0 +1,4 @@
+<div class="sp-availability {% if availability.is_open %}is-open{% else %}is-closed{% endif %}">
+  <span class="sp-dot" aria-hidden="true"></span>
+  <p><strong>{{ availability.label }}.</strong> {{ availability.summary }}</p>
+</div>

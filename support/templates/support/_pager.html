@@ -1,0 +1,7 @@
+{% if is_paginated %}
+<p class="sp-pager">
+  {% if page_obj.has_previous %}<a href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</p>
+{% endif %}

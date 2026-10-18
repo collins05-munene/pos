@@ -1,0 +1,8 @@
+<nav class="sp-nav" aria-label="Support">
+  <a href="{% url 'support:home' %}"{% if active == 'home' %} aria-current="page"{% endif %}>Overview</a>
+  <a href="{% url 'support:help-center' %}"{% if active == 'help' %} aria-current="page"{% endif %}>Help center</a>
+  <a href="{% url 'support:report-issue' %}"{% if active == 'report' %} aria-current="page"{% endif %}>Report an issue</a>
+  {% if user.role == 'ADMIN' or user.role == 'MANAGER' or user.is_superuser %}<a href="{% url 'support:feature-list' %}"{% if active == 'features' %} aria-current="page"{% endif %}>Feature requests</a>{% endif %}
+  <a href="{% url 'support:contact' %}"{% if active == 'contact' %} aria-current="page"{% endif %}>Contact support</a>
+  <a href="{% url 'support:ticket-list' %}"{% if active == 'tickets' %} aria-current="page"{% endif %}>My tickets</a>
+</nav>

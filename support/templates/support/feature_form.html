@@ -1,0 +1,24 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap sp-narrow">
+  {% include "support/_nav.html" with active="features" %}
+  {% include "support/_messages.html" %}
+  <h1>Request a feature</h1>
+  <p class="sp-lead">Check the suggestions that appear as you type. If someone already asked, a vote counts more than a duplicate.</p>
+  <form method="post" class="sp-form" data-support-form data-suggest-url="{% url 'support:suggest' %}" data-suggest-scope="features">
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<p class="sp-error">{{ e }}</p>{% endfor %}
+    {% include "support/_field.html" with field=form.title %}
+    <div class="sp-suggestions" data-suggestions hidden aria-live="polite"></div>
+    {% include "support/_field.html" with field=form.module %}
+    {% include "support/_field.html" with field=form.description %}
+    <div class="sp-actions-row">
+      <button type="submit" class="sp-btn sp-btn-primary">Submit request</button>
+      <a class="sp-btn" href="{% url 'support:feature-list' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+<script src="{% static 'support/support.js' %}" defer></script>
+{% endblock %}

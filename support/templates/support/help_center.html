@@ -1,0 +1,32 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'support/support.css' %}">
+<div class="sp-wrap">
+  {% include "support/_nav.html" with active="help" %}
+  {% include "support/_messages.html" %}
+  <h1>Help center</h1>
+  <form class="sp-search" method="get" role="search">
+    <input type="search" name="q" value="{{ q }}" class="sp-input" placeholder="Search guides, FAQs and videos" aria-label="Search the help center">
+    <select name="kind" class="sp-input" aria-label="Type">
+      <option value="">All types</option>
+      {% for value, label in kind_choices %}<option value="{{ value }}"{% if kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="sp-btn sp-btn-primary" type="submit">Search</button>
+  </form>
+
+  {% if q %}
+    <h2>{{ results|length }} result{{ results|length|pluralize }} for "{{ q }}"</h2>
+    <ul class="sp-list">
+      {% for a in results %}<li><a href="{{ a.get_absolute_url }}">{{ a.title }}</a> <span class="sp-badge">{{ a.get_kind_display }}</span><span>{{ a.summary }}</span></li>
+      {% empty %}<li class="sp-empty">No articles match. Try different words, or <a href="{% url 'support:contact' %}">message support</a>.</li>{% endfor %}
+    </ul>
+  {% else %}
+    {% for label, articles in groups %}
+    <h2>{{ label }}</h2>
+    <ul class="sp-list">{% for a in articles %}<li><a href="{{ a.get_absolute_url }}">{{ a.title }}</a> <span class="sp-badge">{{ a.get_kind_display }}</span><span>{{ a.summary }}</span></li>{% endfor %}</ul>
+    {% empty %}<p class="sp-empty">No articles have been published yet.</p>{% endfor %}
+  {% endif %}
+  <p class="sp-note">Can't find it? <a href="{% url 'support:contact' %}">Message support</a>.</p>
+</div>
+{% endblock %}
