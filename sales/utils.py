@@ -7,6 +7,7 @@ from inventory.models import Branch
 from inventory.stock import change_stock, available_units, InsufficientStock
 from products.models import ProductVariant
 from .exceptions import InsufficientStockError
+from .receipts import create_receipt
 
 
 def resolve_user_branch(user):
@@ -115,6 +116,9 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             order.change_given = (amount_received - running_revenue).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         order.save()
+
+        # Receipt is a frozen snapshot of the sale; created in the same transaction.
+        create_receipt(order)
 
         from notifications.checks import check_stock_after_sale
         transaction.on_commit(

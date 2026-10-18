@@ -72,7 +72,8 @@ INSTALLED_APPS = [
     "platform_admin",
     "backups",
     "notifications",
-    "support"
+    "support",
+    
 ]
 
 MIDDLEWARE = [
