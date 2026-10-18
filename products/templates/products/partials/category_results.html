@@ -1,0 +1,49 @@
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 25%;">Category Name</th>
+                <th scope="col" style="width: 25%;">Web Address Nickname</th>
+                <th scope="col" style="width: 25%;">Parent</th>
+                <th scope="col" style="width: 25%; text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+            <tr>
+                <td class="brand-name">{{ category.name }}</td>
+                <td class="brand-desc">{{ category.slug|default:"No slug provided." }}</td>
+                <td class="brand-name">{{ category.parent|default_if_none:"" }}</td>
+                <td class="brand-actions">
+                    {% if show_archived %}
+                        <form method="post" action="{% url 'category-restore' category.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="action-link edit-link">Restore</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'category-update' category.id %}" class="action-link edit-link">Update</a>
+                        <a href="{% url 'category-delete' category.id %}" class="action-link delete-link">Delete</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="empty-state-row">
+                    <div class="empty-state">
+                        {% if search_query %}
+                            <h3>No categories match "{{ search_query }}"</h3>
+                        {% elif show_archived %}
+                            <h3>No deleted categories</h3>
+                        {% else %}
+                            <h3>No categories registered</h3>
+                            <p>Get started by adding your first category to the system.</p>
+                            <a href="{% url 'category-create' %}" class="btn btn-secondary">Add one now</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include 'users/partials/pagination.html' %}

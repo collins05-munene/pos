@@ -1,0 +1,7 @@
+{# {% include 'users/partials/live_search.html' with placeholder='Search products...' %} #}
+<form method="get" role="search" data-live-form onsubmit="return false;"
+      style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+    <input type="search" name="q" placeholder="{{ placeholder|default:'Search...' }}"
+           autocomplete="off" aria-label="Search"
+           style="flex: 1; max-width: 360px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+</form>

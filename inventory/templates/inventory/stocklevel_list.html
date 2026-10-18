@@ -1,88 +1,42 @@
 {% extends 'users/base.html' %}
+{% load static %}
 
-{% block title %} Stock Levels {% endblock %}
+{% block title %} Stock Level {% endblock %}
 
 {% block content %}
-    <div class="directory-container">
-        <div class="page-header">
-            <div class="header-text">
-                <h2>Stock Level</h2>
-                <p>Live quantity on hand across branches. Stock is counted in each product's base unit and split into its selling units.</p>
-            </div>
-            <a href="{% url 'stock-adjust' %}" class="btn btn-primary">Log Adjustment</a>
+<div class="directory-container">
+
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Stock Level</h2>
+            <p>Live quantity on hand across branches. Stock is counted in each product's base unit and split into its selling units.</p>
         </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Product</th>
-                        <th scope="col">SKU</th>
-                        <th scope="col">Branch</th>
-                        <th scope="col">Quantity</th>
-                        <th scope="col">Breakdown</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for level in stock_levels %}
-                        <tr>
-                            <td class="brand-name">{{ level.variant.product.name }}</td>
-                            <td class="brand-name">
-                                <code style="font-family: monospace;">{{ level.variant.sku }}</code>
-                            </td>
-                            <td class="brand-name">{{ level.branch.name }}</td>
-                            <td class="brand-name">{{ level.quantity|floatformat:"-3" }} {{ level.variant.product.unit_of_measure.name }}</td>
-                            <td class="brand-name">{{ level.breakdown_display }}</td>
-                            <td class="brand-name">
-                                {% if level.quantity <= 0 %}
-                                    <span style="color: #991b1b; font-weight: 600;">Out of stock</span>
-                                {% elif level.is_low_stock %}
-                                    <span style="color: #b45309; font-weight: 600;">Low Stock</span>
-                                {% else %}
-                                    <span style="color: #166534; font-weight: 600;">In Stock</span>
-                                {% endif %}
-                            </td>
-                            <td class="brand-name">
-                                <a href="{% url 'stock-adjust' %}?variant={{ level.variant.id }}&branch={{ level.branch.id }}"
-                                   class="action-link edit-link">
-                                    Adjust
-                                </a>
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="7" class="empty-state-row">
-                                <div class="empty-state">
-                                    <h3>No Stock Records Yet.</h3>
-                                    <p>Stock levels are created automatically when purchases are recorded, or manually via adjustments.</p>
-                                    <a href="{% url 'stock-adjust' %}" class="btn btn-secondary">Log an adjustment.</a>
-                                </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if is_paginated %}
-            <div class="pagination-container">
-                <span class="pagination-info">Showing page <strong>{{page_obj.number}}</strong> of <strong>{{paginator.num_pages}}</strong></span>
-                <nav class="pagination-nav">
-                    <ul class="pagination-list">
-                        {% if page_obj.has_previous %}
-                            <li class="pagination-item"><a href="?page={{page_obj.previous_page_number}}" class="pagination-link">Previous</a></li>
-                        {% else %}
-                            <li class="pagination-item"><span class="pagination-link disabled">Previous</span></li>
-                        {% endif %}
-                        <li class="pagination-item"><span class="pagination-link active">{{page_obj.number}}</span></li>
-                        {% if page_obj.has_next %}
-                            <li class="pagination-item"><a href="?page={{page_obj.next_page_number}}" class="pagination-link">Next</a></li>
-                        {% else %}
-                            <li class="pagination-item"><span class="pagination-link disabled">Next</span></li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
-        {% endif %}
+        <a href="{% url 'stock-adjust' %}" class="btn btn-primary">Log Adjustment</a>
     </div>
+
+    {% include 'users/partials/live_search.html' with placeholder='Search product, SKU or branch...' %}
+
+    <div id="live-csrf" hidden>{% csrf_token %}</div>
+
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Branch</th>
+                    <th scope="col">Quantity</th>
+                    <th scope="col">Breakdown</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Action</th>
+                </tr>
+            </thead>
+            <tbody id="live-body">
+                <tr><td colspan="7" class="empty-state-row"><div class="empty-state"><p>Loading…</p></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="live-pager"></div>
+</div>
+<script src="{% static 'js/live-search.js' %}" defer></script>
 {% endblock %}

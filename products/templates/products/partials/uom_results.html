@@ -1,0 +1,47 @@
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 40%;">Unit of Measure</th>
+                <th scope="col" style="width: 30%;">Short Name</th>
+                <th scope="col" style="width: 30%; text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for uom in uoms %}
+            <tr>
+                <td class="brand-name">{{ uom.name }}</td>
+                <td class="brand-desc">{{ uom.short_name|default:"No short name provided." }}</td>
+                <td class="brand-actions">
+                    {% if show_archived %}
+                        <form method="post" action="{% url 'uom-restore' uom.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="action-link edit-link">Restore</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'uom-update' uom.id %}" class="action-link edit-link">Update</a>
+                        <a href="{% url 'uom-delete' uom.id %}" class="action-link delete-link">Delete</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3" class="empty-state-row">
+                    <div class="empty-state">
+                        {% if search_query %}
+                            <h3>No units of measure match "{{ search_query }}"</h3>
+                        {% elif show_archived %}
+                            <h3>No archived Units of Measure</h3>
+                        {% else %}
+                            <h3>No units of measure registered</h3>
+                            <p>Get started by adding your first unit of measure.</p>
+                            <a href="{% url 'uom-create' %}" class="btn btn-secondary">Add one now</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include 'users/partials/pagination.html' %}

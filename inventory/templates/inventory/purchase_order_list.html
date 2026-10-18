@@ -1,77 +1,70 @@
 {% extends 'users/base.html' %}
+{% load static %}
 
-{% block title %}Stock Purchases{% endblock %}
+{% block title %} Stock Purchases {% endblock %}
 
 {% block content %}
-    <div class="directory-container">
-        <div class="page-header">
-            <div class="header-text">
-                <h2>Stock Purchases</h2>
-                <p>Every stock purchase — what was bought, from whom, and how it was paid for.</p>
-            </div>
-            <a href="{% url 'purchase-order-create' %}" class="btn btn-primary">Record Purchase</a>
+<div class="directory-container">
+
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Stock Purchases</h2>
+            <p>Every stock purchase — what was bought, from whom, and how it was paid for.</p>
         </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Purchase Number</th>
-                        <th scope="col">Supplier</th>
-                        <th scope="col">Branch</th>
-                        <th scope="col">Stock Status</th>
-                        <th scope="col">Payment</th>
-                        <th scope="col">Created</th>
-                        <th scope="col">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for po in purchase_orders %}
-                        <tr>
-                            <td class="brand-name"><strong>{{ po.po_number }}</strong></td>
-                            <td class="brand-name">{{ po.supplier.name|default:"No supplier" }}</td>
-                            <td class="brand-name">{{ po.branch.name }}</td>
-                            <td class="brand-name">
-                                {% if po.status == 'RECEIVED' %}
-                                    <span style="color: #166534; font-weight: 600;">{{ po.get_status_display }}</span>
-                                {% elif po.status == 'PARTIAL' %}
-                                    <span style="color: #b45309; font-weight: 600;">{{ po.get_status_display }}</span>
-                                {% elif po.status == 'CANCELLED' %}
-                                    <span style="color: #6b7280; font-weight: 600;">{{ po.get_status_display }}</span>
-                                {% else %}
-                                    <span style="color: #1e40af; font-weight: 600;">{{ po.get_status_display }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="brand-name">
-                                {% with status=po.payment_status %}
-                                    <span style="font-weight: 600; color: {% if status == 'PAID' %}#166534{% elif status == 'PARTIAL' %}#b45309{% else %}#991b1b{% endif %};">
-                                        {{ po.payment_status_display }}
-                                    </span>
-                                    {% if status != 'PAID' %}
-                                        <br><small style="color: #6b7280;">Balance KSH {{ po.balance_payable }}</small>
-                                    {% endif %}
-                                {% endwith %}
-                            </td>
-                            <td class="brand-name">{{ po.created_at|date:"d M Y" }}</td>
-                            <td class="brand-name">
-                                <a href="{% url 'purchase-order-detail' po.id %}" class="action-link edit-link">View</a>
-                                {% if po.status != 'RECEIVED' and po.status != 'CANCELLED' %}
-                                    <a href="{% url 'purchase-order-receive' po.id %}" class="action-link edit-link">Receive</a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="7" class="empty-state-row">
-                                <div class="empty-state">
-                                    <h3>No Stock Purchases Yet.</h3>
-                                    <p>Record a purchase to update inventory and track what's owed to suppliers.</p>
-                                    <a href="{% url 'purchase-order-create' %}" class="btn btn-secondary">Record one now</a>
-                                </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <a href="{% url 'purchase-order-create' %}" class="btn btn-primary">Record Purchase</a>
     </div>
+
+    <form method="get" role="search" data-live-form onsubmit="return false;"
+          style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px;">
+        <label style="font-size: 12px; color: #6b7280;">Search<br><input type="search" name="q" placeholder="Purchase no. or supplier" autocomplete="off" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;"></label>
+        <label style="font-size: 12px; color: #6b7280;">Stock status<br>
+            <select name="status" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                {% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select></label>
+        <label style="font-size: 12px; color: #6b7280;">Payment<br>
+            <select name="payment" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                <option value="PAID">Paid</option>
+                <option value="PARTIAL">Partly paid</option>
+                <option value="UNPAID">Unpaid</option>
+            </select></label>
+        <label style="font-size: 12px; color: #6b7280;">Supplier<br>
+            <select name="supplier" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                {% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
+            </select></label>
+        <label style="font-size: 12px; color: #6b7280;">Branch<br>
+            <select name="branch" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                {% for b in branches %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}
+            </select></label>
+        <label style="font-size: 12px; color: #6b7280;">From<br><input type="date" name="date_from" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;"></label>
+        <label style="font-size: 12px; color: #6b7280;">To<br><input type="date" name="date_to" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;"></label>
+        <a href="{% url 'purchase-order-list' %}" class="action-link" style="padding: 8px 4px;">Clear</a>
+    </form>
+
+    <div id="live-csrf" hidden>{% csrf_token %}</div>
+
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col">Purchase Number</th>
+                    <th scope="col">Supplier</th>
+                    <th scope="col">Branch</th>
+                    <th scope="col">Stock Status</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="live-body">
+                <tr><td colspan="7" class="empty-state-row"><div class="empty-state"><p>Loading…</p></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="live-pager"></div>
+</div>
+<script src="{% static 'js/live-search.js' %}" defer></script>
 {% endblock %}
