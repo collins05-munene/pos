@@ -115,7 +115,7 @@ def set_staff_active(user, *, is_active):
     return user
 
 
-def create_staff_user(*, tenant, handle, role, first_name="", password=None, pin=None):
+def create_staff_user(*, tenant, handle, role, first_name="", last_name="", email="", phone="", national_id=None, password=None, pin=None):
     """Owner/admin creates a cashier or manager inside their own tenant."""
     User = get_user_model()
     handle = handle.strip().lower()
@@ -126,8 +126,8 @@ def create_staff_user(*, tenant, handle, role, first_name="", password=None, pin
     if role not in User.Roles.values:
         raise ValidationError("Unknown role.")
 
-    user = User(username=compose_username(tenant.slug, handle), first_name=first_name,
-                role=role, tenant=tenant)
+    user = User(username=compose_username(tenant.slug, handle), first_name=first_name, last_name=last_name, email=email, phone=phone,national_id=national_id or None, role=role, tenant=tenant)
+
     if password:
         from django.contrib.auth.password_validation import validate_password
         validate_password(password, user=user)  # raises ValidationError -- caller handles it
@@ -140,4 +140,14 @@ def create_staff_user(*, tenant, handle, role, first_name="", password=None, pin
         user.save()
     except IntegrityError:
         raise ValidationError("That username is already taken in your business.")
+    return user
+
+def update_staff_details(user, *, first_name, last_name, email, phone, national_id=None):
+    user.first_name, user.last_name = first_name, last_name
+    user.email, user.phone = email, phone
+    user.national_id = national_id or None
+    try:
+        user.save(update_fields=["first_name", "last_name", "email", "phone", "national_id"])
+    except IntegrityError:
+        raise ValidationError("Those details clash with another user in your shop.")
     return user

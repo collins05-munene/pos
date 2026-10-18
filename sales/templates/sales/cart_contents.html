@@ -80,6 +80,7 @@
                         KSH {{ item.total_price }}
                     </div>
 
+        # variant_index is auto-filled by JS, so it must not make a blank row look "filled in".
                     <div style="flex: 0.5; text-align: right;">
                         <form method="POST" action="{% url 'cart_remove' %}" data-ajax-cart>
                             {% csrf_token %}

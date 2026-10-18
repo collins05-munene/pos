@@ -26,23 +26,32 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=15, choices=Roles.choices, default=Roles.CASHIER)
     last_seen = models.DateTimeField(null=True, blank=True)
-    pin = models.CharField(
-        max_length=128, blank=True, null=True,
-        validators=[RegexValidator(r'^\d{4,6}$', 'Pin must be 4  to 6 digits')],
-        help_text="Hashed 4-6 digit PIN for cashier login.",
-    )
-
-    # NULL only for platform superusers.
+    pin = models.CharField(max_length=128, blank=True, null=True,validators=[RegexValidator(r'^\d{4,6}$', 'Pin must be 4  to 6 digits')], help_text="Hashed 4-6 digit PIN for cashier login.")
     tenant = models.ForeignKey("tenants.Tenant", null=True, blank=True,
-                               on_delete=models.PROTECT, related_name="users")
-    is_owner = models.BooleanField(default=False,
-                                   help_text="The business owner: the only user who sees billing.")
+    on_delete=models.PROTECT, related_name="users")
+    is_owner = models.BooleanField(default=False,help_text="The business owner: the only user who sees billing.")
+    national_id = models.CharField(max_length=20, blank=True, null=True)  
+    phone = models.CharField(max_length=20, blank=True)
 
-    objects = UserManager()              # unscoped: authentication needs it
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "national_id"],
+                condition=models.Q(national_id__isnull=False),
+                name="uniq_national_id_per_tenant"),
+        ] + ([] if getattr(settings, "TENANCY_ALLOW_NULL_TENANT", False) else [
+            models.CheckConstraint(
+                condition=models.Q(is_superuser=True) | models.Q(tenant__isnull=False),
+                name="user_has_tenant_unless_superuser"),
+            models.UniqueConstraint(
+                fields=["tenant"], condition=models.Q(is_owner=True),
+                name="one_owner_per_tenant"),
+        ])
+
+    objects = UserManager()              
     tenant_objects = TenantUserManager()
 
     class Meta:
-        # DB-level guarantees, active once the backfill is done (TENANCY_ALLOW_NULL_TENANT off).
         constraints = [] if getattr(settings, "TENANCY_ALLOW_NULL_TENANT", False) else [
             models.CheckConstraint(
                 condition=models.Q(is_superuser=True) | models.Q(tenant__isnull=False),
@@ -67,7 +76,6 @@ class User(AbstractUser):
 
 
 class ActivityLog(TenantOwnedModel):
-    # Overrides the abstract field: failed logins / platform events have no tenant.
     tenant = models.ForeignKey("tenants.Tenant", null=True, blank=True, editable=False,
                                on_delete=models.SET_NULL, related_name="activity_logs")
     tenant_required = False

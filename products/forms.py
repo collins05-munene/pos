@@ -70,13 +70,10 @@ class ProductForm(forms.ModelForm):
         self.fields['unit_of_measure'].queryset = UnitOfMeasure.objects.order_by('name')
 
 
-# --------------------------------------------------------------------------
-# Base variants (size / colour / SKU) - these are what hold stock
-# --------------------------------------------------------------------------
+
 class ProductVariantForm(forms.ModelForm):
     class Meta:
         model = ProductVariant
-        # is_active is not a field: it isn't rendered, so it would post as False.
         fields = ['sku', 'size', 'color', 'cost_price', 'retail_price', 'low_stock_threshold']
         widgets = {
             'sku': forms.TextInput(attrs={'class': 'form-input sku-input', 'placeholder': 'SKU'}),
@@ -88,16 +85,13 @@ class ProductVariantForm(forms.ModelForm):
         }
 
 
-# extra=0 + min_num=1: exactly one row on a new product, existing rows on edit, never zero.
+
 ProductVariantFormSet = forms.inlineformset_factory(
     Product, ProductVariant, form=ProductVariantForm,
     extra=0, min_num=1, validate_min=True, can_delete=True,
 )
 
 
-# --------------------------------------------------------------------------
-# Selling units (packet, box, 500 g ...) - edited on the same page as the product
-# --------------------------------------------------------------------------
 class SellingUnitForm(forms.Form):
     """
     One selling unit of a base variant. `variant_index` is the position of the
@@ -133,7 +127,6 @@ class SellingUnitForm(forms.Form):
     CONTENT_FIELDS = ('unit_name', 'sku', 'units_per_pack', 'retail_price', 'cost_price')
 
     def has_changed(self):
-        # variant_index is auto-filled by JS, so it must not make a blank row look "filled in".
         return any(name in self.changed_data for name in self.CONTENT_FIELDS)
 
     def clean_unit_name(self):

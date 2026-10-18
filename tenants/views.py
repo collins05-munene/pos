@@ -3,21 +3,24 @@ import json
 from django.contrib.auth import login
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404, render, redirect
 
 from billing.pricing import quote_table
-from .forms import SignupForm
+from .forms import SignupForm, StaffDetailsForm
 from .mixins import OwnerRequiredMixin
 from .rendering import html_or_json
-from .services import (
-    create_staff_user, list_staff, register_business, set_staff_active,
-    set_staff_credential, staff_handle,
-)
+from .services import (create_staff_user, list_staff, register_business, set_staff_active, set_staff_credential, staff_handle, update_staff_details)
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
+
+
+def _form_errors(form):
+    return {f: list(errs) for f, errs in form.errors.items()}
 
 
 @method_decorator(ratelimit(key="ip", rate="5/h", method="POST", block=True), name="post")
@@ -58,16 +61,18 @@ class SignupView(View):
             "tenant": {"name": tenant.name, "business_code": tenant.slug},
             "invoice": {"number": invoice.number, "total": str(invoice.total),
                         "term_months": invoice.term_months},
-            "next": "/billing/",   # owner is logged in; billing pages are exempt from the lock
+            "next": "/billing/",   
         }, status=201)
 
 
-ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER")  # ADMIN is reserved for the owner, set at sign-up
-
+ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER")  
 
 def _staff_payload(user):
     return {
         "id": user.pk, "handle": staff_handle(user.tenant, user.username),
+        "first_name": user.first_name, "last_name": user.last_name,
+        "full_name": user.get_full_name(), "email": user.email, "phone": user.phone,
+        "national_id": user.national_id or "",
         "role": user.role, "is_active": user.is_active, "date_joined": user.date_joined,
         "login_method": "PIN" if user.role == "CASHIER" else "password",
     }
@@ -86,22 +91,23 @@ class StaffListView(OwnerRequiredMixin, View):
         """Add a cashier or manager."""
         handle = (request.POST.get("handle") or "").strip()
         role = (request.POST.get("role") or "").strip().upper()
-        first_name = (request.POST.get("first_name") or "").strip()
         credential = request.POST.get("credential") or ""
 
         if role not in ALLOWED_STAFF_ROLES:
             return JsonResponse({"errors": {"role": ["Choose Cashier or Manager."]}}, status=400)
 
-        kwargs = dict(tenant=request.tenant, handle=handle, role=role, first_name=first_name)
-        kwargs["pin" if role == "CASHIER" else "password"] = credential
+        form = StaffDetailsForm(request.POST, tenant=request.tenant)
+        if not form.is_valid():
+            return JsonResponse({"errors": _form_errors(form)}, status=400)
 
+        kwargs = dict(tenant=request.tenant, handle=handle, role=role, **form.cleaned_data)
+        kwargs["pin" if role == "CASHIER" else "password"] = credential
         try:
             user = create_staff_user(**kwargs)
         except ValidationError as exc:
             field = "credential" if "PIN" in "".join(exc.messages) or "password" in "".join(exc.messages) else "handle"
             return JsonResponse({"errors": {field: exc.messages}}, status=400)
         return JsonResponse({"staff": _staff_payload(user)}, status=201)
-
 
 class StaffActionView(OwnerRequiredMixin, View):
     """POST /staff/<id>/<action>/ -- reset-credential, activate, deactivate."""
@@ -115,8 +121,45 @@ class StaffActionView(OwnerRequiredMixin, View):
                 set_staff_active(user, is_active=False)
             elif action == "activate":
                 set_staff_active(user, is_active=True)
+            elif action == "update-details":
+                form = StaffDetailsForm(request.POST, tenant=request.tenant, instance=user)
+                if not form.is_valid():
+                    return JsonResponse({"errors": _form_errors(form)}, status=400)
+                update_staff_details(user, **form.cleaned_data)
             else:
                 return JsonResponse({"error": "unknown_action"}, status=404)
         except ValidationError as exc:
             return JsonResponse({"errors": {"value": exc.messages}}, status=400)
         return JsonResponse({"staff": _staff_payload(user)})
+
+
+class ProfileView(LoginRequiredMixin, View):
+    """Any signed-in user (owner, manager, cashier) sees and edits their own details."""
+    template_name = "tenants/profile.html"
+
+    def _render(self, request, form, status=200):
+        u = request.user
+        return render(request, self.template_name, {
+            "form": form,
+            "handle": staff_handle(u.tenant, u.username) if u.tenant_id else u.username,
+            "id_locked": bool(u.national_id),
+            "saved": request.GET.get("saved") == "1",
+        }, status=status)
+
+    def get(self, request):
+        u = request.user
+        return self._render(request, StaffDetailsForm(tenant=u.tenant, instance=u, require_id=False))
+
+    def post(self, request):
+        u = request.user
+        form = StaffDetailsForm(request.POST, tenant=u.tenant, instance=u, require_id=False)
+        if not form.is_valid():
+            return self._render(request, form, status=400)
+        data = form.cleaned_data
+        data["national_id"] = u.national_id or data["national_id"]
+        try:
+            update_staff_details(u, **data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self._render(request, form, status=400)
+        return redirect(f"{reverse('tenants:my-profile')}?saved=1")

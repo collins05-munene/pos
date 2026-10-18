@@ -1,0 +1,62 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% block title %}My profile -- Sellify{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">{% endblock %}
+
+{% block content %}
+<main>
+  <div class="wrap">
+    <h1>My profile</h1>
+    <p class="lede">
+      {{ request.user.get_role_display }}{% if request.tenant %} at {{ request.tenant.name }}{% endif %}
+      &middot; username <strong>{{ handle }}</strong>
+      &middot; joined {{ request.user.date_joined|date:"j M Y" }}
+    </p>
+
+    {% if saved %}<div class="alert" style="display:block;">Profile updated.</div>{% endif %}
+    {% for e in form.non_field_errors %}<div class="alert bad" style="display:block;">{{ e }}</div>{% endfor %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <div class="field-row">
+        <div class="field">
+          <label for="first_name">First name</label>
+          <input id="first_name" name="first_name" type="text" value="{{ form.first_name.value|default_if_none:'' }}" required>
+          {% if form.first_name.errors %}<div class="err" style="display:block;">{{ form.first_name.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label for="last_name">Last name</label>
+          <input id="last_name" name="last_name" type="text" value="{{ form.last_name.value|default_if_none:'' }}" required>
+          {% if form.last_name.errors %}<div class="err" style="display:block;">{{ form.last_name.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="phone">Phone number</label>
+          <input id="phone" name="phone" type="tel" value="{{ form.phone.value|default_if_none:'' }}" required>
+          {% if form.phone.errors %}<div class="err" style="display:block;">{{ form.phone.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label for="email">Email <small>(optional)</small></label>
+          <input id="email" name="email" type="email" value="{{ form.email.value|default_if_none:'' }}">
+          {% if form.email.errors %}<div class="err" style="display:block;">{{ form.email.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="national_id">ID number</label>
+        {% if id_locked %}
+          <input id="national_id" type="text" value="{{ request.user.national_id }}" disabled>
+          <small>Locked. Ask the shop owner if it needs correcting.</small>
+        {% else %}
+          <input id="national_id" name="national_id" type="text" value="{{ form.national_id.value|default_if_none:'' }}">
+          {% if form.national_id.errors %}<div class="err" style="display:block;">{{ form.national_id.errors.0 }}</div>{% endif %}
+        {% endif %}
+      </div>
+
+      <button type="submit" class="primary" style="width:auto;">Save changes</button>
+    </form>
+  </div>
+</main>
+{% endblock %}
