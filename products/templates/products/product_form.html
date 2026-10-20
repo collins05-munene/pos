@@ -37,6 +37,49 @@
     .single-variant .pack-variant-wrap { display: none; }
     .btn-add { background: #eff6ff; color: #1d4ed8; border: 1px dashed #93c5fd; border-radius: 6px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
     .example-box { background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.8rem; color: #4b5563; margin-bottom: 1rem; }
+
+    /* ---------- phones ---------- */
+    @media screen and (max-width: 640px) {
+        .page-content .grid-2 { grid-template-columns: 1fr; }
+
+        /* variant table -> one card per variant, labels come from the column order */
+        .variant-table, .variant-table tbody { display: block; }
+        .variant-table thead { display: none; }
+        .variant-table tr.variant-row {
+            display: block;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .variant-table td { display: block; border: 0; padding: 0.35rem 0; }
+        .variant-table td::before {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #6b7280;
+            margin-bottom: 0.2rem;
+        }
+        .variant-table td:nth-of-type(1)::before { content: "SKU *"; }
+        .variant-table td:nth-of-type(2)::before { content: "Size"; }
+        .variant-table td:nth-of-type(3)::before { content: "Color"; }
+        .variant-table td:nth-of-type(4)::before { content: "Cost price *"; }
+        .variant-table td:nth-of-type(5)::before { content: "Retail price *"; }
+        .variant-table td:nth-of-type(6)::before { content: "Min stock"; }
+        .variant-table td:last-of-type { text-align: left !important; padding-top: 0.6rem; }
+        .variant-table td:last-of-type::before { content: none; }
+        .variant-table .btn-danger { width: 100%; min-height: 44px; }
+
+        .form-footer-actions { flex-direction: column-reverse; align-items: stretch !important; }
+        .form-footer-actions .btn-action {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 44px; text-align: center;
+        }
+        #add-variant-btn, #add-pack-btn { min-height: 44px; }
+    }
 </style>
 
 <div class="form-page-container" style="max-width: 1000px; margin: 0 auto; padding: 2rem 1rem;">
@@ -94,7 +137,7 @@
                 {{ form.description }}
             </div>
 
-            <div style="display: flex; gap: 2rem; align-items: center; background: #f9fafb; padding: 0.75rem 1rem; border-radius: 6px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; align-items: center; background: #f9fafb; padding: 0.75rem 1rem; border-radius: 6px;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                     {{ form.has_variations }}
                     <span style="font-weight: 600;">This product has multiple variants (e.g. Sizes, Colors)</span>
@@ -107,7 +150,7 @@
         </div>
 
         <div class="form-section" id="variants-section">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                 <div>
                     <h3 class="form-section-title">Product Variants</h3>
                     <p class="form-section-sub" id="base-unit-note">Prices are per base unit (the Unit of Measure above).</p>
@@ -195,7 +238,7 @@
             {% include 'products/_pack_row.html' with f=packs.empty_form %}
         </template>
 
-        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 2rem;">
+        <div class="form-footer-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 2rem;">
             {% if not object %}
                 <span style="font-size: 0.8rem; color: #6b7280;">You'll be taken to record the purchase next.</span>
             {% endif %}

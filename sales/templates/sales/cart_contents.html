@@ -52,7 +52,7 @@
     }
 </style>
 
-<div id="cart-panel" class="cart-container">
+<div id="cart-panel" class="cart-container" data-items="{{ cart.total_items }}" data-total="{{ cart.get_total_price|default:'0.00' }}">
     <div class="cart-header">
         <h3 style="margin:0; color:#111827;">Current Checkout Session</h3>
         <small style="color:#6b7280;">{{ cart.cart|length }} line{{ cart.cart|length|pluralize }} &middot; {{ cart.total_items }} item{{ cart.total_items|pluralize }}</small>
@@ -80,7 +80,6 @@
                         KSH {{ item.total_price }}
                     </div>
 
-        # variant_index is auto-filled by JS, so it must not make a blank row look "filled in".
                     <div style="flex: 0.5; text-align: right;">
                         <form method="POST" action="{% url 'cart_remove' %}" data-ajax-cart>
                             {% csrf_token %}

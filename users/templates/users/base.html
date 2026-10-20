@@ -24,6 +24,7 @@
         <link rel="stylesheet" href="{% static 'users/css/form.css' %}">
         <link rel="stylesheet" href="{% static 'users/css/delete.css' %}">
         <link rel="stylesheet" href="{% static 'users/css/detail.css' %}">
+        <link rel="stylesheet" href="{% static 'users/css/responsive.css' %}">
         
         <style>
             .session-modal-overlay {
@@ -136,6 +137,25 @@
             .ts-dropdown .create { 
                 color: #1d4ed8; 
             }
+
+            /* Django message toasts: fit the screen on phones */
+            @media screen and (max-width: 640px) {
+                .toast-stack {
+                    left: 0.75rem !important;
+                    right: 0.75rem !important;
+                    top: 0.75rem !important;
+                    width: auto !important;
+                    max-width: none !important;
+                }
+                .pwa-update-toast {
+                    left: 0.75rem;
+                    right: 0.75rem;
+                    bottom: 0.75rem;
+                    transform: none;
+                    max-width: none;
+                }
+                .session-modal { padding: 1.25rem; }
+            }
         </style>
         
         {% block extra_head %} {% endblock %}
@@ -152,7 +172,7 @@
         </div>
 
         {% if messages %}
-        <div style="position: fixed; top: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem; max-width: 400px; width: 100%;">
+        <div class="toast-stack" style="position: fixed; top: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem; max-width: 400px; width: 100%;">
             {% for message in messages %}
             <div class="django-toast-alert" 
                 style="padding: 1rem 1.25rem; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; font-weight: 500; font-family: system-ui, sans-serif; font-size: 0.95rem;">
@@ -418,5 +438,6 @@
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
         {% load static %}
         <script src="{% static 'js/searchable-select.js' %}"></script>
+        <script src="{% static 'js/responsive.js' %}" defer></script>
     </body>
 </html>
