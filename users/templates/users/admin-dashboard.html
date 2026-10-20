@@ -2,8 +2,8 @@
 {% load static %}
 
 {% block title %}Overview{% endblock %}
-
 {% block extra_head %}
+
 <style>
 .dash {
     --dash-card: #ffffff;
@@ -24,7 +24,6 @@
     font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* ---------- Live status bar ---------- */
 .dash-live-bar {
     display: flex;
     align-items: center;
@@ -56,7 +55,35 @@
 .live-indicator.is-offline { background: var(--dash-warn-bg); color: var(--dash-warn); }
 @keyframes live-pulse { 50% { opacity: .35; } }
 
-/* ---------- KPI cards ---------- */
+.dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.wordmark {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--dash-text);
+    letter-spacing: -0.03em;
+}
+
+.wordmark span {
+    color: var(--dash-accent-light);
+}
+
+
+.dash-live-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0; 
+    font-size: 0.85rem;
+    color: var(--dash-muted);
+}
+
+
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -108,7 +135,6 @@
     font-weight: 500;
 }
 
-/* ---------- Panels & tables ---------- */
 .lists-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
@@ -158,7 +184,6 @@ table.dash-table tr:last-child td { border-bottom: none; }
     border-radius: 4px;
 }
 
-/* ---------- Cashier status ---------- */
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -188,7 +213,7 @@ table.dash-table tr:last-child td { border-bottom: none; }
 }
 .view-link:hover { background: rgba(79, 70, 229, 0.15); }
 
-/* ---------- Refresh feedback: the single orchestrated moment ---------- */
+
 .dash-flash .kpi-card { animation: dash-flash 0.8s ease; }
 @keyframes dash-flash {
     from { border-color: var(--dash-accent-light); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
@@ -202,11 +227,14 @@ table.dash-table tr:last-child td { border-bottom: none; }
 
 {% block content %}
 <div class="dash">
-
-  <div class="dash-live-bar">
-    <span id="live-indicator" class="live-indicator is-live" role="status" aria-live="polite">
-      <span class="live-dot"></span><span id="live-text">Live</span>
-    </span>
+  <div class="dash-header">
+    <div class="wordmark">Sell<span>ify</span></div>
+    
+    <div class="dash-live-bar">
+      <span id="live-indicator" class="live-indicator is-live" role="status" aria-live="polite">
+        <span class="live-dot"></span><span id="live-text">Live</span>
+      </span>
+    </div>
   </div>
 
   <div id="dash-live"
@@ -215,7 +243,6 @@ table.dash-table tr:last-child td { border-bottom: none; }
        data-body-url="{% url 'dashboard-body' %}">
     {% include 'users/_dashboard_body.html' %}
   </div>
-
 </div>
 {% endblock %}
 
