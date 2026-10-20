@@ -98,8 +98,8 @@
 {% if user.get_role_display == 'Admin' %}
 <aside class="sidebar" id="mainSidebar">
     <div class="logo">
-        <h2>Sellify POS</h2>
-        <p>Retail Suite</p>
+        <h2>UniSale Systems</h2>
+        <p>POS Retail Suite</p>
     </div>
 
     <ul class="menu">
@@ -137,6 +137,9 @@
         <li><a href="{% url 'support:feature-list' %}">Feature Requests</a></li>
         <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
         {% if user.is_staff %}<li><a href="{% url 'support:staff-queue' %}">Support Queue</a></li>{% endif %}
+        <li class="menu-title">Legal Agreements</li>
+        <li><a href="{% url 'terms' %}">Terms of Service</a></li>
+        <li><a href="{% url 'privacy' %}">Privacy Policy</a></li>
     </ul>
     <div class="sidebar-footer">
         <strong>{{ user.username }}</strong>

@@ -1,0 +1,90 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2563eb">
+    <title>{% block title %}Legal{% endblock %} | UniSale Systems</title>
+    <link rel="stylesheet" href="{% static 'users/css/legal.css' %}">
+</head>
+<body>
+
+<header class="legal-header">
+    <div class="legal-header-inner">
+        <a class="legal-brand" href="{% url 'login' %}">UniSale Systems</a>
+        <nav class="legal-nav" aria-label="Legal pages">
+            <a href="{% url 'terms' %}" {% if request.resolver_match.url_name == 'terms' %}aria-current="page"{% endif %}>Terms</a>
+            <a href="{% url 'privacy' %}" {% if request.resolver_match.url_name == 'privacy' %}aria-current="page"{% endif %}>Privacy</a>
+            <a href="{% url 'login' %}" class="legal-nav-signin">Sign in</a>
+        </nav>
+    </div>
+</header>
+
+<div class="legal-layout">
+
+    <aside class="legal-toc">
+        <nav aria-label="Contents">
+            <details id="tocDetails">
+                <summary>Contents</summary>
+                <ol>
+                    {% block toc %}{% endblock %}
+                </ol>
+            </details>
+        </nav>
+    </aside>
+
+    <main class="legal-doc" id="top">
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+
+<footer class="legal-footer">
+    <div class="legal-footer-inner">
+        <span>&copy; {% now "Y" %} UniSale Systems. All rights reserved.</span>
+        <span class="legal-footer-links">
+            <a href="{% url 'terms' %}">Terms and Conditions</a>
+            <a href="{% url 'privacy' %}">Privacy Policy</a>
+            <a href="#top">Back to top &uarr;</a>
+        </span>
+    </div>
+</footer>
+
+<script>
+(function () {
+    'use strict';
+    var details = document.getElementById('tocDetails');
+    if (!details) return;
+
+    // Wide screens: contents always visible in the side column. Phones: collapsed.
+    var wide = window.matchMedia('(min-width: 1000px)');
+    function sync() { details.open = wide.matches; }
+    sync();
+    if (wide.addEventListener) { wide.addEventListener('change', sync); }
+    else if (wide.addListener) { wide.addListener(sync); }
+
+    // Tapping a contents link on a phone folds the list away again.
+    details.addEventListener('click', function (e) {
+        if (!wide.matches && e.target.closest('a')) details.open = false;
+    });
+
+    // Highlight the section being read.
+    var links = {};
+    details.querySelectorAll('a[href^="#"]').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    if ('IntersectionObserver' in window) {
+        var current = null;
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                if (en.isIntersecting && links[en.target.id]) {
+                    if (current) current.removeAttribute('aria-current');
+                    current = links[en.target.id];
+                    current.setAttribute('aria-current', 'true');
+                }
+            });
+        }, { rootMargin: '-80px 0px -70% 0px' });
+        document.querySelectorAll('.legal-doc h2[id]').forEach(function (h) { io.observe(h); });
+    }
+}());
+</script>
+</body>
+</html>

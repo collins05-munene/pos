@@ -13,7 +13,7 @@ from datetime import time
 
 from django.conf import settings
 
-PRODUCT_NAME = getattr(settings, "SUPPORT_PRODUCT_NAME", "Sellify POS")
+PRODUCT_NAME = getattr(settings, "SUPPORT_PRODUCT_NAME", "UniSale Systems POS")
 APP_VERSION = getattr(settings, "APP_VERSION", "unknown")
 SITE_URL = getattr(settings, "SITE_URL", "")
 SUPPORT_EMAIL = getattr(settings, "SUPPORT_EMAIL", "")
