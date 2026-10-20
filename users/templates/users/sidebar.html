@@ -9,7 +9,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: 1300;
+        padding: 1rem;
+        overflow-y: auto;
     }
 
     .modal-content {
@@ -19,6 +21,8 @@
         border-radius: 8px;
         padding: 24px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        max-height: 100%;
+        overflow-y: auto;
     }
 
     .modal-header {
@@ -82,6 +86,13 @@
         border: none;
         border-radius: 6px;
         cursor: pointer;
+    }
+
+    @media screen and (max-width: 480px) {
+        .modal-content { padding: 18px; }
+        .modal-actions { flex-direction: column-reverse; }
+        .modal-actions .btn-save,
+        .modal-actions .btn-cancel { width: 100%; min-height: 44px; }
     }
 </style>
 {% if user.get_role_display == 'Admin' %}
@@ -167,6 +178,7 @@
 {% endif %}
 
 <button id="sidebarToggle" aria-label="Toggle Sidebar" aria-expanded="true" aria-controls="mainSidebar">☰</button>
+<div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
 
 <div id="cashModal" class="modal-overlay" style="display: none;">
@@ -209,15 +221,57 @@
 (function () {
     'use strict';
 
+    // Same breakpoint as responsive.css: at <= 900px the sidebar is a slide-in drawer
+    var MOBILE = window.matchMedia('(max-width: 900px)');
+
     function initSidebarToggle() {
-        const sidebar = document.getElementById('mainSidebar');
-        const toggle = document.getElementById('sidebarToggle');
+        var sidebar  = document.getElementById('mainSidebar');
+        var toggle   = document.getElementById('sidebarToggle');
+        var backdrop = document.getElementById('sidebarBackdrop');
         if (!sidebar || !toggle) return;
 
+        function setDrawer(open) {
+            document.body.classList.toggle('sidebar-open', open);
+            toggle.setAttribute('aria-expanded', String(open));
+            toggle.textContent = open ? '\u2715' : '\u2630';   // X / hamburger
+        }
+
         toggle.addEventListener('click', function () {
-            const isHidden = sidebar.classList.toggle('sidebar-hidden');
-            toggle.setAttribute('aria-expanded', String(!isHidden));
+            if (MOBILE.matches) {
+                setDrawer(!document.body.classList.contains('sidebar-open'));
+            } else {
+                // desktop: unchanged collapse/expand behaviour
+                var isHidden = sidebar.classList.toggle('sidebar-hidden');
+                toggle.setAttribute('aria-expanded', String(!isHidden));
+            }
         });
+
+        if (backdrop) backdrop.addEventListener('click', function () { setDrawer(false); });
+
+        // tapping a menu link closes the drawer (also covers the "Cash In" modal link)
+        sidebar.addEventListener('click', function (e) {
+            if (MOBILE.matches && e.target.closest('.menu a')) setDrawer(false);
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && document.body.classList.contains('sidebar-open')) setDrawer(false);
+        });
+
+        function syncToViewport() {
+            if (MOBILE.matches) {
+                sidebar.classList.remove('sidebar-hidden');   // drawer state is body.sidebar-open on mobile
+                setDrawer(false);
+            } else {
+                document.body.classList.remove('sidebar-open');
+                toggle.textContent = '\u2630';
+                toggle.setAttribute('aria-expanded', String(!sidebar.classList.contains('sidebar-hidden')));
+            }
+        }
+
+        if (MOBILE.addEventListener) { MOBILE.addEventListener('change', syncToViewport); }
+        else if (MOBILE.addListener) { MOBILE.addListener(syncToViewport); }
+
+        syncToViewport();
     }
 
     if (document.readyState === 'loading') {

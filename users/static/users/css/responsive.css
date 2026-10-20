@@ -1,0 +1,207 @@
+/* =====================================================================
+   responsive.css  -  mobile / tablet layer for the POS UI
+   Load LAST in base.html (after detail.css) so it can refine everything
+   above it.  Breakpoints:
+     900px  tablet & below : sidebar becomes a slide-in drawer
+     640px  phones         : tighter spacing, stacked forms, 16px inputs
+     520px / 400px         : small phones, topbar trims
+   Everything is wrapped in "screen" so receipt printing is untouched.
+   ===================================================================== */
+
+/* ---- always on ------------------------------------------------------ */
+img, video { max-width: 100%; height: auto; }
+
+/* wrapper added by responsive.js around tables that aren't already scrollable */
+.table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sidebar-backdrop { display: none; }
+
+
+/* =====================================================================
+   <= 900px : drawer navigation + compact topbar
+   ===================================================================== */
+@media screen and (max-width: 900px) {
+
+    :root { --sidebar-width: min(280px, 80vw); }
+
+    /* --- sidebar -> off-canvas drawer --- */
+    .sidebar,
+    .sidebar.sidebar-hidden {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        height: 100vh;
+        height: 100dvh;
+        width: var(--sidebar-width);
+        min-width: var(--sidebar-width);
+        z-index: 1100;
+        transform: translateX(-100%);
+        visibility: hidden;                      /* keeps closed links out of the tab order */
+        transition: transform .28s ease, visibility 0s linear .28s;
+    }
+
+    body.sidebar-open .sidebar {
+        transform: none;
+        visibility: visible;
+        transition: transform .28s ease, visibility 0s;
+        box-shadow: 8px 0 30px rgba(0, 0, 0, .35);
+    }
+
+    .sidebar .logo           { padding: 18px 20px; }
+    .sidebar .menu           { padding: 1rem; -webkit-overflow-scrolling: touch; }
+    .sidebar .sidebar-footer { padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, .55);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease;
+        z-index: 1050;
+    }
+    body.sidebar-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
+
+    /* --- hamburger: sits in the topbar, slides beside the drawer when open --- */
+    #sidebarToggle,
+    #sidebarToggle[aria-expanded="false"] {
+        left: 10px;
+        top: 8px;
+        width: 44px;
+        height: 44px;
+        z-index: 1200;
+    }
+    body.sidebar-open #sidebarToggle { left: calc(var(--sidebar-width) + 12px); }
+
+    /* --- topbar --- */
+    .topbar {
+        height: 60px;
+        padding: 0 .75rem 0 64px;                /* clears the hamburger */
+        gap: .5rem;
+    }
+    .topbar .left-side { flex: 1 1 auto; min-width: 0; }
+    .topbar .left-side input { width: 100%; max-width: none; min-width: 0; }
+    .topbar .right-side { gap: .5rem; flex-shrink: 0; }
+    .topbar .status { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+    .topbar .profile { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* notification dropdown: pin to the screen instead of the bell */
+    .notification-menu {
+        position: fixed;
+        top: 64px;
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-width: none;
+    }
+    .notification-list { max-height: 60vh; }
+
+    /* --- layout --- */
+    .page-content { -webkit-overflow-scrolling: touch; }
+
+    /* tables: tidy padding (horizontal scroll comes from .table-wrapper / .table-scroll) */
+    .page-content .data-table th,
+    .page-content .data-table td { padding: .75rem 1rem; }
+}
+
+
+/* =====================================================================
+   <= 640px : phones
+   ===================================================================== */
+@media screen and (max-width: 640px) {
+
+    /* page shells: less outer spacing (prefixed to beat per-page inline <style>) */
+    .page-content .directory-container,
+    .page-content .dashboard-container,
+    .page-content .detail-container,
+    .page-content .receipts-wrap { margin: 1rem auto; padding: 0 1rem; }
+
+    .page-content .backups-page { padding: 16px; }
+    .page-content .delete-page-container { margin: 1.5rem auto; padding: 0 1rem; }
+    .page-content .payment-card { margin: 1rem auto; padding: 1.25rem; }
+    .page-content .receipt-page { margin: 1rem auto; }
+    .page-content .receipt-actions { flex-wrap: wrap; }
+
+    /* headings */
+    .page-content .header-text h2,
+    .page-content .dashboard-title { font-size: 1.4rem; }
+    .page-content .invoice-title   { font-size: 1.4rem; }
+    .page-content .agg-value       { font-size: 1.4rem; }
+    .page-content .header-aggregates { text-align: left; }
+    .page-content .page-header { margin-bottom: 1.25rem; }
+
+    /* cards */
+    .page-content .card { padding: 1rem; }
+    .page-content .form-card-header { padding: 1.25rem; }
+    .page-content .styled-form { padding: 1.25rem; }
+    .page-content .product-container { padding: 16px; }
+    .page-content .form-section { padding: 1rem; }
+
+    /* dashboard filter bar: stack, full-width fields */
+    .page-content .header-actions { flex-wrap: wrap; }
+    .page-content .report-filter-card { padding: 1rem; }
+    .page-content .report-filter-field { flex: 1 1 100%; }
+    .page-content .report-filter-field input[type="datetime-local"] { width: 100%; }
+    .page-content .btn-generate { width: 100%; min-height: 44px; }
+
+    /* inputs: 16px stops iOS Safari zooming the page on focus */
+    .page-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]),
+    .page-content select,
+    .page-content textarea,
+    .topbar input,
+    .ts-control,
+    .ts-control input,
+    .modal-content .form-control,
+    .modal-content input { font-size: 16px; }
+
+    /* pagination */
+    .pagination-list { max-width: 100%; overflow-x: auto; }
+    .pagination-link { padding: .65rem .9rem; }
+
+    /* support pages */
+    .page-content .sp-actions-row { flex-wrap: wrap; }
+
+    /* row actions in tables: allow comfortable tapping */
+    .action-link { padding: .5rem .85rem; margin-left: .35rem; }
+}
+
+
+/* =====================================================================
+   <= 520px / 400px : small phones - give the search box room
+   ===================================================================== */
+@media screen and (max-width: 520px) {
+    .topbar .profile { display: none; }          /* name + role are also in the drawer footer */
+}
+@media screen and (max-width: 400px) {
+    .topbar .status { display: none; }
+    .page-content .directory-container,
+    .page-content .dashboard-container,
+    .page-content .detail-container,
+    .page-content .receipts-wrap { padding: 0 .75rem; }
+}
+
+
+/* =====================================================================
+   Touch devices (any width): bigger tap targets
+   ===================================================================== */
+@media screen and (pointer: coarse) {
+    .menu li a            { padding: 12px 14px; min-height: 44px; display: flex; align-items: center; }
+    .btn, .btn-submit, .btn-action, .btn-link, .btn-cancel, .btn-danger,
+    .cancel-btn, .btn-generate, .session-btn { min-height: 44px; }
+    .notification-bell-btn { min-width: 44px; min-height: 44px; }
+    .notification-item .close-btn { min-width: 32px; min-height: 32px; }
+    .quick-pick-btn { padding: .5rem .95rem; }
+    .action-link { min-height: 36px; display: inline-flex; align-items: center; }
+}
+
+/* never let these show on paper */
+@media print {
+    .sidebar-backdrop, #sidebarToggle { display: none !important; }
+}

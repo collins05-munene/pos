@@ -8,9 +8,22 @@
     --danger:#ef4444;
 }
 
+*, *::before, *::after{
+    box-sizing:border-box;
+}
+
+html{
+    -webkit-text-size-adjust:100%;
+}
+
+body{
+    margin:0;
+    font-family:"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
 
 .auth-wrapper{
-    height:100vh;
+    min-height:100vh;
+    min-height:100dvh;
     display:flex;
     justify-content:center;
     align-items:center;
@@ -19,7 +32,8 @@
 }
 
 .auth-card{
-    width:380px;
+    width:100%;
+    max-width:380px;
     background:var(--card);
     border:1px solid var(--border);
     border-radius:14px;
@@ -56,6 +70,9 @@ label{
 
 input{
     width:100%;
+    min-height:46px;
+    font-size:16px;              /* 16px stops iOS zooming the page on focus */
+    font-family:inherit;
     padding:10px 12px;
     border-radius:8px;
     border:1px solid var(--border);
@@ -71,6 +88,9 @@ input:focus{
 
 .btn-primary{
     width:100%;
+    min-height:48px;
+    font-size:16px;
+    font-family:inherit;
     padding:10px;
     border:none;
     border-radius:8px;
@@ -106,12 +126,12 @@ input:focus{
     font-size:15px;
     color:var(--muted);
     text-decoration:none;
-    padding: 10px;
+    padding: 12px 10px;
     border-radius: 8px;
 }
 
 .toggle-auth-link:hover{
-    color:rgb(255, 255, 0255);
+    color:#ffffff;
     background-color:#2563eb;
     transition: 0.6s;
 }
@@ -126,6 +146,8 @@ input:focus{
 
 .keypad-btn{
     padding:12px;
+    min-height:52px;
+    font-size:1.1rem;
     border-radius:8px;
     border:1px solid var(--border);
     background:#0f172a;
@@ -145,4 +167,30 @@ input:focus{
 .keypad-btn.submit{
     background:var(--primary);
     border:none;
+}
+
+
+/* ---------- phones ---------- */
+@media (max-width:480px){
+    .auth-wrapper{
+        padding:12px;
+    }
+    .auth-card{
+        padding:22px 18px;
+        border-radius:12px;
+        box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    .auth-title{
+        font-size:20px;
+    }
+    .auth-subtitle{
+        font-size:15px;
+        margin-bottom:16px;
+    }
+    label{
+        font-size:15px;
+    }
+    .alert-banner{
+        font-size:14px;
+    }
 }

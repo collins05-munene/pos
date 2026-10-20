@@ -21,7 +21,7 @@ html, body {
 }
 
 body{
-    font-family:Segoe UI;
+    font-family:"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
     background:var(--background);
     color:var(--text);
 }

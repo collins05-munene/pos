@@ -126,6 +126,108 @@
         background: #2563eb;
         color: #fff;
 }
+
+    /* ---------- mobile cart (bottom sheet) ---------- */
+    .cart-fab, .cart-close, .cart-backdrop { display: none; }
+
+    @media screen and (max-width: 900px) {
+        .catalog-panel { padding: 0.75rem; border-right: none; }
+        .search-input { font-size: 16px; padding: 0.7rem; min-width: 0; }
+        .search-btn { min-height: 44px; padding: 0 1rem; }
+        .category-scroll {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            margin-left: -0.75rem; margin-right: -0.75rem;
+            padding-left: 0.75rem; padding-right: 0.75rem;
+        }
+        .category-scroll::-webkit-scrollbar { display: none; }
+        .cat-badge { flex-shrink: 0; padding: 0.6rem 1rem; }
+        .product-matrix {
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.6rem;
+            padding-bottom: 5.5rem;           /* room for the floating cart bar */
+            -webkit-overflow-scrolling: touch;
+        }
+        .variant-tile { padding: 0.75rem; }
+
+        /* cart becomes a sheet that slides up over the catalog */
+        .checkout-panel {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            top: 12vh; top: 12dvh;
+            max-width: none;
+            margin: 0;
+            z-index: 900;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            transform: translateY(100%);
+            visibility: hidden;
+            transition: transform 0.28s ease, visibility 0s linear 0.28s;
+        }
+        body.cart-open .checkout-panel {
+            transform: none;
+            visibility: visible;
+            transition: transform 0.28s ease, visibility 0s;
+        }
+
+        .cart-backdrop {
+            display: block;
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 850;
+        }
+        body.cart-open .cart-backdrop { opacity: 1; pointer-events: auto; }
+
+        .cart-close {
+            position: fixed;
+            right: 0.75rem;
+            top: calc(12vh + 0.5rem); top: calc(12dvh + 0.5rem);
+            width: 44px; height: 44px;
+            align-items: center; justify-content: center;
+            background: #f3f4f6; color: #374151;
+            border: none; border-radius: 50%;
+            font-size: 1.4rem; cursor: pointer;
+            z-index: 901;
+        }
+        body.cart-open .cart-close { display: flex; }
+
+        .cart-fab {
+            display: flex;
+            position: fixed;
+            left: 0.75rem; right: 0.75rem; bottom: 0.75rem;
+            z-index: 800;
+            min-height: 54px;
+            align-items: center; justify-content: space-between; gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: #2563eb; color: #fff;
+            border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 700; cursor: pointer;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+        .cart-fab.is-empty { background: #6b7280; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+        .cart-fab-meta { font-weight: 500; font-size: 0.9rem; opacity: 0.95; }
+        body.cart-open .cart-fab { display: none; }
+
+        /* cart contents, phone-sized (prefixed to beat the fragment's own <style>) */
+        .checkout-panel .cart-header { padding: 1rem 4rem 1rem 1rem; }
+        .checkout-panel .cart-rows-box { padding: 0 1rem; -webkit-overflow-scrolling: touch; }
+        .checkout-panel .cart-item-row { flex-wrap: wrap; gap: 0.5rem 0.75rem; }
+        .checkout-panel .cart-item-row > div:nth-child(1) { flex: 1 1 100% !important; }
+        .checkout-panel .cart-item-row > div:nth-child(2) { flex: 1 1 auto !important; text-align: left !important; }
+        .checkout-panel .cart-item-row > div:nth-child(2) form { justify-content: flex-start !important; }
+        .checkout-panel .cart-item-row > div:nth-child(3) { flex: 0 0 auto !important; }
+        .checkout-panel .cart-item-row > div:nth-child(4) { flex: 0 0 auto !important; }
+        .checkout-panel .qty-input { width: 72px; min-height: 44px; font-size: 16px; }
+        .checkout-panel .update-btn,
+        .checkout-panel .row-btn-remove { min-width: 44px; min-height: 44px; }
+        .checkout-panel .cart-totals-footer {
+            padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+        }
+    }
+    @media print { .cart-fab, .cart-close, .cart-backdrop { display: none !important; } }
 </style>
 {% endblock %}
 
@@ -156,6 +258,14 @@
     </div>
 
 </div>
+
+<!-- mobile cart controls (outside .checkout-panel because its HTML is replaced on every cart update) -->
+<div class="cart-backdrop" id="cartBackdrop"></div>
+<button type="button" class="cart-close" id="cartClose" aria-label="Close cart">&times;</button>
+<button type="button" class="cart-fab is-empty" id="cartFab" aria-expanded="false">
+    <span>View cart</span>
+    <span class="cart-fab-meta"><span id="cartFabCount">0</span> items &middot; KSH <span id="cartFabTotal">0.00</span></span>
+</button>
 {% endblock %}{% block extra_js %}
 <script>
 (function () {
@@ -289,8 +399,52 @@
         });
     }
 
+    function initMobileCart() {
+        const fab = document.getElementById('cartFab');
+        const closeBtn = document.getElementById('cartClose');
+        const backdrop = document.getElementById('cartBackdrop');
+        const panel = document.querySelector('.checkout-panel');
+        if (!fab || !closeBtn || !backdrop || !panel) return;
+
+        const countEl = document.getElementById('cartFabCount');
+        const totalEl = document.getElementById('cartFabTotal');
+
+        function setOpen(open) {
+            document.body.classList.toggle('cart-open', open);
+            fab.setAttribute('aria-expanded', String(open));
+        }
+
+        // The cart HTML is swapped out on every add/update/remove,
+        // so re-read the counts from it each time it changes.
+        function syncFab() {
+            const cart = document.getElementById('cart-panel');
+            if (!cart) return;
+            const items = cart.dataset.items || '0';
+            countEl.textContent = items;
+            totalEl.textContent = cart.dataset.total || '0.00';
+            fab.classList.toggle('is-empty', items === '0');
+        }
+
+        fab.addEventListener('click', function () { setOpen(true); });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        backdrop.addEventListener('click', function () { setOpen(false); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+
+        new MutationObserver(syncFab).observe(panel, { childList: true });
+
+        const wide = window.matchMedia('(min-width: 901px)');
+        const onWide = function (e) { if (e.matches) setOpen(false); };
+        if (wide.addEventListener) { wide.addEventListener('change', onWide); }
+        else if (wide.addListener) { wide.addListener(onWide); }
+
+        syncFab();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         delegateCartEvents(document);
+        initMobileCart();
 
         const searchForm = document.getElementById('product-search-form');
         const searchInput = document.getElementById('product-search-input');

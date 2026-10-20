@@ -184,11 +184,13 @@
 
   .data-split-container {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);   /* 1fr alone lets a wide table stretch the card past the screen */
     gap: 1.5rem;
     align-items: start;
     margin-bottom: 2rem;
   }
+  .data-split-container > .card { min-width: 0; }
+  .table-card > div[id$="-table-container"] { min-width: 0; max-width: 100%; }
   .section-title {
     margin: 0 0 1.25rem 0;
     font-size: 1.15rem;
@@ -197,8 +199,14 @@
   .table-responsive {
     width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     transition: opacity 0.15s ease;
   }
+  /* Sessions, Cash In/Out log and Sales tables: keep columns on one line so the
+     table gets wider than the screen and scrolls sideways instead of squashing. */
+  .table-card .table-responsive table { min-width: 640px; }
+  .table-card th,
+  .table-card td { white-space: nowrap; }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -436,6 +444,22 @@
       'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
   }
 
+  // Make sure every table inside a container sits in a horizontal scroller.
+  // Safe to call repeatedly: tables already inside one are left alone.
+  function makeScrollable(root) {
+    if (!root) return;
+    root.querySelectorAll('table').forEach(function (table) {
+      if (table.closest('.table-responsive')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'table-responsive';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    });
+  }
+
+  ['sessions-table-container', 'txns-table-container', 'orders-table-container']
+    .forEach(function (id) { makeScrollable(document.getElementById(id)); });
+
   function startOfDay(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
@@ -479,6 +503,7 @@
         .then(function (data) {
           if (data && data.ok) {
             container.innerHTML = data.html;
+            makeScrollable(container);   // re-apply after the AJAX swap
             
             window.history.replaceState(null, '', relativeHref);
           } else {
