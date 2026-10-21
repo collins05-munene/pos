@@ -31,12 +31,6 @@ if os.path.exists(env_file):
 SECRET_KEY  = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# CHANGED FOR PWA/PRODUCTION HARDENING: this was hardcoded to True.
-# It now defaults to True for local/ngrok dev (unchanged behaviour if
-# you don't set anything), but MUST be set to False via the DEBUG env
-# var in production — the HTTPS/security block below only activates
-# when DEBUG is False, and a service worker will refuse to register
-# on a plain-HTTP production origin anyway (see notes below).
 DEBUG = env.bool('DEBUG', default=True)
 
 ALLOWED_HOSTS = [
@@ -73,6 +67,7 @@ INSTALLED_APPS = [
     "backups",
     "notifications",
     "support",
+    "assistant",
     
 ]
 
@@ -106,6 +101,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                "assistant.context_processors.assistant",
             ],
         },
     },
@@ -256,3 +252,10 @@ SITE_URL = "https://pos-wctc.onrender.com"       # links inside emails
 SUPPORT_EMAIL = "collinsgitonga.dev@gmail.com"      # team inbox for new tickets and customer replies
 SUPPORT_WHATSAPP_NUMBER = "254790342156"     # digits only, international format
 SUPPORT_UPLOAD_ROOT = "/var/app/private_uploads" 
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
+ASSISTANT_ENABLED = os.environ.get("ASSISTANT_ENABLED", "1") == "1"
+ASSISTANT_NAME = "POS Assistant"                  
+ASSISTANT_PRODUCT_NAME = "UniSale Systems POS"      
+ASSISTANT_DAILY_LIMIT_PER_TENANT = 100 

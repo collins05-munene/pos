@@ -439,5 +439,8 @@
         {% load static %}
         <script src="{% static 'js/searchable-select.js' %}"></script>
         <script src="{% static 'js/responsive.js' %}" defer></script>
+        {% if user.is_authenticated and request.tenant and assistant_enabled %}
+           {% include 'assistant/widget.html' %}
+        {% endif %}
     </body>
 </html>
