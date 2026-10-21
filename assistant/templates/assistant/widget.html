@@ -1,0 +1,70 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'assistant/assistant.css' %}">
+
+<div id="assistantRoot" class="assistant-root"
+     data-url="{% url 'assistant:chat' %}"
+     data-csrf="{{ csrf_token }}"
+     data-user="{{ user.pk }}">
+
+    <button type="button" id="assistantFab" class="assistant-fab"
+            aria-label="Open help assistant" aria-expanded="false" aria-controls="assistantPanel">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.6-.8L3 20l1.1-4.7A8.4 8.4 0 1 1 21 11.5z"/>
+        </svg>
+        <span class="assistant-fab-label">Help</span>
+    </button>
+
+    <section id="assistantPanel" class="assistant-panel" role="dialog" aria-label="{{ assistant_name }}" hidden>
+        <header class="assistant-header">
+            <div class="assistant-title">
+                <strong>{{ assistant_name }}</strong>
+                <small>Ask how to use the POS</small>
+            </div>
+            <button type="button" id="assistantClear" class="assistant-icon-btn" aria-label="Clear conversation" title="Clear conversation">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg>
+            </button>
+            <button type="button" id="assistantClose" class="assistant-icon-btn" aria-label="Close assistant">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+        </header>
+
+        <div id="assistantMessages" class="assistant-messages" role="log" aria-live="polite">
+            <div class="assistant-msg assistant-msg-bot assistant-greeting">
+                <div class="assistant-bubble">
+                    <p>Hi{% if user.first_name %} {{ user.first_name }}{% endif %}! I can help you use the POS: selling, the cash register, stock, reports and more. What do you need?</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="assistantChips" class="assistant-chips">
+            {% if user.role == 'CASHIER' %}
+                <button type="button" data-q="How do I make a sale?">How do I make a sale?</button>
+                <button type="button" data-q="A customer is paying by M-Pesa. What happens?">Customer paying by M-Pesa</button>
+                <button type="button" data-q="How do I open and close the register?">Open / close the register</button>
+                <button type="button" data-q="Why can't I sell an item?">Why can't I sell an item?</button>
+            {% else %}
+                <button type="button" data-q="How do I add a product that is sold as tablets, packets and boxes?">Add a product with packs</button>
+                <button type="button" data-q="How do I receive stock from a supplier?">Receive stock</button>
+                <button type="button" data-q="How do I read the dashboard figures?">Read the dashboard</button>
+                <button type="button" data-q="How do I back up my data?">Back up my data</button>
+                {% if user.is_owner %}<button type="button" data-q="How does billing and renewal work?">Billing &amp; renewal</button>{% endif %}
+            {% endif %}
+        </div>
+
+        <p class="assistant-notice">AI can make mistakes. Never type passwords, PINs or customers' personal details.</p>
+
+        <form id="assistantForm" class="assistant-form" autocomplete="off">
+            <textarea id="assistantInput" rows="1" maxlength="1000" placeholder="Type your question…"
+                      aria-label="Your question" enterkeyhint="send"></textarea>
+            <button type="submit" id="assistantSend" class="assistant-send" aria-label="Send">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+        </form>
+    </section>
+</div>
+
+<script src="{% static 'assistant/assistant.js' %}" defer></script>
