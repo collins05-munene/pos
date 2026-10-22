@@ -14,8 +14,6 @@ def api_key():
 
 
 def model():
-    # Model names get retired often. Keep this in an env var so you can change it
-    # without a deploy. Verify what your key can use with:  manage.py assistant_check --list-models
     return _get("GEMINI_MODEL", "gemini-flash-lite-latest")
 
 
@@ -36,12 +34,10 @@ def temperature():
 
 
 def max_output_tokens():
-    # Reasoning ("thinking") tokens count against this, so keep headroom.
     return int(_get("ASSISTANT_MAX_OUTPUT_TOKENS", 1500))
 
 
 def thinking_level():
-    # Optional, e.g. "minimal" or "low" on Gemini 3 models (faster, cheaper). Blank = model default.
     return (_get("GEMINI_THINKING_LEVEL", "") or "").strip()
 
 
@@ -50,5 +46,4 @@ def timeout_seconds():
 
 
 def tenant_daily_limit():
-    # Protects the (small) free quota from one shop using it all. 0 = unlimited.
     return int(_get("ASSISTANT_DAILY_LIMIT_PER_TENANT", 100))
