@@ -14,11 +14,14 @@
 <div class="auth-wrapper">
 
     <div class="auth-card">
+        <div class="auth-progress-container" id="progressContainer">
+            <div class="auth-progress-bar"></div>
+        </div>
 
         <h2 class="auth-title">Management Access</h2>
         <p class="auth-subtitle">Sign in with standard admin/manager credentials</p>
 
-        <form method="POST">
+        <form method="POST" id="authForm">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
@@ -37,7 +40,7 @@
                 <input type="password" name="password" required autocomplete="current-password">
             </div>
             <input type="hidden" name="next" value="{{ next }}">
-            <button class="btn-primary" type="submit">
+            <button class="btn-primary" type="submit" id="submitBtn">
                 Authenticate
             </button>
 
@@ -50,6 +53,18 @@
     </div>
 
 </div>
+
+<script>
+    document.getElementById('authForm').addEventListener('submit', function(e) {
+        const container = document.getElementById('progressContainer');
+        const btn = document.getElementById('submitBtn');
+        
+        container.style.display = 'block';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.innerText = 'Authenticating...';
+    });
+</script>
 
 </body>
 </html>

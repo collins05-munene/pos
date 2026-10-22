@@ -13,10 +13,14 @@
 
 <div class="auth-wrapper">
     <div class="auth-card">
+        <div class="auth-progress-container" id="progressContainer">
+            <div class="auth-progress-bar"></div>
+        </div>
+
         <h2 class="auth-title">Cashier Login</h2>
         <p class="auth-subtitle">Enter your shop code, username, and PIN to login.</p>
 
-        <form method="POST">
+        <form method="POST" id="authForm">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
@@ -41,7 +45,7 @@
             </div>
             
             <input type="hidden" name="next" value="{{ next }}">
-            <button type="submit" class="btn-primary">Authenticate</button>
+            <button type="submit" class="btn-primary" id="submitBtn">Authenticate</button>
         </form>
 
         <a href="{% url 'login' %}" class="toggle-auth-link">
@@ -49,6 +53,18 @@
         </a>
     </div>
 </div>
+
+<script>
+    document.getElementById('authForm').addEventListener('submit', function(e) {
+        const container = document.getElementById('progressContainer');
+        const btn = document.getElementById('submitBtn');
+        
+        container.style.display = 'block';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.innerText = 'Authenticating...';
+    });
+</script>
 
 </body>
 </html>
