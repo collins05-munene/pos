@@ -15,7 +15,7 @@
         <nav class="legal-nav" aria-label="Legal pages">
             <a href="{% url 'terms' %}" {% if request.resolver_match.url_name == 'terms' %}aria-current="page"{% endif %}>Terms</a>
             <a href="{% url 'privacy' %}" {% if request.resolver_match.url_name == 'privacy' %}aria-current="page"{% endif %}>Privacy</a>
-            <a href="{% url 'login' %}" class="legal-nav-signin">Sign in</a>
+            <a href="{% url 'pos_terminal' %}" class="legal-nav-signin">Back</a>
         </nav>
     </div>
 </header>
@@ -56,19 +56,17 @@
     var details = document.getElementById('tocDetails');
     if (!details) return;
 
-    // Wide screens: contents always visible in the side column. Phones: collapsed.
+    
     var wide = window.matchMedia('(min-width: 1000px)');
     function sync() { details.open = wide.matches; }
     sync();
     if (wide.addEventListener) { wide.addEventListener('change', sync); }
     else if (wide.addListener) { wide.addListener(sync); }
 
-    // Tapping a contents link on a phone folds the list away again.
     details.addEventListener('click', function (e) {
         if (!wide.matches && e.target.closest('a')) details.open = false;
     });
 
-    // Highlight the section being read.
     var links = {};
     details.querySelectorAll('a[href^="#"]').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
     if ('IntersectionObserver' in window) {

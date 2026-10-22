@@ -1,4 +1,4 @@
-/* legal.css - public Terms & Privacy pages (no login required). Mobile first. */
+
 :root {
     --lg-primary: #2563eb;
     --lg-text: #1f2937;
@@ -30,7 +30,7 @@ body {
 a { color: var(--lg-primary); }
 a:hover { text-decoration: none; }
 
-/* ---------- header ---------- */
+
 .legal-header {
     position: sticky;
     top: 0;
@@ -71,18 +71,17 @@ a:hover { text-decoration: none; }
 .legal-nav .legal-nav-signin { background: var(--lg-primary); color: #fff; }
 .legal-nav .legal-nav-signin:hover { background: #1d4ed8; color: #fff; }
 
-/* ---------- layout ---------- */
+
 .legal-layout {
     max-width: 1100px;
     margin: 0 auto;
     padding: 1rem 1rem 2rem;
     display: grid;
-    grid-template-columns: minmax(0, 1fr);   /* minmax(0,..) so long text can never widen the page */
-    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);  
     align-items: start;
 }
 
-/* ---------- contents ---------- */
+
 .legal-toc details {
     background: var(--lg-card);
     border: 1px solid var(--lg-border);
@@ -121,7 +120,6 @@ a:hover { text-decoration: none; }
 .legal-toc li a:hover { background: #eff6ff; color: var(--lg-primary); }
 .legal-toc li a[aria-current="true"] { background: #dbeafe; color: #1e40af; font-weight: 600; }
 
-/* ---------- document ---------- */
 .legal-doc {
     background: var(--lg-card);
     border: 1px solid var(--lg-border);
@@ -160,14 +158,12 @@ a:hover { text-decoration: none; }
 .legal-doc .doc-meta {
     background: var(--lg-bg);
     border: 1px solid var(--lg-border);
-    border-left: 4px solid var(--lg-primary);
     border-radius: 8px;
     padding: 0.85rem 1rem;
     font-size: 0.92rem;
     line-height: 1.8;
 }
 
-/* unfilled [placeholders] stand out so none slip into production */
 mark.ph {
     background: #fef08a;
     color: #713f12;
@@ -175,7 +171,6 @@ mark.ph {
     border-radius: 3px;
 }
 
-/* ---------- footer ---------- */
 .legal-footer { border-top: 1px solid var(--lg-border); background: var(--lg-card); }
 .legal-footer-inner {
     max-width: 1100px;
@@ -190,7 +185,6 @@ mark.ph {
 .legal-footer-links { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
 .legal-footer-links a { padding: 0.35rem 0; }
 
-/* ---------- tablets / desktops ---------- */
 @media (min-width: 640px) {
     .legal-header-inner { padding: 0.75rem 1.5rem; }
     .legal-layout { padding: 1.5rem 1.5rem 3rem; }
@@ -205,7 +199,6 @@ mark.ph {
     .legal-toc ol { max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); }
 }
 
-/* ---------- print ---------- */
 @media print {
     body { background: #fff; font-size: 11pt; }
     .legal-header, .legal-toc, .legal-footer { display: none; }
