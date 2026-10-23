@@ -11,7 +11,7 @@
 
     <header class="masthead">
       <div class="wrap">
-        <div class="wordmark">UniSale<span> Systems</span></div>
+        <div class="wordmark">{{ request.tenant.name }}</div>
         <div class="masthead-meta"><a href="/billing/" style="text-decoration:underline;">Billing</a> <span id="shop-meta"></span></div>
         <div class="masthead-meta"><a href="{% url 'admin-dashboard' %}" style="text-decoration:underline;">Dashboard</a></div>
       </div>
