@@ -15,7 +15,7 @@ from users.utils import log_action, AuditAction
 from .models import Category, Brand, ProductVariant, UnitOfMeasure, Product, fmt_qty
 from .forms import (
     CategoryForm, BrandForm, UnitOfMeasureForm, ProductForm,
- SellingUnitFormSet,
+ SellingUnitFormSet, ProductVariantFormSet
 )
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
@@ -242,7 +242,7 @@ class UoMDeleteView(SafeDeleteMixin, AuditLogMixin, AdminRequiredMixin, DeleteVi
     partial_template_name = 'products/partials/product_results.html'
 
 
-class ProductListView(LiveSearchMixin, CashierRequiredMixin, ListView):
+class ProductListView(LiveSearchMixin, ArchiveFilterMixin, CashierRequiredMixin, ListView):
     model = Product
     template_name = 'products/product_list.html'
     context_object_name = 'products'
