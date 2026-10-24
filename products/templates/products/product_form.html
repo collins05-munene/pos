@@ -38,11 +38,9 @@
     .btn-add { background: #eff6ff; color: #1d4ed8; border: 1px dashed #93c5fd; border-radius: 6px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
     .example-box { background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.8rem; color: #4b5563; margin-bottom: 1rem; }
 
-    /* ---------- phones ---------- */
     @media screen and (max-width: 640px) {
         .page-content .grid-2 { grid-template-columns: 1fr; }
 
-        /* variant table -> one card per variant, labels come from the column order */
         .variant-table, .variant-table tbody { display: block; }
         .variant-table thead { display: none; }
         .variant-table tr.variant-row {
@@ -141,10 +139,6 @@
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                     {{ form.has_variations }}
                     <span style="font-weight: 600;">This product has multiple variants (e.g. Sizes, Colors)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    {{ form.is_active }}
-                    <span>Active in POS</span>
                 </label>
             </div>
         </div>
