@@ -454,6 +454,231 @@ How to Submit and Vote on Feature Requests:
 How to Track Your Submitted Support Tickets:
 1. Open My Tickets: Go to the "My tickets" tab in the Support section[cite: 37].
 2. Filter & Inspect: Toggle between "Open", "Resolved and closed", or "All" tabs to inspect ticket progress, status badges, and update timestamps[cite: 37].
+
+Products Directory Screen Overview
+- Header & Actions: Displays "Products Directory" with subtitle "Manage products" and a primary blue "Add New Product" button[cite: 43].
+- View Mode Tabs: Toggle buttons to switch between "Active" items and "Deleted" (archived) items[cite: 3, 43].
+- Search Bar: Input box ("Search name, prefix, category, brand or SKU...") to filter the inventory list[cite: 43].
+- Products Directory Table Columns:
+  * Product Name: Title of the inventory item (e.g., Cetirizine 10mg)[cite: 43].
+  * Prefix: Base SKU code (e.g., CETI-10-MG)[cite: 43].
+  * Category: Group classification (e.g., Antihistamines)[cite: 43].
+  * Unit of Measure: Base stock tracking unit (e.g., Tablet, Sachet)[cite: 3, 43].
+  * Brand: Manufacturer brand name (e.g., Zyrtec, Elysium)[cite: 43].
+  * Variations: Boolean flag (True/False) indicating if multiple variants exist[cite: 43].
+  * Actions: Quick action links per product row: "Update" (edit details), "Delete" (archive item), and "View" (inspect item details)[cite: 3, 43].
+
+Register Product Wizard (Steps 1 & 2)
+- Step Progress Indicator: Header steps ("1. Product & variants", "2. Selling units", "3. Record purchase")[cite: 38].
+- General Information Section:
+  * Product Name *: Text field for base item name[cite: 38].
+  * Base SKU Prefix *: Input field for short code prefix (e.g., PARA-500)[cite: 38].
+  * Category *: Selectable dropdown with search auto-complete[cite: 38].
+  * Brand: Optional brand selector[cite: 38].
+  * Description: Multi-line text area for product details[cite: 38].
+  * Multiple Variants Checkbox: Checkbox option ("This product has multiple variants (e.g. Sizes, Colors)")[cite: 38].
+- Product Variants Table:
+  * Configures base variant details: SKU *, Size (optional), Color (optional), Cost Price * (purchasing price), Retail Price * (selling price), and Min Stock (alert threshold)[cite: 3, 39].
+- Selling Units Section (Optional):
+  * Allows creating secondary sales pack sizes (e.g., Packet, Box, 500g) converted to base units[cite: 3, 39]. Includes an "+ Add selling unit" button[cite: 39].
+- Wizard Navigation: Buttons for "Cancel" and "Save & Record Purchase"[cite: 39].
+
+Record Stock Purchase Form (Step 3 / Receiving Stock)
+- Subtitle Banner: Explains that inventory updates automatically and cash payments deduct from the cash pool[cite: 3, 40].
+- Header & Supplier Information:
+  * Supplier: Dropdown selector (defaults to "No supplier (market / individual / other source)")[cite: 40].
+  * Branch *: Dropdown to select destination branch[cite: 40].
+  * Notes: Text area for invoice/supplier notes[cite: 40].
+- Items Purchased List:
+  * Section to specify "Product / unit bought", "Quantity", and "Cost per unit"[cite: 41]. Converts units to base stock automatically[cite: 3, 41]. Includes "+ Add another item" and "Delete" options[cite: 41].
+- Receiving & Payment Controls:
+  * "Stock has arrived - receive it now" Checkbox: When checked, inventory increases immediately; when unchecked, records an advance order[cite: 3, 42].
+  * "Pay with": Dropdown (e.g., "Not paying now (credit / unpaid)", Cash, M-Pesa)[cite: 42].
+  * "Amount paid now (KSH)": Cash paid input (leaving at 0 records on credit)[cite: 42].
+  * "Payment reference": Bank/M-Pesa transaction code input[cite: 42].
+  * Financial Summary Card: Displays "TOTAL PURCHASE COST", "PAID NOW", and "BALANCE PAYABLE"[cite: 42].
+  * Submit Action: Primary blue button ("Record Purchase") to finalize stock entry[cite: 3, 42].
+
+  Brands Directory & Form
+- Brands Directory Screen Overview:
+  * Page Title & Action: Displays "Brands Directory" with subtitle "Manage manufacturers and product lines." and a blue "Add New Brand" button[cite: 45].
+  * Search Bar: Text input ("Search brands...") to filter the listed manufacturers[cite: 45].
+  * Table Columns: "BRAND NAME" (e.g., Amoxil, CarePlus, Elysium), "DESCRIPTION" (e.g., "No description provided."), and "ACTIONS"[cite: 45].
+  * Row Actions: "Update" (blue button to edit brand details) and "Delete" (red button to archive/delete)[cite: 45].
+- Create Brand Profile Form:
+  * Title: "Create Brand Profile"[cite: 44].
+  * Fields: "Name *" (Required text input) and "Description" (Optional multi-line text area)[cite: 44].
+  * Action Buttons: "Cancel" (gray button) and "Add Brand" (blue button)[cite: 44].
+
+Categories Directory & Form
+- Category Directory Screen Overview:
+  * Page Title & Action: Displays "Category Directory" with subtitle "Manage product departments and classifications." and a blue "Add New Category" button[cite: 47].
+  * View Mode Tabs: "Active" and "Deleted" (archived categories) tabs[cite: 3, 47].
+  * Search Bar: Text input ("Search categories...") to filter category entries[cite: 47].
+  * Table Columns: "CATEGORY NAME" (e.g., Analgesics, Antibiotics, Antihistamines), "WEB ADDRESS NICKNAME" (slugified code, e.g., analgesics), "PARENT" (parent category if nested), and "ACTIONS"[cite: 47].
+  * Row Actions: "Update" (blue button) and "Delete" (red button)[cite: 3, 47].
+- Create Category Profile Form:
+  * Title: "Create Category Profile"[cite: 46].
+  * Fields: "Name *" (Required text field) and "Parent" (Optional dropdown menu to select parent classification for nested categories)[cite: 46].
+  * Action Buttons: "Cancel" (gray button) and "Add Category" (blue button)[cite: 46].
+
+Units of Measure (UOM) Directory & Form
+- Units of Measure Directory Screen Overview:
+  * Page Title & Action: Displays "Units of Measure Directory" with subtitle "Manage units of measure." and a blue "Add New Unit of Measure" button[cite: 49].
+  * View Mode Tabs: "Active" and "Deleted" tabs[cite: 3, 49].
+  * Search Bar: Text input ("Search units of measure...")[cite: 49].
+  * Table Columns: "UNIT OF MEASURE" (e.g., Bottle, Box, Capsule, Kilogram, Litre), "SHORT NAME" (abbreviation, e.g., bottle, box, capsule, kg, l), and "ACTIONS"[cite: 49].
+  * Row Actions: "Update" (blue button) and "Delete" (red button)[cite: 3, 49].
+  * Pagination: Controls at bottom right ("Previous", page numbers) showing page status (e.g., "Page 1 of 2 · 10 results")[cite: 49].
+- Create Unit of Measure Profile Form:
+  * Title: "Create Unit of Measure Profile"[cite: 48].
+  * Fields: "Name *" (Required full name, e.g., "Kilograms") and "Short name *" (Required abbreviation, e.g., "kg")[cite: 48].
+  * Action Buttons: "Cancel" (gray button) and "Save" (blue button)[cite: 48].
+
+
+How to Add and Manage Brands, Categories, and Units of Measure:
+
+1. Brands Management:
+   - Navigate to "Brands" under the INVENTORY sidebar menu[cite: 11, 45].
+   - Click "Add New Brand" to create a new profile, type the Brand Name and optional Description, and click "Add Brand"[cite: 44, 45].
+   - Use "Update" to modify an existing manufacturer or "Delete" to remove it[cite: 3, 45].
+
+2. Categories Management:
+   - Navigate to "Categories" under the INVENTORY sidebar menu[cite: 11, 47].
+   - Click "Add New Category", enter the Category Name, pick an optional Parent category if organizing sub-categories, and click "Add Category"[cite: 46, 47].
+   - Items with past sales or purchases cannot be deleted permanently; they are archived under the "Deleted" tab and can be restored[cite: 3, 47].
+
+3. Units of Measure (UOM) Management:
+   - Navigate to "Units of Measure" under the INVENTORY sidebar menu[cite: 11, 49].
+   - Click "Add New Unit of Measure", fill out the full "Name" (e.g., Kilograms) and "Short name" (e.g., kg), then click "Save"[cite: 48, 49].
+   - Stock is always tracked in the product's base unit of measure[cite: 3, 49].
+
+   
+Supplier Directory Screen Overview
+- Page Title & Action: Header displays "Supplier Directory" with subtitle "Manage the companies you buy stock from." and a primary blue "Add New Supplier" button[cite: 51].
+- Search Bar: Text input ("Search company, contact, phone or email...") to quickly filter registered supplier profiles[cite: 51].
+- Supplier Directory Table Columns:
+  * COMPANY NAME: Business title of the vendor (e.g., Nairobi Pharmaceuticals)[cite: 51].
+  * SUPPLIER NAME: Primary contact person's name (e.g., John Doe)[cite: 51].
+  * SUPPLIER PHONE: Main contact telephone number[cite: 51].
+  * SUPPLIER EMAIL: Contact email address[cite: 51].
+  * ACTIONS: Row management options:
+    - "Update": Blue button to edit supplier contact details[cite: 51].
+    - "View": Light blue button to inspect supplier profile details and items supplied[cite: 3, 51].
+    - "Delete": Light red button to permanently delete the vendor profile (Restricted: Admins only; Cashiers cannot delete)[cite: 3, 51].
+
+Create Supplier Profile Form
+- Title & Subtitle: Header displays "Create Supplier Profile" with subtitle "Fill out the form fields down below."[cite: 50].
+- Form Fields:
+  * Name: Input box for vendor company name (placeholder: "Supplier Company Name")[cite: 50].
+  * Contact person: Text field for primary contact individual (placeholder: "Contact Name")[cite: 50].
+  * Email: Input box for supplier email (placeholder: "email@supplier.com")[cite: 50].
+  * Phone: Input field for contact phone number (placeholder: "+123456789")[cite: 50].
+  * Address: Multi-line text box for physical/street address details[cite: 50].
+- Form Actions: Buttons for "Cancel" and "Add Supplier" (or "Save") to save vendor credentials[cite: 44, 50].
+
+
+How to Add and Manage Suppliers:
+1. Open Supplier Directory: Navigate to "Suppliers" under the INVENTORY sidebar menu[cite: 11, 51].
+2. Add a Supplier: Click the blue "Add New Supplier" button at the top right[cite: 51].
+3. Enter Details: Fill in the company Name, Contact person, Email, Phone, and Address[cite: 50].
+4. Save Profile: Submit the form to add the vendor to your Directory[cite: 50, 51].
+5. View or Edit:
+   - Cashiers and Admins can click "Update" to modify contact information or "View" to check details and items supplied[cite: 3, 51].
+   - Only Admins can click "Delete" to remove a supplier profile[cite: 3, 51].
+
+Stock Purchases Directory Screen Overview
+- Page Title & Action: Header displays "Stock Purchases" with subtitle "Every stock purchase — what was bought, from whom, and how it was paid for." and a primary blue "Record Purchase" button[cite: 55].
+- Filter & Search Controls:
+  * "Search": Text input field to search by purchase order number or supplier name[cite: 55].
+  * "Stock status": Dropdown filter (e.g., All, Fully Received, Pending)[cite: 55].
+  * "Payment": Dropdown filter (e.g., All, Paid, Unpaid/Credit)[cite: 55].
+  * "Supplier" & "Branch": Dropdown filters for specific vendors or store branches[cite: 55].
+  * "From" & "To": Date range pickers with a "Clear" button to reset active filters[cite: 55].
+- Stock Purchases Table Columns:
+  * PURCHASE NUMBER: Unique tracking code (e.g., PO-20261025-864824)[cite: 55].
+  * SUPPLIER: Vendor name associated with the order (e.g., "No supplier" or specific vendor)[cite: 55].
+  * BRANCH: Destination store location (e.g., Main Branch)[cite: 55].
+  * STOCK STATUS: Status badge (e.g., "Fully Received")[cite: 55].
+  * PAYMENT: Payment status and outstanding balance (e.g., "Unpaid (Credit)" with "Balance KSH 199.98")[cite: 55].
+  * CREATED: Date timestamp when the order was logged (e.g., 25 Oct 2026)[cite: 55].
+  * ACTIONS: Blue "View" button per row to inspect the full invoice and payment breakdown[cite: 55].
+
+Record Stock Purchase Form Overview
+- Header & Description: Title displays "Record Stock Purchase" with subtitle "Log what was bought, at what cost and how it was paid. Inventory is updated automatically, and cash payments are deducted from the branch cash pool."[cite: 52]
+- Supplier & Destination Details:
+  * Supplier: Dropdown selector to pick a registered vendor (defaults to informal/market purchases if left blank)[cite: 52].
+  * Branch *: Required destination branch selector[cite: 52].
+  * Notes: Multi-line text box for optional notes or invoice reference details[cite: 52].
+- Items Purchased Section:
+  * Rows allowing users to pick the "Product / unit bought", enter "Quantity", and specify the "Cost per unit" (stock is automatically converted and added in base units)[cite: 3, 53]. Includes "+ Add another item" and individual item "Delete" checkboxes[cite: 53].
+- Receiving & Payment Section:
+  * "Stock has arrived - receive it now" Checkbox: Checked by default to increase inventory immediately; uncheck to record as an advance order for later receipt[cite: 3, 54].
+  * "Pay with" Dropdown: Select payment method (e.g., "Not paying now (credit / unpaid)", Cash, M-Pesa)[cite: 54].
+  * "Amount paid now (KSH)": Numeric field for partial or full payment (leave at 0 to record fully on credit)[cite: 54].
+  * "Payment reference": Optional input for bank/M-Pesa transaction codes[cite: 54].
+  * Financial Summary Cards: Displays calculated totals for "TOTAL PURCHASE COST", "PAID NOW", and "BALANCE PAYABLE"[cite: 54].
+  * Form Actions: "Cancel" (gray button) and "Record Purchase" (primary blue button)[cite: 54].
+
+
+How to Record a Stock Purchase:
+1. Open Stock Purchases: Navigate to "Purchases" or "Stock Purchases" under the INVENTORY / PURCHASING menu[cite: 3, 55].
+2. Start New Record: Click the blue "Record Purchase" button at the top right[cite: 55].
+3. Select Supplier & Branch: Choose the vendor from the "Supplier" dropdown (or leave as informal/market source) and pick the destination "Branch"[cite: 52]. Add optional notes[cite: 52].
+4. Add Purchased Items: Under "Items Purchased", select each product and unit bought, enter the quantity, and specify the exact cost per unit[cite: 53]. Click "+ Add another item" if purchasing multiple products[cite: 53].
+5. Configure Receiving: Ensure "Stock has arrived - receive it now" is checked if the physical stock is present to immediately update inventory[cite: 3, 54]. Uncheck if logging an advance purchase order[cite: 3, 54].
+6. Handle Payment: Select the payment method under "Pay with"[cite: 54]. Enter the amount paid now (leave at 0 to record fully on credit/unpaid)[cite: 54]. Add any bank or M-Pesa transaction codes in "Payment reference"[cite: 54].
+7. Finalize Order: Review the financial summary (Total Cost, Paid Now, Balance Payable) and click the blue "Record Purchase" button[cite: 54]. The order will appear in the Stock Purchases directory list with its payment and stock status[cite: 55].
+
+
+Stock Level Directory Screen Overview
+- Page Title & Action: Header displays "Stock Level" with subtitle "Live quantity on hand across branches. Stock is counted in each product's base unit and split into its selling units." and a primary blue "Log Adjustment" button[cite: 57].
+- Search Bar: Input box ("Search product, SKU or branch...") to quickly filter inventory items[cite: 57].
+- Stock Level Table Columns:
+  * PRODUCT: Name of the item (e.g., Paracetamol 500mg, Wireless Mouse)[cite: 57].
+  * SKU: Variant identification code (e.g., PARA-500-MG-DEFAULT)[cite: 57].
+  * BRANCH: Store branch location (e.g., Main Branch)[cite: 57].
+  * QUANTITY: Live total quantity on hand[cite: 57].
+  * BREAKDOWN: Detailed breakdown of inventory across base and selling units (e.g., "14 Piece, 1 500G")[cite: 57].
+  * STATUS: Stock status indicator badges (e.g., "Out of stock", "In Stock", or Low Stock)[cite: 57].
+  * ACTION: Blue "Adjust" button per row to quickly jump to stock adjustments for that item[cite: 57].
+
+Log Stock Adjustment Form Overview
+- Header & Context: Title displays "Log Stock Adjustment" with description "Use this for stock counts, damage, theft, expiry, or correcting data entry mistakes — not for receiving new purchase orders."[cite: 56]
+- Form Fields:
+  * Branch *: Required dropdown to select the target store branch[cite: 56].
+  * Variant *: Required dropdown to select the product variant being adjusted[cite: 56].
+  * Adjustment type *: Required dropdown to select the nature of the adjustment (e.g., stock count correction, damage, theft, expiry)[cite: 56].
+  * Quantity changed *: Numeric field for the adjustment amount (entered in the variant's own unit, e.g., 2 boxes; use base units for manual counts)[cite: 3, 56].
+  * Reason: Multi-line text area to record detailed notes explaining why the adjustment occurred[cite: 56].
+- Form Actions: "Cancel" (gray button) and "Save Adjustment" (primary blue button)[cite: 56].
+
+How to Check Stock Levels and Log Adjustments:
+1. Open Stock Levels: Navigate to the "Stock Level" page from the inventory menu to view live quantities across branches[cite: 57].
+2. Search Inventory: Use the search bar to look up specific products by name, SKU, or branch[cite: 57]. Monitor statuses like "Out of stock" or low stock[cite: 57].
+3. Log a Stock Adjustment: Click the blue "Log Adjustment" button at the top right of the Stock Level page (or click "Adjust" on a specific row)[cite: 56, 57].
+4. Fill Out Adjustment Details: Select the target Branch and Variant, pick the Adjustment type, and enter the Quantity changed (using the variant's unit or base unit)[cite: 56].
+5. Provide a Reason: Type detailed notes in the reason box explaining why the adjustment is being made (e.g., damage, expiry, or audit count correction)[cite: 56].
+6. Save Adjustment: Click the blue "Save Adjustment" button to update inventory counts[cite: 56].
+
+
+Deletion & Archiving Rules
+- Protection of Historical Records: Products, categories, brands, and units of measure that already have recorded sales or purchases cannot be permanently deleted.
+- Archiving Behavior: When attempting to delete an entity that has active references or history, the system archives (hides) it instead and displays an alert notification (e.g., "[Item name] has been deleted successfully but some related objects still reference it. It has been archived instead of being permanently deleted.")[cite: 3, 59]. Archived items can be restored or viewed from the "Deleted" filter tab in directories[cite: 3, 43, 47, 49].
+
+Confirmation Required Modal
+- Modal Title & Warning: Header displays "Confirmation Required" with a warning icon, prompting: "Are you entirely confident you wish to permanently strip the [entity type] profile '[Item Name]' out of the active system directories? This action cannot be undone."[cite: 58, 61, 62]
+- Action Buttons:
+  * "No, Abort Operations": Gray button to cancel the deletion request and return to the directory[cite: 58, 61, 62].
+  * "Yes, Permanently Delete": Red action button to execute the deletion or trigger archiving if historical dependencies exist[cite: 3, 58, 61, 62].
+
+How Deletion and Archiving Works:
+1. Initiate Deletion: Click the red "Delete" button next to any item in a directory table (such as Products, Brands, Categories, or Units of Measure)[cite: 43, 45, 47, 49].
+2. Confirm Action: A confirmation modal appears asking if you are sure you want to strip the entity profile[cite: 58, 61, 62]. Click "Yes, Permanently Delete" to proceed or "No, Abort Operations" to cancel[cite: 58, 61, 62].
+3. System Check & Archiving: 
+   - If the item has no past sales or purchase history, it is permanently removed[cite: 3].
+   - If the item has related historical objects or sales records referencing it, the system automatically archives (hides) it instead, displaying a notification banner confirming it was archived rather than permanently destroyed[cite: 3, 59].
+4. Managing Deleted Items: Archived items can be accessed, reviewed, or restored by switching from the "Active" tab to the "Deleted" tab in the respective directory page[cite: 3, 43, 47, 49, 60].
 """.strip()
 
 
