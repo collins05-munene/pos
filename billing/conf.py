@@ -5,13 +5,20 @@ from django.conf import settings
 
 DEFAULTS = {
     "CURRENCY": "KES",
-    "MONTHLY_PRICE": Decimal("1"),
+    "MONTHLY_PRICE": Decimal("10"),
     "INSTALL_FEE": Decimal("2"),         
     "TERM_DISCOUNT_PERCENT": {1: 0, 3: 30, 6: 30, 12: 30},
     "GRACE_DAYS": 5,           
     "TRIAL_DAYS": 0,         
     "RENEWAL_NOTICE_DAYS": 7,       
-    "CANCEL_AFTER_SUSPENDED_DAYS": 60,     
+    "CANCEL_AFTER_SUSPENDED_DAYS": 60,
+    "STK_PUSH_ENABLED": False,
+    "STK_PUSH_MESSAGE": ("STK push payment is still in development. We'll make it available as soon as it's ready. For now, pay to the number shown below and enter your M-Pesa code to activate your subscription."),
+    "MANUAL_PAYMENTS_ENABLED": True,
+    "MANUAL_PAY_LABEL": "Till number",    
+    "MANUAL_PAY_NUMBER": "",              
+    "MANUAL_PAY_NAME": "",               
+    "MANUAL_MAX_ATTEMPTS_PER_HOUR": 8,    
 }
 
 
