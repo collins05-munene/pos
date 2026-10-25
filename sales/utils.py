@@ -25,7 +25,8 @@ def resolve_user_branch(user):
     return Branch.objects.first()
 
 
-def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_received=None):
+def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_received=None,
+                      *, client_uuid=None, invoice_number=None, occurred_at=None, offline=False):
     """
     amount_received is only meaningful for CASH sales. When provided, it is
     validated against the cart total computed here (server-side, not trusted
@@ -38,20 +39,42 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
     removes 30 base units from the single shared stock row, so tablets, packets
     and boxes can never drift apart. Each order line stores the cost price of
     the unit actually sold, so COGS and profit are right per unit.
+
+    Keyword-only extras (all optional; used by checkout idempotency and offline sync):
+
+      client_uuid     browser-generated idempotency key stored on the Order. The unique
+                      constraint on (tenant, client_uuid) makes a double submit impossible.
+      invoice_number  an invoice number the customer already holds on a printed offline
+                      receipt. Kept when free; replaced (and flagged) if it is taken.
+      occurred_at     when the sale really happened. Order.created_at and the receipt use
+                      it, so reports and cash sessions show the true time, not sync time.
+      offline         the sale already happened with no connection. Stock may go negative
+                      (the goods are gone, the books must show it) and anything odd --
+                      negative stock, a price that differs from today's -- is written to
+                      Order.offline_flags for a manager to review.
     """
     with transaction.atomic():
         branch = cash_session.branch if cash_session else resolve_user_branch(cashier)
         if branch is None:
             raise ValueError("Could not determine which branch this sale belongs to.")
 
+        flags = []
         invoice_id = f"INV-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        if invoice_number:
+            if Order.objects.filter(invoice_number=invoice_number).exists():
+                flags.append({"type": "INVOICE_RENUMBERED", "client_invoice": invoice_number, "invoice": invoice_id})
+            else:
+                invoice_id = invoice_number
 
         order = Order.objects.create(
             invoice_number=invoice_id,
             branch=branch,
             cashier=cashier,
             payment_method=payment_method,
-            cash_session=cash_session
+            cash_session=cash_session,
+            client_uuid=client_uuid,
+            is_offline_sale=offline,
+            synced_at=timezone.now() if offline else None,
         )
 
         running_revenue = Decimal('0.00')
@@ -85,9 +108,16 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             cost_price = getattr(variant, 'cost_price', Decimal('0.00'))
 
             try:
-                change_stock(branch, variant, -quantity_sold)
+                stock = change_stock(branch, variant, -quantity_sold, allow_negative=offline)
             except InsufficientStock:
                 raise InsufficientStockError(variant, int(available_units(branch, variant)), quantity_sold)
+
+            if offline:
+                if stock.quantity < 0:
+                    flags.append({"type": "NEGATIVE_STOCK", "sku": variant.sku, "stock_after": str(stock.quantity)})
+                if retail_price != variant.retail_price:
+                    flags.append({"type": "PRICE_MISMATCH", "sku": variant.sku,
+                                  "sold_at": str(retail_price), "current_price": str(variant.retail_price)})
 
             OrderItem(
                 order=order,
@@ -115,10 +145,16 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             order.amount_received = amount_received
             order.change_given = (amount_received - running_revenue).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+        order.offline_flags = flags
         order.save()
 
+        if occurred_at is not None:
+            # created_at is auto_now_add, so it can only be corrected after the insert.
+            Order.objects.filter(pk=order.pk).update(created_at=occurred_at)
+            order.created_at = occurred_at
+
         # Receipt is a frozen snapshot of the sale; created in the same transaction.
-        create_receipt(order)
+        create_receipt(order, issued_at=occurred_at)
 
         from notifications.checks import check_stock_after_sale
         transaction.on_commit(

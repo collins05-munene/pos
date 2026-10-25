@@ -109,13 +109,14 @@
             </div>
             <div style="text-align: right;">
                 <span style="font-size: 0.85rem; color: #6b7280; display: block;">Total Due:</span>
-                <strong id="total-due" data-amount="{{ total_amount }}" style="font-size: 1.5rem; color: #2563eb;">KSH {{ total_amount }}</strong>
+                <strong id="total-due" data-amount="{{ total_amount }}" data-cart="{{ cart.as_json }}" style="font-size: 1.5rem; color: #2563eb;">KSH {{ total_amount }}</strong>
             </div>
         </div>
 
         <form method="POST" action="{% url 'process_payment' %}" id="cash-payment-form">
             {% csrf_token %}
             <input type="hidden" name="payment_method" value="cash">
+            <input type="hidden" name="client_uuid" value="{{ checkout_uuid }}">
 
             <label class="field-label" for="amount_received">Amount Received (KSH)</label>
             <input
@@ -136,6 +137,7 @@
             </div>
             <div id="insufficient-warning">Amount received is less than the total due — cannot complete this sale.</div>
 
+            <div id="pay-error" style="display:none; color:#dc2626; font-size:0.9rem; margin-bottom:1rem;"></div>
             <button type="submit" id="submit-btn" disabled>Complete Sale</button>
         </form>
 
@@ -182,12 +184,61 @@
 
             receivedInput.addEventListener('input', updateChange);
 
-            form.addEventListener('submit', function (e) {
+            const errorBox = document.getElementById('pay-error');
+            let busy = false;
+
+            function showError(msg) { errorBox.textContent = msg; errorBox.style.display = 'block'; }
+
+            // Nothing left over from an earlier dropped terminal should be picked up later.
+            window.addEventListener('load', function () {
+                if (window.POSOffline) window.POSOffline.takeHandoff().catch(function () {});
+            });
+
+            // The sale is posted with fetch so that a dropped connection can be told apart from a
+            // refusal. On a dropped connection the sale is saved on this device with the SAME checkout
+            // id, then synced. If the first attempt actually reached the server, the server sees the id
+            // again and answers "already recorded" rather than selling twice.
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
                 const received = parseFloat(receivedInput.value);
-                if (isNaN(received) || received < totalDue) {
-                    e.preventDefault();
-                    updateChange();
+                if (busy || isNaN(received) || received < totalDue) { updateChange(); return; }
+                busy = true; submitBtn.disabled = true; submitBtn.textContent = 'Saving\u2026';
+                errorBox.style.display = 'none';
+
+                let data = null, saveOffline = false;
+                const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+                const timer = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
+                try {
+                    const r = await fetch(form.action, {
+                        method: 'POST', body: new FormData(form), credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                        signal: ctl ? ctl.signal : undefined
+                    });
+                    if (r.status >= 500 || r.status === 401 || r.status === 402 || r.status === 403) saveOffline = true;
+                    else { try { data = await r.json(); } catch (_) { saveOffline = true; } }
+                } catch (_) { saveOffline = true; }
+                if (timer) clearTimeout(timer);
+
+                if (data) {
+                    if (data.ok || /open|register|terminal/.test(data.redirect || '')) { window.location.href = data.redirect; return; }
+                    showError(data.message || 'The sale could not be completed.');
+                } else if (saveOffline) {
+                    try {
+                        let lines = [];
+                        try { lines = JSON.parse(document.getElementById('total-due').dataset.cart || '[]'); } catch (_) {}
+                        const sale = await window.POSOffline.recordSale({
+                            lines: lines.map(function (l) { return { variantId: l.variant_id, qty: l.quantity, price: l.price }; }),
+                            amountReceived: receivedInput.value,
+                            uuid: form.elements['client_uuid'].value,
+                            fromOnlineCart: true
+                        });
+                        window.location.href = '/pos/offline/#receipt=' + sale.uuid;
+                        return;
+                    } catch (err) {
+                        showError('No connection, and the sale could not be saved offline (' + (err.message || err.code) + '). Please try again.');
+                    }
                 }
+                busy = false; submitBtn.textContent = 'Complete Sale'; updateChange();
             });
         })();
     </script>

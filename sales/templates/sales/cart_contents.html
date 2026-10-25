@@ -52,7 +52,7 @@
     }
 </style>
 
-<div id="cart-panel" class="cart-container" data-items="{{ cart.total_items }}" data-total="{{ cart.get_total_price|default:'0.00' }}">
+<div id="cart-panel" class="cart-container" data-items="{{ cart.total_items }}" data-total="{{ cart.get_total_price|default:'0.00' }}" data-cart="{{ cart.as_json }}">
     <div class="cart-header">
         <h3 style="margin:0; color:#111827;">Current Checkout Session</h3>
         <small style="color:#6b7280;">{{ cart.cart|length }} line{{ cart.cart|length|pluralize }} &middot; {{ cart.total_items }} item{{ cart.total_items|pluralize }}</small>

@@ -16,15 +16,20 @@ class InsufficientStock(Exception):
         super().__init__(f"Only {available} in stock (in base units).")
 
 
-def change_stock(branch, variant, qty):
+def change_stock(branch, variant, qty, allow_negative=False):
     """
     qty is in the variant's OWN unit: +10 boxes received, -3 tablets sold, -2 packets damaged.
     Positive adds, negative removes. Must be called inside transaction.atomic().
+
+    allow_negative is ONLY for recording a sale that has already physically happened
+    (an offline sale being synced): the goods are gone, so the books must show it even
+    if another till sold the same stock in the meantime. Stock then goes negative and the
+    caller flags it for a manager. Normal online selling never passes it.
     """
     stock, _ = StockLevel.objects.select_for_update().get_or_create(
         branch=branch, variant=variant.stock_variant, defaults={'quantity': 0})
     new_qty = Decimal(stock.quantity) + variant.to_base_units(qty)
-    if new_qty < 0:
+    if new_qty < 0 and not allow_negative:
         raise InsufficientStock(stock.quantity)
     stock.quantity = new_qty
     stock.save(update_fields=['quantity'])

@@ -285,6 +285,24 @@
     }
 
     
+    // The connection dropped. Rather than let the browser show an error page, move the cart
+    // to the offline terminal and keep selling there.
+    function cartLines() {
+        const panel = document.getElementById('cart-panel');
+        try { return JSON.parse((panel && panel.dataset.cart) || '[]'); } catch (_) { return []; }
+    }
+    function goOffline(form) {
+        if (!window.POSOfflineBoot) { if (form) form.submit(); return; }
+        let add = null;
+        if (form && /cart\/add/.test(form.action)) {
+            const vid = form.querySelector('input[name="variant_id"]');
+            const sku = form.querySelector('input[name="sku"]');
+            if (vid && vid.value) add = { variantId: Number(vid.value) };
+            else if (sku && sku.value.trim()) add = { sku: sku.value.trim() };
+        }
+        window.POSOfflineBoot.handoff(cartLines(), add);
+    }
+
     async function ajaxCartSubmit(form) {
         const data = new FormData(form);
         const skuInput = document.querySelector('input[name="sku"]');
@@ -298,7 +316,7 @@
                 body: data,
             });
         } catch (_) {
-            form.submit();
+            goOffline(form);
             return;
         }
 
@@ -350,7 +368,7 @@
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
         } catch (_) {
-            form.submit();
+            goOffline(null);
             return;
         }
 
@@ -441,6 +459,15 @@
 
         syncFab();
     }
+
+    document.addEventListener('click', function (e) {
+        const link = e.target.closest && e.target.closest('a[href*="/checkout/pay"]');
+        if (!link || !window.POSOffline) return;
+        window.POSOffline.setHandoff({
+            lines: cartLines().map(function (l) { return { variantId: l.variant_id, qty: l.quantity, price: l.price }; }),
+            add: null
+        }).catch(function () {});
+    }, true);
 
     document.addEventListener('DOMContentLoaded', function () {
         delegateCartEvents(document);

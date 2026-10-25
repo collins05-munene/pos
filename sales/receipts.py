@@ -31,7 +31,7 @@ def _line_name(variant):
     return name
 
 
-def create_receipt(order):
+def create_receipt(order, issued_at=None):
     """
     Idempotent: returns the existing receipt if this order already has one.
     Call inside the same transaction as the sale so the receipt number (and the
@@ -66,5 +66,5 @@ def create_receipt(order):
         total=order.total_revenue,
         amount_received=order.amount_received,
         change_given=order.change_given,
-        issued_at=timezone.now(),
+        issued_at=issued_at or timezone.now(),
     )
