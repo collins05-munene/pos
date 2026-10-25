@@ -11,5 +11,4 @@ class SupplierForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'email@supplier.com'}),
             'phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': '+123456789'}),
             'address': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3, 'placeholder': 'Street address...'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
