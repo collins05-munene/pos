@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from products.models import ProductVariant
@@ -148,6 +149,15 @@ class POSCart:
     def __iter__(self):
         for item in self.cart.values():
             yield CartItem(**item)
+
+    @property
+    def as_json(self):
+        """The cart lines as JSON (embedded in the page so a dropped connection can hand the cart to the offline terminal)."""
+        return json.dumps([
+            {'variant_id': int(i['variant_id']), 'name': i['name'], 'sku': i['sku'],
+             'price': str(i['price']), 'quantity': int(i['quantity'])}
+            for i in self.cart.values()
+        ])
 
     @property
     def total_items(self):

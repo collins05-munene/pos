@@ -160,7 +160,7 @@
         
         {% block extra_head %} {% endblock %}
     </head>
-    <body>
+    <body{% if user.is_authenticated and request.tenant %} data-pos-user="1"{% endif %}>
         <div class="app-container">
             {% include 'users/sidebar.html' %}
             <div class="main-content"> 
@@ -272,6 +272,9 @@
                 }
 
                 function performLogout() {
+                    // Lock offline selling on this device; unsynced sales stay in IndexedDB
+                    // (localStorage.clear() below cannot touch them).
+                    var lockP = window.POSOffline ? window.POSOffline.lock() : Promise.resolve();
                     localStorage.clear();
                     sessionStorage.clear();
 
@@ -280,7 +283,9 @@
                         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
                     });
 
-                    window.location.href = LOGIN_URL;
+                    Promise.race([lockP, new Promise(function (r) { setTimeout(r, 400); })])
+                        .then(function () { window.location.href = LOGIN_URL; },
+                              function () { window.location.href = LOGIN_URL; });
                 }
 
                 const activityEvents = ["mousemove", "keydown", "click", "touchstart", "scroll"];
@@ -376,6 +381,7 @@
                 });
 
                 function fetchNotifications() {
+                    if (navigator.onLine === false) return;
                     fetch("{% url 'unread-notifications' %}")
                         .then(response => response.json())
                         .then(data => {
@@ -434,6 +440,11 @@
                 setInterval(fetchNotifications, 30000);
             });            
         </script>
+        {% load static %}
+        {% if user.is_authenticated and request.tenant %}
+        <script src="{% static 'js/pos-offline-core.js' %}"></script>
+        <script src="{% static 'js/pos-offline-boot.js' %}"></script>
+        {% endif %}
         {% block extra_js %} {% endblock %}
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
         {% load static %}

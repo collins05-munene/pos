@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -49,13 +49,28 @@
     <div class="card">
         <div class="icon">📡</div>
         <h1>No internet connection</h1>
-        <p>
-            The POS System needs a connection to load this page — sales,
-            inventory and payment data must always come from the live
-            server so nothing goes out of sync.
+        <p id="msg">
+            This page needs a connection to load. If this device is set up for offline selling you can keep
+            ringing up sales; they are saved here and sent automatically when the connection returns.
         </p>
+        <a id="openTill" href="/pos/offline/" style="display:none;margin-bottom:.75rem;text-decoration:none;text-align:center;background:#10b981;color:#fff;padding:.7rem 1.5rem;border-radius:6px;font-weight:600">Open offline terminal</a>
         <button onclick="window.location.reload()">Try again</button>
-        <p class="note">Once you're back online, this page will reconnect automatically.</p>
+        <p class="note" id="note">Once you're back online, this page will reconnect automatically.</p>
     </div>
+    <script src="{% static 'js/pos-offline-core.js' %}"></script>
+    <script>
+        (function () {
+            window.addEventListener('online', function () { window.location.reload(); });
+            if (!window.POSOffline) return;
+            POSOffline.getState().then(function (st) {
+                if (st.ok) { document.getElementById('openTill').style.display = 'block'; return; }
+                if (st.reason === 'LOCKED' || st.reason === 'EXPIRED') {
+                    document.getElementById('note').textContent = st.reason === 'LOCKED'
+                        ? 'You are signed out. Sign in once you are online to sell offline.'
+                        : 'The saved product list is too old. Connect once to refresh it.';
+                }
+            }).catch(function () {});
+        })();
+    </script>
 </body>
 </html>

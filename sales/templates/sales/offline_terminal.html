@@ -1,0 +1,125 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="{% static 'manifest.json' %}">
+<title>Offline Terminal</title>
+{# This page is cached by the service worker for everyone. It must never contain user, tenant or csrf data. #}
+<style>
+:root { color-scheme: light; --blue:#2563eb; --ink:#111827; --mute:#6b7280; --line:#e5e7eb; --bg:#f3f4f6; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; }
+button { font: inherit; cursor: pointer; }
+.top { background: #fff; border-bottom: 1px solid var(--line); padding: .6rem 1rem; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.top h1 { font-size: 1rem; margin: 0; }
+.top .who { color: var(--mute); font-size: .85rem; flex: 1 1 auto; min-width: 0; }
+.chip { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 600; border: 0; }
+.chip.off { background: #fef3c7; color: #92400e; } .chip.on { background: #dcfce7; color: #166534; }
+.chip.warn { background: #fee2e2; color: #991b1b; } .chip.sync { background: #dbeafe; color: #1e40af; }
+.btn { border: 0; border-radius: 8px; padding: .55rem 1rem; font-weight: 600; background: #e2e8f0; color: #334155; }
+.btn.primary { background: var(--blue); color: #fff; } .btn.go { background: #10b981; color: #fff; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+a.btn { text-decoration: none; display: inline-block; }
+.main { flex: 1; display: flex; min-height: 0; }
+.catalog { flex: 1.8; min-width: 0; display: flex; flex-direction: column; padding: 1rem; background: #fff; border-right: 1px solid var(--line); }
+.cart { flex: 1.1; max-width: 380px; display: flex; flex-direction: column; background: #f9fafb; }
+#q { width: 100%; padding: .75rem; font-size: 1.05rem; border: 1px solid #d1d5db; border-radius: 6px; margin-bottom: .75rem; }
+.cats { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .6rem; margin-bottom: .6rem; border-bottom: 1px solid #f3f4f6; }
+.cats button { background: #e5e7eb; border: 0; border-radius: 20px; padding: .45rem .9rem; white-space: nowrap; font-size: .85rem; }
+.cats button.active { background: var(--blue); color: #fff; }
+.grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; align-content: start; min-height: 0; }
+.tile { border: 1px solid var(--line); border-radius: 6px; padding: .8rem; display: flex; flex-direction: column; gap: .15rem; background: #fff; }
+.tile.out { opacity: .55; }
+.tile b { font-size: .95rem; } .tile small { color: var(--mute); }
+.tile .sku { font-family: monospace; font-size: .78rem; } .tile .price { color: var(--blue); font-weight: 700; font-size: 1.05rem; }
+.tile .pack { align-self: flex-start; background: #eff6ff; color: #1d4ed8; font-size: .75rem; font-weight: 600; padding: .05rem .5rem; border-radius: 10px; }
+.tile button { margin-top: .5rem; width: 100%; background: var(--blue); color: #fff; border: 0; border-radius: 4px; padding: .5rem; font-weight: 700; }
+.tile button:disabled { background: #9ca3af; cursor: not-allowed; }
+.cart h2 { margin: 0; padding: 1rem 1.25rem; background: #fff; border-bottom: 1px solid var(--line); font-size: 1rem; }
+.lines { flex: 1; overflow-y: auto; padding: 0 1.25rem; }
+.line { display: flex; align-items: center; gap: .5rem; padding: .8rem 0; border-bottom: 1px solid #f3f4f6; }
+.line .nm { flex: 1; font-size: .9rem; } .line .nm small { display: block; color: var(--mute); font-family: monospace; }
+.line input { width: 56px; padding: .3rem; text-align: center; border: 1px solid #d1d5db; border-radius: 4px; font-size: 1rem; }
+.line .x { background: none; border: 0; color: #ef4444; font-size: 1.3rem; }
+.foot { padding: 1.25rem; background: #fff; border-top: 1px solid var(--line); }
+.total { display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; }
+.empty { text-align: center; color: #9ca3af; margin-top: 4rem; }
+.overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 50; }
+.overlay[hidden] { display: none; }
+.card { background: #fff; border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; }
+.card h3 { margin: 0 0 1rem; }
+.card input.big { width: 100%; font-size: 1.4rem; padding: .7rem; border: 2px solid var(--line); border-radius: 8px; margin: .4rem 0 .8rem; }
+.quick { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
+.change { display: flex; justify-content: space-between; align-items: center; padding: .9rem; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; margin-bottom: 1rem; font-weight: 600; }
+.change.bad { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.err { color: #b91c1c; font-size: .9rem; margin: 0 0 .8rem; min-height: 1.1em; }
+.row { display: flex; gap: .6rem; } .row > * { flex: 1; }
+.blocked { margin: 3rem auto; max-width: 460px; text-align: center; background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,.1); }
+.blocked p { color: #4b5563; line-height: 1.5; }
+.paper { background: #fff; width: 80mm; max-width: 100%; margin: 1rem auto; padding: 6mm 5mm; border: 1px solid var(--line); font: 12px/1.45 "Courier New", monospace; }
+.paper .c { text-align: center; } .paper h2 { margin: 0; font-size: 16px; } .paper hr { border: 0; border-top: 1px dashed #888; margin: 8px 0; }
+.paper .r { display: flex; justify-content: space-between; } .paper .g { font-weight: 700; font-size: 14px; }
+.paper .tag { text-align: center; font-weight: 700; border: 1px solid #111; padding: 2px 0; margin-bottom: 8px; letter-spacing: 1px; }
+.plist .it { border-bottom: 1px solid var(--line); padding: .6rem 0; font-size: .9rem; display: flex; justify-content: space-between; gap: .5rem; }
+.plist .it small { color: var(--mute); display: block; } .plist .bad { color: #b91c1c; }
+.toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: #111827; color: #fff; padding: .7rem 1.1rem; border-radius: 8px; z-index: 60; max-width: 90vw; }
+.toast[hidden] { display: none; }
+@media (max-width: 800px) {
+  .main { flex-direction: column; overflow-y: auto; }
+  .catalog { border-right: 0; flex: none; max-height: 60vh; }
+  .cart { max-width: none; flex: none; }
+}
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+  body * { visibility: hidden; }
+  .paper, .paper * { visibility: visible; }
+  .paper { position: absolute; left: 0; top: 0; width: 80mm; border: 0; margin: 0; }
+}
+</style>
+</head>
+<body data-pos-shell="1">
+<header class="top">
+  <h1>Offline Terminal</h1>
+  <div class="who" id="who">Loading&hellip;</div>
+  <span class="chip on" id="net">Online</span>
+  <button class="btn" id="pendingBtn" type="button">Unsynced sales</button>
+  <a class="btn" id="onlineLink" href="/pos/terminal/" hidden>Online terminal</a>
+</header>
+
+<div id="view"></div>
+
+<div class="overlay" id="payOverlay" hidden>
+  <div class="card">
+    <h3>Cash payment</h3>
+    <div class="total"><span>Total due</span><span id="payTotal">KSH 0.00</span></div>
+    <label for="payAmount">Amount received (KSH)</label>
+    <input class="big" id="payAmount" type="number" inputmode="decimal" step="0.01" min="0" autocomplete="off">
+    <div class="quick" id="payQuick"></div>
+    <div class="change" id="payChange"><span>Change to give</span><span id="payChangeAmt">KSH 0.00</span></div>
+    <p class="err" id="payErr"></p>
+    <div class="row"><button class="btn" id="payCancel" type="button">Cancel</button><button class="btn go" id="payConfirm" type="button" disabled>Complete sale</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="pendingOverlay" hidden>
+  <div class="card">
+    <h3>Sales waiting to sync</h3>
+    <div class="plist" id="pendingList"></div>
+    <div class="row" style="margin-top:1rem;flex-wrap:wrap">
+      <button class="btn primary" id="syncNow" type="button">Sync now</button>
+      <button class="btn" id="retryFailed" type="button" hidden>Retry failed</button>
+      <button class="btn" id="exportBtn" type="button">Save backup file</button>
+      <button class="btn" id="pendingClose" type="button">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="{% static 'js/pos-offline-core.js' %}"></script>
+<script src="{% static 'js/pos-offline-boot.js' %}"></script>
+<script src="{% static 'js/pos-offline-terminal.js' %}"></script>
+</body>
+</html>
