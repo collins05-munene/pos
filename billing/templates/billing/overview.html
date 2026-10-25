@@ -23,10 +23,14 @@
     <p class="lede" id="status-line">Loading your subscription&hellip;</p>
 
     <div id="alert" class="alert" role="alert"></div>
+    <div id="notices" class="notices" aria-live="polite"></div>
 
     <div class="invoice" id="invoice-panel" hidden>
       <div class="invoice-row"><span class="k">Invoice</span><span class="v" id="inv-number">--</span></div>
       <div class="invoice-row"><span class="k">Term</span><span class="v" id="inv-term">--</span></div>
+      <div class="invoice-row" id="inv-full-row" hidden><span class="k">Invoice total</span><span class="v" id="inv-full">--</span></div>
+      <div class="invoice-row credit" id="inv-credit-row" hidden><span class="k">Credit applied</span><span class="v" id="inv-credit">--</span></div>
+      <div class="invoice-total-label">Amount to pay</div>
       <div class="invoice-total" id="inv-total">KES 0</div>
 
       <label for="phone" style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:5px;">
@@ -46,7 +50,40 @@
       <button id="select-plan-btn" class="primary" style="margin-top: 15px;">Proceed to Payment</button>
     </div>
 
+    <section id="manual-pay" class="manual-pay" data-url="{% url 'billing:manual-payment' %}" data-overview="{% url 'billing:billing-overview' %}" hidden>
+      <hr class="rule">
+      <h2>Already paid by M-Pesa? Enter your code</h2>
+      <p class="plan-note" id="mp-steps"></p>
+      <label for="mp-term" style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:5px;">Subscription term</label>
+      <select id="mp-term" style="margin-bottom:12px;"></select>
+      <div id="mp-code-row">
+        <label for="mp-code" style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:5px;">M-Pesa confirmation code</label>
+        <div class="stk-phone">
+          <input id="mp-code" type="text" maxlength="14" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. SJK3L9X2QP" style="text-transform:uppercase;">
+          <button class="primary" id="mp-btn" type="button">Confirm payment</button>
+        </div>
+      </div>
+      <div id="mp-credit-row" hidden>
+        <button class="primary" id="mp-credit-btn" type="button">Pay with my credit</button>
+      </div>
+      <div id="mp-result" role="status" aria-live="polite"></div>
+      <details id="mp-attempts" class="attempts" hidden>
+        <summary id="mp-attempts-summary">Recent attempts</summary>
+        <ul id="mp-attempt-list"></ul>
+        <button type="button" class="link" id="mp-attempts-clear" style="margin-top:8px;">Clear</button>
+      </details>
+    </section>
+
     <hr class="rule">
+
+    <section id="credit-ledger" hidden>
+      <h2>Credit activity</h2>
+      <table class="ledger">
+        <thead><tr><th>Date</th><th>What</th><th class="num">Amount</th></tr></thead>
+        <tbody id="credit-rows"></tbody>
+      </table>
+      <hr class="rule">
+    </section>
 
     <h2>Invoice history</h2>
     <table class="ledger">
@@ -62,4 +99,5 @@
 
   <script src="{% static 'duka/js/duka-api.js' %}"></script>
   <script src="{% static 'duka/js/billing.js' %}"></script>
+  <script src="{% static 'duka/js/manual-pay.js' %}"></script>
 {% endblock %}

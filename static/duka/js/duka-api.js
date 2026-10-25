@@ -72,5 +72,30 @@ const Duka = (() => {
     return node;
   }
 
-  return { api, money, dt, daysUntil, statusBadge, el, getCookie };
+
+  function notice(kind, title, body, opts = {}) {
+    const main = el('div', { class: 'notice-main' }, [
+      el('div', { class: 'notice-title', text: title }),
+      body ? el('div', { class: 'notice-body', text: body }) : null,
+    ]);
+    if (opts.meter && Number(opts.meter.max) > 0) {
+      const pct = Math.max(0, Math.min(100, (Number(opts.meter.value) / Number(opts.meter.max)) * 100));
+      const bar = el('span');
+      bar.style.width = pct + '%';
+      main.appendChild(el('div', { class: 'notice-meter', role: 'img', 'aria-label': opts.meter.label || '' }, bar));
+      if (opts.meter.label) main.appendChild(el('div', { class: 'notice-meter-label', text: opts.meter.label }));
+    }
+    if (opts.action) {
+      main.appendChild(el('button', { type: 'button', class: 'secondary notice-action',
+        text: opts.action.label, onclick: opts.action.onclick }));
+    }
+    const card = el('div', { class: `notice notice--${kind}`, role: kind === 'bad' ? 'alert' : 'status' }, main);
+    if (opts.dismiss) {
+      card.appendChild(el('button', { type: 'button', class: 'notice-x', 'aria-label': 'Dismiss',
+        text: '\u00d7', onclick: opts.dismiss }));
+    }
+    return card;
+  }
+
+  return { api, money, dt, daysUntil, statusBadge, el, getCookie, notice };
 })();

@@ -7,11 +7,12 @@ from operator import sub
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
 
 from . import conf, mpesa
-from .models import BillingEvent, Invoice, MpesaPayment, Subscription
+from .models import BillingCredit, BillingEvent, Invoice, MpesaPayment, Subscription
 from .pricing import quote
 from .signals import billing_event
 
@@ -69,7 +70,7 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
                          .filter(tenant=tenant, status=Invoice.Status.OPEN))
     for inv in open_invoices:
         if inv.term_months == term_months and inv.total == q["total"]:
-            return inv
+            return apply_credit(inv)
     for inv in open_invoices:
         inv.status = Invoice.Status.VOID
         inv.save(update_fields=["status"])
@@ -86,10 +87,42 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
     )
     record_event("invoice.created", tenant, invoice=invoice.number, total=invoice.total,
                  term_months=term_months)
+    return apply_credit(invoice)
+
+
+def credit_balance(tenant):
+    return BillingCredit.objects.filter(tenant=tenant).aggregate(t=Sum("amount"))["t"] or Decimal("0")
+
+
+def amount_due(invoice):
+    """What the shop still has to pay on an OPEN invoice after its credit."""
+    if invoice.status != Invoice.Status.OPEN:
+        return Decimal("0")
+    return max(invoice.total - credit_balance(invoice.tenant), Decimal("0"))
+
+
+def apply_credit(invoice):
+    """Pay `invoice` from the shop's credit if the credit fully covers it. Returns the invoice."""
+    with transaction.atomic():
+        # Lock the subscription row: serialises everything that touches this shop's credit.
+        Subscription.objects.select_for_update().get(tenant_id=invoice.tenant_id)
+        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if invoice.status != Invoice.Status.OPEN or invoice.total <= 0:
+            return invoice
+        if credit_balance(invoice.tenant) < invoice.total:
+            return invoice
+        BillingCredit.objects.create(tenant=invoice.tenant, amount=-invoice.total,
+                                     kind=BillingCredit.Kind.APPLIED, invoice=invoice)
+        mark_invoice_paid(invoice, receipt="credit")
+        record_event("invoice.paid_from_credit", invoice.tenant, invoice=invoice.number,
+                     total=invoice.total)
+        invoice.refresh_from_db()
     return invoice
 
 
 def initiate_stk_payment(invoice, phone):
+    if not conf.get("STK_PUSH_ENABLED"):
+        raise BillingError(conf.get("STK_PUSH_MESSAGE"))
     if invoice.status != Invoice.Status.OPEN:
         raise BillingError("This invoice is not payable.")
         
