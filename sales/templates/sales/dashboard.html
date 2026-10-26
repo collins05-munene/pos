@@ -394,6 +394,11 @@
       <div class="value">{{ metrics.margin }}%</div>
       <p class="card-footer">Overall efficiency percentage.</p>
     </div>
+    <div class="card metric-card card-red">
+      <h3>Refunds Paid Out</h3>
+      <div class="value">KSH {{ metrics.refunds|floatformat:2 }}</div>
+      <p class="card-footer">Already deducted from the revenue, cost and profit above.</p>
+    </div>
   </div>
 
   <h2 class="section-divider">Cumulative Cash & Vault Overview</h2>
@@ -438,6 +443,11 @@
       <h3>Total Cash Out</h3>
       <div class="value">KSH {{ cash_metrics.cash_out|floatformat:2 }}</div>
       <p class="card-footer">Withdrawals (deposits, rent, petty cash, etc.) in this period.</p>
+    </div>
+    <div class="card metric-card card-red">
+      <h3>Customer Refunds</h3>
+      <div class="value">KSH {{ cash_metrics.refunds|floatformat:2 }}</div>
+      <p class="card-footer">Cash handed back to customers in this period.</p>
     </div>
     <div class="card metric-card {% if cash_metrics.discrepancies < 0 %}card-red{% else %}card-green{% endif %}">
       <h3>Period Discrepancy</h3>

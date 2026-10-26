@@ -1,0 +1,114 @@
+{% extends 'users/base.html' %}
+{% block extra_head %}
+<style>
+    .rf-wrap { max-width: 1000px; margin: 1.5rem auto; padding: 0 1rem; }
+    .rf-wrap h1 { margin: 0 0 .25rem 0; color: #111827; font-size: 1.4rem; }
+    .rf-sub { margin: 0 0 1.25rem 0; color: #6b7280; font-size: .9rem; }
+    .rf-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; }
+    .rf-card h2 { margin: 0 0 .75rem 0; font-size: 1rem; color: #1f2937; }
+    .rf-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
+    .rf-row label { display: block; font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .25rem; }
+    .rf-row input { padding: .55rem .7rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: .92rem; }
+    .rf-row .grow { flex: 1 1 260px; } .rf-row .grow input { width: 100%; box-sizing: border-box; }
+    .rf-btn { padding: .6rem 1.1rem; border-radius: 6px; border: none; font-size: .9rem; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+    .rf-btn.primary { background: #dc2626; color: #fff; } .rf-btn.blue { background: #2563eb; color: #fff; } .rf-btn.grey { background: #e2e8f0; color: #475569; }
+    .rf-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .rf-table th, .rf-table td { padding: .7rem .9rem; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: .92rem; }
+    .rf-table th { background: #f8fafc; color: #475569; font-weight: 600; }
+    .rf-table .num { text-align: right; } .rf-table a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    .badge { display: inline-block; padding: .1rem .55rem; border-radius: 10px; font-size: .75rem; font-weight: 700; }
+    .badge.none { background: #f1f5f9; color: #64748b; } .badge.part { background: #fef3c7; color: #92400e; } .badge.full { background: #fee2e2; color: #991b1b; }
+    .rf-total { display: flex; justify-content: space-between; align-items: center; margin: 0 0 .75rem 0; font-size: .92rem; color: #475569; }
+    .rf-total strong { color: #b91c1c; font-size: 1.1rem; }
+    .rf-empty { text-align: center; padding: 1.5rem; color: #6b7280; }
+    .rf-pager { display: flex; justify-content: space-between; margin-top: 1rem; font-size: .9rem; color: #475569; }
+    .rf-pager a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    @media (max-width: 640px) { .col-by, .col-reason { display: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rf-wrap">
+    <h1>Refunds</h1>
+    <p class="rf-sub">Refunds go back to the customer in cash from the open register. Stock is returned or written off item by item. Sales up to {{ window_days }} days old can be refunded (admins can go further back).</p>
+
+    <div class="rf-card">
+        <h2>Refund a sale</h2>
+        <form method="GET" class="rf-row">
+            <div class="grow">
+                <label for="find">Receipt or invoice number from the customer's receipt</label>
+                <input type="text" id="find" name="find" value="{{ find }}" placeholder="RCT-000123 or INV-20261026-AB12CD" autocomplete="off" autofocus>
+            </div>
+            <button type="submit" class="rf-btn blue">Find sale</button>
+        </form>
+
+        {% if find %}
+            {% if found %}
+            <table class="rf-table" style="margin-top:1rem">
+                <thead><tr><th>Receipt</th><th>Invoice</th><th>Date</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                {% for r in found %}
+                    <tr>
+                        <td>{{ r.receipt_number }}</td>
+                        <td>{{ r.order.invoice_number }}</td>
+                        <td>{{ r.issued_at|date:"d M Y, H:i" }}</td>
+                        <td class="num">{{ r.total }}</td>
+                        <td>
+                            {% if r.refunded <= 0 %}<span class="badge none">Not refunded</span>
+                            {% elif r.refunded >= r.total %}<span class="badge full">Fully refunded</span>
+                            {% else %}<span class="badge part">Refunded KSH {{ r.refunded }}</span>{% endif %}
+                        </td>
+                        <td class="num">{% if r.refunded < r.total %}<a href="{% url 'refund-new' r.pk %}">Refund</a>{% endif %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p class="rf-empty">No sale matches "{{ find }}". Check the number on the customer's receipt.</p>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="rf-card">
+        <h2>Refund history</h2>
+        <form method="GET" class="rf-row" style="margin-bottom:1rem">
+            <div><label for="q">Refund, receipt or invoice no.</label><input type="text" id="q" name="q" value="{{ q }}" placeholder="RFD-000001"></div>
+            <div><label for="from">From</label><input type="date" id="from" name="from" value="{{ date_from }}"></div>
+            <div><label for="to">To</label><input type="date" id="to" name="to" value="{{ date_to }}"></div>
+            <button type="submit" class="rf-btn blue">Filter</button>
+            <a href="{% url 'refund-list' %}" class="rf-btn grey">Reset</a>
+        </form>
+
+        <div class="rf-total"><span>{{ page_obj.paginator.count }} refund{{ page_obj.paginator.count|pluralize }}</span><span>Total refunded: <strong>KSH {{ total_refunded }}</strong></span></div>
+
+        {% if page_obj.object_list %}
+        <table class="rf-table">
+            <thead><tr><th>Refund</th><th>Sale</th><th>Date</th><th class="col-reason">Reason</th><th class="col-by">By</th><th class="num">Amount (KSH)</th><th></th></tr></thead>
+            <tbody>
+            {% for rf in page_obj %}
+                <tr>
+                    <td>{{ rf.refund_number }}</td>
+                    <td>{{ rf.order.invoice_number }}</td>
+                    <td>{{ rf.created_at|date:"d M Y, H:i" }}</td>
+                    <td class="col-reason">{{ rf.get_reason_display }}</td>
+                    <td class="col-by">{{ rf.processed_by_name }}</td>
+                    <td class="num">{{ rf.total_amount }}</td>
+                    <td class="num"><a href="{% url 'refund-detail' rf.pk %}">View</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <div class="rf-pager">
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <span>
+                {% if page_obj.has_previous %}<a href="?{% if qs_without_page %}{{ qs_without_page }}&{% endif %}page={{ page_obj.previous_page_number }}">&larr; Previous</a>{% endif %}
+                {% if page_obj.has_previous and page_obj.has_next %}&nbsp;&nbsp;{% endif %}
+                {% if page_obj.has_next %}<a href="?{% if qs_without_page %}{{ qs_without_page }}&{% endif %}page={{ page_obj.next_page_number }}">Next &rarr;</a>{% endif %}
+            </span>
+        </div>
+        {% else %}
+            <p class="rf-empty">No refunds yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

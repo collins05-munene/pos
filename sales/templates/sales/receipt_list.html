@@ -63,7 +63,7 @@
                 <td>{{ r.issued_at|date:"d M Y, H:i" }}</td>
                 <td class="col-branch">{{ r.branch_name }}</td>
                 <td class="col-cashier">{{ r.cashier_name }}</td>
-                <td class="num">{{ r.total }}</td>
+                <td class="num">{{ r.total }}{% if r.refunded > 0 %}<br><small style="color:#b91c1c;font-weight:700;">{% if r.refunded >= r.total %}Fully refunded{% else %}Refunded {{ r.refunded|floatformat:2 }}{% endif %}</small>{% endif %}</td>
                 <td class="num"><a href="{% url 'receipt-detail' r.pk %}">View</a></td>
             </tr>
         {% endfor %}

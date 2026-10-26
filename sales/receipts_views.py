@@ -4,7 +4,10 @@ sales/receipt_views.py  (import these in sales/urls.py)
 from datetime import datetime, time
 
 from django.core.paginator import Paginator
-from django.db.models import F, Q
+from decimal import Decimal
+
+from django.db.models import DecimalField, F, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -43,6 +46,7 @@ class ReceiptListView(CashierRequiredMixin, View):
         if date_to:
             qs = qs.filter(issued_at__lte=timezone.make_aware(datetime.combine(date_to, time.max), tz))
 
+        qs = qs.annotate(refunded=Coalesce(Sum('order__refunds__total_amount'), Decimal('0.00'), output_field=DecimalField(max_digits=12, decimal_places=2)))
         page_obj = Paginator(qs, self.page_size).get_page(request.GET.get('page'))
 
         params = request.GET.copy()
@@ -60,10 +64,14 @@ class ReceiptListView(CashierRequiredMixin, View):
 class ReceiptDetailView(CashierRequiredMixin, View):
     def get(self, request, pk):
         receipt = get_object_or_404(_visible_receipts(request.user), pk=pk)
+        order = receipt.order
         return render(request, 'sales/receipt_detail.html', {
             'receipt': receipt,
             'is_reprint': receipt.print_count > 0,
             'just_sold': request.GET.get('new') == '1',
+            'refunds': order.refunds.all(),
+            'refunded_amount': order.refunded_amount,
+            'can_refund': (request.user.is_admin or request.user.is_manager) and order.refund_status != 'FULL',
         })
 
 

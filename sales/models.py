@@ -146,10 +146,16 @@ class CashRegisterSession(TenantOwnedModel):
         ).aggregate(total=models.Sum('amount'))['total']
         return result or Decimal('0.00')
 
+    @property
+    def total_refunds(self):
+        """Cash handed back to customers from the drawer during THIS session."""
+        result = self.refunds.aggregate(total=models.Sum('total_amount'))['total']
+        return result or Decimal('0.00')
+
     def get_current_expected_cash(self):
         """
         Opening float (already the carried-forward pool balance) + cash
-        sales + cash-ins - cash-outs recorded against THIS session. Since
+        sales + cash-ins - cash-outs - customer refunds recorded against THIS session. Since
         opening_balance is always the prior session's closing_balance,
         this figure is equivalent to the cumulative all-time pool
         balance for the branch, not a per-session reset.
@@ -159,7 +165,9 @@ class CashRegisterSession(TenantOwnedModel):
         cash_in = self.total_cash_in or Decimal('0.00')
         cash_out = self.total_cash_out or Decimal('0.00')
 
-        return opening + sales + cash_in - cash_out
+        refunds = self.total_refunds or Decimal('0.00')
+
+        return opening + sales + cash_in - cash_out - refunds
 
     def save(self, *args, **kwargs):
         if self.status == 'CLOSED':
@@ -232,7 +240,25 @@ class Order(TenantOwnedModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Invoice {self.invoice_number}"   
+        return f"Invoice {self.invoice_number}"
+
+    @property
+    def refunded_amount(self):
+        """Total cash refunded against this sale so far."""
+        result = self.refunds.aggregate(total=models.Sum('total_amount'))['total']
+        return result or Decimal('0.00')
+
+    @property
+    def refund_status(self):
+        """'NONE', 'PARTIAL' or 'FULL' (by value refunded against value sold)."""
+        refunded = self.refunded_amount
+        if refunded <= 0:
+            return 'NONE'
+        return 'FULL' if refunded >= self.total_revenue else 'PARTIAL'
+
+    @property
+    def net_revenue(self):
+        return self.total_revenue - self.refunded_amount
 
 
 class OrderItem(TenantOwnedModel):
@@ -284,4 +310,76 @@ class Receipt(TenantOwnedModel):
  
     def __str__(self):
         return f"Receipt {self.receipt_number}"
- 
+
+
+class Refund(TenantOwnedModel):
+    """
+    Money handed back to a customer for goods from an earlier sale. See sales/refunds.py.
+
+    The original Order and Receipt are never edited -- they stay exactly what the customer was
+    given. A refund is its own record that points at the sale, so the books show both what was
+    sold and what came back, and the cash leaves the drawer on the day it is actually paid out
+    (cash_session is the register that is OPEN when the refund is made, not the sale's register).
+    """
+    REASONS = (
+        ('WRONG_ITEM', 'Wrong item sold'),
+        ('DEFECTIVE', 'Damaged / defective'),
+        ('EXPIRED', 'Expired or near-expiry product'),
+        ('CHANGED_MIND', 'Customer changed their mind'),
+        ('OVERCHARGED', 'Overcharged / price error'),
+        ('OTHER', 'Other'),
+    )
+
+    refund_number = models.CharField(max_length=30)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='refunds')
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='refunds', null=True)
+    cash_session = models.ForeignKey(CashRegisterSession, on_delete=models.PROTECT, related_name='refunds')
+    processed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='refunds_processed')
+
+    reason = models.CharField(max_length=20, choices=REASONS)
+    notes = models.TextField(blank=True, default='')
+
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Cash paid back to the customer")
+    cogs_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                        help_text="Cost of the goods that went back on the shelf")
+    profit_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                          help_text="Profit given up: refund minus cost recovered")
+
+    # Snapshot for the printed credit note.
+    shop_name = models.CharField(max_length=150)
+    branch_name = models.CharField(max_length=150, blank=True, default='')
+    processed_by_name = models.CharField(max_length=150)
+
+    client_uuid = models.UUIDField(null=True, blank=True, editable=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'refund_number'], name='uniq_tenant_refund_number'),
+            models.UniqueConstraint(fields=['tenant', 'client_uuid'],
+                                    condition=models.Q(client_uuid__isnull=False),
+                                    name='uniq_tenant_refund_client_uuid'),
+        ]
+        indexes = [models.Index(fields=['tenant', '-created_at'])]
+
+    def __str__(self):
+        return f"Refund {self.refund_number}"
+
+
+class RefundItem(TenantOwnedModel):
+    refund = models.ForeignKey(Refund, on_delete=models.CASCADE, related_name='items')
+    order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name='refund_items')
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
+
+    description = models.CharField(max_length=255)
+    sku = models.CharField(max_length=100, blank=True, default='')
+    quantity = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, help_text="What the customer paid per unit")
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2)
+    restocked = models.BooleanField(default=True, help_text="Went back into stock (False = written off)")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    cogs_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.sku} x {self.quantity}"

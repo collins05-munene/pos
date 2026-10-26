@@ -1,0 +1,141 @@
+{% extends 'users/base.html' %}
+{% block extra_head %}
+<style>
+    .rf-wrap { max-width: 860px; margin: 1.5rem auto; padding: 0 1rem; }
+    .rf-back { display: inline-block; color: #4b5563; text-decoration: none; font-size: .9rem; margin-bottom: 1rem; }
+    .rf-wrap h1 { margin: 0 0 .25rem 0; font-size: 1.4rem; color: #111827; }
+    .rf-sub { color: #6b7280; font-size: .9rem; margin: 0 0 1.25rem 0; }
+    .rf-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; }
+    .rf-card h2 { margin: 0 0 .75rem 0; font-size: 1rem; color: #1f2937; }
+    .rf-note { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: .7rem 1rem; font-size: .88rem; margin-bottom: 1rem; }
+    .rf-table { width: 100%; border-collapse: collapse; }
+    .rf-table th, .rf-table td { padding: .65rem .5rem; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: .9rem; vertical-align: middle; }
+    .rf-table th { color: #475569; font-weight: 600; font-size: .8rem; }
+    .rf-table .num { text-align: right; white-space: nowrap; }
+    .rf-table .nm small { display: block; color: #6b7280; font-family: monospace; }
+    .rf-table input[type=number] { width: 76px; padding: .45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; text-align: center; }
+    .rf-table tr.done td { color: #9ca3af; }
+    .rf-field { margin-bottom: 1rem; } .rf-field label { display: block; font-weight: 600; font-size: .85rem; color: #374151; margin-bottom: .3rem; }
+    .rf-field select, .rf-field textarea { width: 100%; box-sizing: border-box; padding: .6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: .95rem; font-family: inherit; }
+    .rf-sum { display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; }
+    .rf-sum span:last-child { color: #b91c1c; }
+    .rf-actions { display: flex; gap: .75rem; }
+    .rf-btn { padding: .8rem 1.2rem; border-radius: 8px; border: none; font-size: 1rem; font-weight: 700; cursor: pointer; text-decoration: none; text-align: center; }
+    .rf-btn.danger { background: #dc2626; color: #fff; flex: 1; } .rf-btn.danger:disabled { opacity: .5; cursor: not-allowed; }
+    .rf-btn.grey { background: #e2e8f0; color: #475569; }
+    .hist { font-size: .85rem; color: #475569; } .hist a { color: #2563eb; font-weight: 600; text-decoration: none; }
+    .help { font-size: .8rem; color: #6b7280; margin-top: .25rem; }
+    @media (max-width: 640px) { .col-price { display: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rf-wrap">
+    <a href="{% url 'refund-list' %}" class="rf-back">&larr; Refunds</a>
+    <h1>Refund sale {{ order.invoice_number }}</h1>
+    <p class="rf-sub">Receipt {{ receipt.receipt_number }} &middot; sold {{ order.created_at|date:"d M Y, H:i" }} by {{ receipt.cashier_name }} &middot; total KSH {{ order.total_revenue }}</p>
+
+    {% if refunds %}
+    <div class="rf-card hist">
+        <strong>Earlier refunds on this sale:</strong>
+        {% for rf in refunds %}<a href="{% url 'refund-detail' rf.pk %}">{{ rf.refund_number }}</a> (KSH {{ rf.total_amount }}){% if not forloop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if nothing_left %}
+        <div class="rf-card">Everything on this sale has already been refunded.</div>
+    {% else %}
+    <form method="POST" id="refund-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="client_uuid" value="{{ checkout_uuid }}">
+
+        <div class="rf-card">
+            <h2>1. What is coming back?</h2>
+            <p class="help" style="margin:0 0 .6rem">Enter how many of each item the customer is returning. Tick &ldquo;Back on shelf&rdquo; only if it can be sold again; leave it unticked for expired, damaged or opened medicine (it is written off).</p>
+            <table class="rf-table">
+                <thead><tr><th>Item</th><th class="num col-price">Price paid</th><th class="num">Sold / refunded</th><th class="num">Return qty</th><th class="num">Back on shelf</th></tr></thead>
+                <tbody>
+                {% for l in lines %}
+                    <tr class="{% if l.refundable == 0 %}done{% endif %}">
+                        <td class="nm">{{ l.name }}<small>{{ l.sku }}</small></td>
+                        <td class="num col-price">{{ l.unit_price }}</td>
+                        <td class="num">{{ l.sold }} / {{ l.refunded }}</td>
+                        <td class="num">
+                            {% if l.refundable > 0 %}
+                            <input type="number" name="qty_{{ l.item.pk }}" min="0" max="{{ l.refundable }}" step="1" inputmode="numeric"
+                                   value="{{ l.qty_value }}" placeholder="0" data-price="{{ l.unit_price }}" class="qty">
+                            {% else %}&mdash;{% endif %}
+                        </td>
+                        <td class="num">{% if l.refundable > 0 %}<input type="checkbox" name="restock_{{ l.item.pk }}" class="restock" {% if l.restock_value %}checked{% endif %}>{% endif %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="rf-card">
+            <h2>2. Why?</h2>
+            <div class="rf-field">
+                <label for="reason">Reason</label>
+                <select name="reason" id="reason" required>
+                    <option value="">Choose a reason&hellip;</option>
+                    {% for code, label in reasons %}<option value="{{ code }}" {% if reason_value == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="rf-field">
+                <label for="notes">Notes (optional)</label>
+                <textarea name="notes" id="notes" rows="2" maxlength="500" placeholder="Anything worth remembering about this refund">{{ notes_value }}</textarea>
+            </div>
+        </div>
+
+        <div class="rf-card">
+            <div class="rf-sum"><span>Cash to give the customer</span><span id="total">KSH 0.00</span></div>
+            <p class="help" style="margin:0 0 1rem">The money is taken out of the open register. The original receipt is not changed.</p>
+            <div class="rf-actions">
+                <a href="{% url 'refund-list' %}" class="rf-btn grey">Cancel</a>
+                <button type="submit" class="rf-btn danger" id="submit-btn" disabled>Refund</button>
+            </div>
+        </div>
+    </form>
+
+    <script>
+    (function () {
+        var form = document.getElementById('refund-form');
+        var qtys = form.querySelectorAll('input.qty');
+        var reason = document.getElementById('reason');
+        var noRestock = '{{ no_restock_reasons }}'.split(',');
+        var btn = document.getElementById('submit-btn');
+        var busy = false;
+
+        function cents(v) { return Math.round(parseFloat(v) * 100) || 0; }
+        function recompute() {
+            var total = 0;
+            qtys.forEach(function (q) {
+                var max = parseInt(q.max, 10), n = parseInt(q.value, 10) || 0;
+                if (n > max) { n = max; q.value = max; }
+                if (n < 0) { n = 0; q.value = 0; }
+                total += n * cents(q.dataset.price);
+            });
+            document.getElementById('total').textContent = 'KSH ' + (total / 100).toFixed(2);
+            btn.disabled = busy || total === 0 || !reason.value;
+        }
+        qtys.forEach(function (q) { q.addEventListener('input', recompute); });
+        reason.addEventListener('change', function () {
+            // expired / damaged goods normally cannot be resold: pre-select "write off" (still adjustable per line)
+            if (noRestock.indexOf(reason.value) !== -1) {
+                form.querySelectorAll('input.restock').forEach(function (c) { c.checked = false; });
+            }
+            recompute();
+        });
+        form.addEventListener('submit', function (e) {
+            if (busy) { e.preventDefault(); return; }
+            var t = document.getElementById('total').textContent;
+            if (!window.confirm('Refund ' + t + ' to the customer from the register?')) { e.preventDefault(); return; }
+            busy = true; btn.disabled = true; btn.textContent = 'Refunding\u2026';
+        });
+        recompute();
+    })();
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

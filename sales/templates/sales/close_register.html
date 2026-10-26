@@ -173,6 +173,13 @@
         </div>
         {% endif %}
 
+        {% if total_refunds > 0 %}
+        <div class="summary-row">
+            <span>Customer Refunds:</span>
+            <span>- KSH {{ total_refunds }}</span>
+        </div>
+        {% endif %}
+
         <hr style="margin: 10px 0; border: 0; border-top: 1px dashed #ccc;">
 
         <div class="summary-row total">
