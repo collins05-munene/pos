@@ -55,6 +55,16 @@
         <div class="receipt-banner">Sale complete. Print the receipt for the customer or start the next sale.</div>
     {% endif %}
 
+    {% if refunds %}
+        <div class="receipt-banner" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">
+            KSH {{ refunded_amount }} of this sale has been refunded:
+            {% for rf in refunds %}{% if user.is_admin or user.is_manager %}<a href="{% url 'refund-detail' rf.pk %}" style="color:inherit;font-weight:700">{{ rf.refund_number }}</a>{% else %}{{ rf.refund_number }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}.
+        </div>
+    {% endif %}
+    {% if can_refund %}
+        <a href="{% url 'refund-new' receipt.pk %}" class="btn-secondary" style="display:flex;align-items:center;justify-content:center;height:44px;border-radius:8px;text-decoration:none;font-weight:600;margin-bottom:.75rem;background:#fee2e2;color:#991b1b;">Refund this sale</a>
+    {% endif %}
+
     <div class="receipt-actions">
         <button type="button" class="btn-print" id="print-btn">Print receipt</button>
         {% if just_sold %}

@@ -140,6 +140,16 @@
             </div>
         </div>
 
+        {% if order.refunds.all %}
+        <div class="card" style="border-color:#fecaca;background:#fef2f2;">
+            <strong style="color:#991b1b;">Refunded KSH {{ order.refunded_amount|floatformat:2 }}</strong>
+            &middot; net revenue KSH {{ order.net_revenue|floatformat:2 }}
+            <div style="margin-top:.4rem;font-size:.9rem;">
+                {% for rf in order.refunds.all %}<a href="{% url 'refund-detail' rf.pk %}">{{ rf.refund_number }}</a> (KSH {{ rf.total_amount }}, {{ rf.get_reason_display }}){% if not forloop.last %}, {% endif %}{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="financials-grid">
             <div class="card metric-card card-blue">
                 <h3>Total Items Sold</h3>

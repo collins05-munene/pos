@@ -10,13 +10,15 @@ from datetime import datetime, time, timedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.views import View
 import logging
 
 from products.models import ProductVariant, Category
 from .cart import POSCart
-from .models import Order, OrderItem, CashRegisterSession, CashTransaction
+from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund
+from .refunds import refund_totals
 from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
@@ -127,6 +129,7 @@ class CloseRegisterView(CashierRequiredMixin, View):
             'total_cash_sales': session.total_cash_sales,
             'total_cash_in': session.total_cash_in,
             'total_cash_out': session.total_cash_out,
+            'total_refunds': session.total_refunds,
             'expected_cash': session.get_current_expected_cash(),
         }
         return render(request, 'sales/close_register.html', context)
@@ -570,6 +573,12 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         cogs = sales_agg['total_cogs'] or Decimal('0.00')
         profit = sales_agg['total_profit'] or (revenue - cogs)
 
+        # Refunds reduce the period they were PAID in (when the cash left), not the sale's period.
+        period_refunds = refund_totals(period_start, period_end)
+        revenue -= period_refunds['amount']
+        cogs -= period_refunds['cogs']
+        profit -= period_refunds['profit']
+
         margin = round((profit / revenue * 100), 2) if revenue > Decimal('0.00') else Decimal('0.00')
 
         context['metrics'] = {
@@ -577,11 +586,13 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'cogs': cogs,
             'profit': profit,
             'margin': margin,
+            'refunds': period_refunds['amount'],
         }
 
         total_cash_sales_all_time = orders.filter(
             payment_method='CASH'
         ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+        total_cash_sales_all_time -= refund_totals()['amount']      # refunds are always paid in cash
 
         latest_closed_session_id_per_branch = (
             CashRegisterSession.objects.filter(
@@ -639,6 +650,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'active_sessions_count': all_sessions.filter(status='OPEN').count(),
             'cash_in': cash_in,
             'cash_out': cash_out,
+            'refunds': period_refunds['amount'],
             'discrepancies': period_discrepancy,
         }
 
@@ -652,7 +664,9 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
 
         sessions_qs = period_sessions.select_related('opened_by', 'branch').order_by('-opened_at')
         txns_qs = period_cash_txns.select_related('user').order_by('-created_at')
-        orders_qs = period_orders.select_related('branch').order_by('-created_at')
+        orders_qs = (period_orders.select_related('branch')
+                     .annotate(refunded=Coalesce(Sum('refunds__total_amount'), Decimal('0.00'), output_field=DecimalField(max_digits=12, decimal_places=2)))
+                     .order_by('-created_at'))
 
         sessions_page = _paginate(self.request, sessions_qs, 'sessions_page', page_size=15)
         txns_page = _paginate(self.request, txns_qs, 'txns_page', page_size=15)

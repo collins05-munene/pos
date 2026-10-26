@@ -21,7 +21,7 @@
         </td>
         <td>{{ order.branch.name|default:"Main" }}</td>
         <td>{{ order.get_payment_method_display }}</td>
-        <td>KSH {{ order.total_revenue }}</td>
+        <td>KSH {{ order.total_revenue }}{% if order.refunded > 0 %}<br><small style="color:#b91c1c;font-weight:700;">Refunded {{ order.refunded|floatformat:2 }}</small>{% endif %}</td>
         {% if user.get_role_display == 'Admin' %}
         <td class="text-green">KSH {{ order.total_profit }}</td>
         {% endif %}
