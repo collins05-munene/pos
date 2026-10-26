@@ -127,7 +127,6 @@
         color: #fff;
 }
 
-    /* ---------- mobile cart (bottom sheet) ---------- */
     .cart-fab, .cart-close, .cart-backdrop { display: none; }
 
     @media screen and (max-width: 900px) {
@@ -145,12 +144,11 @@
         .product-matrix {
             grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
             gap: 0.6rem;
-            padding-bottom: 5.5rem;           /* room for the floating cart bar */
+            padding-bottom: 5.5rem;          
             -webkit-overflow-scrolling: touch;
         }
         .variant-tile { padding: 0.75rem; }
 
-        /* cart becomes a sheet that slides up over the catalog */
         .checkout-panel {
             position: fixed;
             left: 0; right: 0; bottom: 0;
@@ -179,7 +177,11 @@
             transition: opacity 0.25s ease;
             z-index: 850;
         }
-        body.cart-open .cart-backdrop { opacity: 1; pointer-events: auto; }
+
+        body.cart-open .cart-backdrop { 
+            opacity: 1; 
+            pointer-events: auto; 
+        }
 
         .cart-close {
             position: fixed;
@@ -207,14 +209,35 @@
             font-size: 1rem; font-weight: 700; cursor: pointer;
             box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
         }
-        .cart-fab.is-empty { background: #6b7280; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
-        .cart-fab-meta { font-weight: 500; font-size: 0.9rem; opacity: 0.95; }
-        body.cart-open .cart-fab { display: none; }
 
-        /* cart contents, phone-sized (prefixed to beat the fragment's own <style>) */
-        .checkout-panel .cart-header { padding: 1rem 4rem 1rem 1rem; }
-        .checkout-panel .cart-rows-box { padding: 0 1rem; -webkit-overflow-scrolling: touch; }
-        .checkout-panel .cart-item-row { flex-wrap: wrap; gap: 0.5rem 0.75rem; }
+        .cart-fab.is-empty { 
+            background: #6b7280; 
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); 
+        }
+
+        .cart-fab-meta { 
+            font-weight: 500; 
+            font-size: 0.9rem; 
+            opacity: 0.95; 
+        }
+
+        body.cart-open .cart-fab { 
+            display: none; 
+        }
+
+        .checkout-panel .cart-header { 
+            padding: 1rem 4rem 1rem 1rem; 
+        }
+
+        .checkout-panel .cart-rows-box { 
+            padding: 0 1rem; 
+            -webkit-overflow-scrolling: touch; 
+        }
+
+        .checkout-panel .cart-item-row { 
+            flex-wrap: wrap; 
+            gap: 0.5rem 0.75rem; 
+        }
         .checkout-panel .cart-item-row > div:nth-child(1) { flex: 1 1 100% !important; }
         .checkout-panel .cart-item-row > div:nth-child(2) { flex: 1 1 auto !important; text-align: left !important; }
         .checkout-panel .cart-item-row > div:nth-child(2) form { justify-content: flex-start !important; }
@@ -285,8 +308,8 @@
     }
 
     
-    // The connection dropped. Rather than let the browser show an error page, move the cart
-    // to the offline terminal and keep selling there.
+    // The connection dropped. Rather than let the browser show an error page, tell the cashier
+    // and offer to move the cart to the offline terminal (or wait for the connection).
     function cartLines() {
         const panel = document.getElementById('cart-panel');
         try { return JSON.parse((panel && panel.dataset.cart) || '[]'); } catch (_) { return []; }
@@ -300,7 +323,7 @@
             if (vid && vid.value) add = { variantId: Number(vid.value) };
             else if (sku && sku.value.trim()) add = { sku: sku.value.trim() };
         }
-        window.POSOfflineBoot.handoff(cartLines(), add);
+        window.POSOfflineBoot.prompt(cartLines(), add);
     }
 
     async function ajaxCartSubmit(form) {

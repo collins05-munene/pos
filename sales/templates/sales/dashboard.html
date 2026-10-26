@@ -172,25 +172,49 @@
     font-size: 0.8rem;
     color: #9ca3af;
   }
-  .card-blue .value { color: #2563eb; }
-  .card-green .value { color: #16a34a; }
-  .card-red .value { color: #dc2626; }
-  .card-purple .value { color: #9333ea; }
+
+  .card-blue .value { 
+    color: #2563eb; 
+  }
+
+  .card-green .value {
+    color: #16a34a; 
+  } 
+
+  .card-red .value { 
+    color: #dc2626; 
+  }
+  
+  .card-purple .value { 
+    color: #9333ea; 
+  }
+
   .card-highlight {
     border: 1px solid #bbf7d0;
     background: #f0fdf4;
   }
-  .card-highlight .value { color: #16a34a; }
+
+  .card-highlight .value { 
+    color: #16a34a; 
+  }
 
   .data-split-container {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);   /* 1fr alone lets a wide table stretch the card past the screen */
+    grid-template-columns: minmax(0, 1fr);  
     gap: 1.5rem;
     align-items: start;
     margin-bottom: 2rem;
   }
-  .data-split-container > .card { min-width: 0; }
-  .table-card > div[id$="-table-container"] { min-width: 0; max-width: 100%; }
+
+  .data-split-container > .card { 
+    min-width: 0; 
+  }
+
+  .table-card > div[id$="-table-container"] { 
+    min-width: 0; 
+    max-width: 100%; 
+  }
+
   .section-title {
     margin: 0 0 1.25rem 0;
     font-size: 1.15rem;
@@ -202,11 +226,15 @@
     -webkit-overflow-scrolling: touch;
     transition: opacity 0.15s ease;
   }
-  /* Sessions, Cash In/Out log and Sales tables: keep columns on one line so the
-     table gets wider than the screen and scrolls sideways instead of squashing. */
-  .table-card .table-responsive table { min-width: 640px; }
-  .table-card th,
-  .table-card td { white-space: nowrap; }
+
+  .table-card .table-responsive table { 
+    min-width: 640px; 
+  }
+
+  .table-card th, .table-card td { 
+    white-space: nowrap; 
+  }
+
   table {
     width: 100%;
     border-collapse: collapse;
@@ -245,10 +273,25 @@
     font-weight: 700;
     text-transform: uppercase;
   }
-  .badge-open { background-color: #dcfce7; color: #15803d; }
-  .badge-closed { background-color: #f3f4f6; color: #4b5563; }
-  .badge-in { background-color: #dbeafe; color: #1e40af; }
-  .badge-out { background-color: #fee2e2; color: #991b1b; }
+  .badge-open { 
+    background-color: #dcfce7; 
+    color: #15803d; 
+  }
+
+  .badge-closed { 
+    background-color: #f3f4f6; 
+    color: #4b5563; 
+  }
+
+  .badge-in { 
+    background-color: #dbeafe; 
+    color: #1e40af; 
+  }
+
+  .badge-out { 
+    background-color: #fee2e2; 
+    color: #991b1b; 
+  }
 
   .table-pagination {
     display: flex;

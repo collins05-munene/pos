@@ -1,14 +1,4 @@
-/*
- * pos-offline-boot.js
- *
- * Loaded on every signed-in page (via users/base.html) and on the offline terminal.
- *  - keeps the on-device catalogue fresh while online
- *  - sends waiting offline sales whenever there is a connection (page load, 'online' event,
- *    tab becomes visible, every 30s while something is waiting)
- *  - shows a small status pill when something needs the cashier's attention
- *  - locks offline selling when the person signs out
- *  - gives the online terminal a way to hand its cart over when the connection drops
- */
+
 (function () {
   'use strict';
   var P = window.POSOffline;
@@ -19,7 +9,7 @@
   var signedIn = body && body.dataset.posUser === '1';
   var OFFLINE_URL = '/pos/offline/';
 
-  /* ---- status pill (not on the offline terminal, which has its own header) ---- */
+  
   var pill = null;
   function ensurePill() {
     if (pill || onShell) return pill;
@@ -64,7 +54,56 @@
   }
   P.listen(render);
 
-  /* ---- keep catalogue fresh and the outbox empty ---- */
+  
+  var modal = null, dismissed = false;
+  function injectModalCss() {
+    if (document.getElementById('posOfflineModalCss')) return;
+    var css = document.createElement('style');
+    css.id = 'posOfflineModalCss';
+    css.textContent = '#posOfflineModal{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;' +
+      'align-items:center;justify-content:center;padding:1rem;font-family:system-ui,sans-serif}' +
+      '#posOfflineModal .box{background:#fff;border-radius:14px;padding:1.5rem;max-width:400px;width:100%;text-align:center;' +
+      'box-shadow:0 20px 40px rgba(0,0,0,.3)}#posOfflineModal h3{margin:.2rem 0 .6rem;font-size:1.2rem;color:#111827}' +
+      '#posOfflineModal p{color:#4b5563;line-height:1.5;margin:0 0 1.2rem;font-size:.95rem}' +
+      '#posOfflineModal .btns{display:flex;flex-direction:column;gap:.6rem}' +
+      '#posOfflineModal button{border:0;border-radius:8px;padding:.8rem 1rem;font:600 1rem system-ui,sans-serif;cursor:pointer}' +
+      '#posOfflineModal .go{background:#10b981;color:#fff}#posOfflineModal .wait{background:#e2e8f0;color:#334155}';
+    document.head.appendChild(css);
+  }
+  function closePrompt() { if (modal) { modal.remove(); modal = null; } }
+  function pageCart() {
+    var panel = document.getElementById('cart-panel');
+    try { return JSON.parse((panel && panel.dataset.cart) || '[]'); } catch (e) { return []; }
+  }
+
+  function prompt(lines, add) {
+    if (onShell || !signedIn || modal) return Promise.resolve();
+    if (/\/checkout\/pay/.test(location.pathname)) return Promise.resolve();
+    return P.getState().then(function (st) {
+      injectModalCss();
+      modal = document.createElement('div');
+      modal.id = 'posOfflineModal';
+      modal.setAttribute('role', 'alertdialog');
+      modal.setAttribute('aria-modal', 'true');
+      var ready = st.ok;
+      modal.innerHTML = '<div class="box"><div style="font-size:2rem">&#128246;</div><h3>You are offline</h3><p>' +
+        (ready
+          ? 'The internet connection was lost. You can keep selling on the offline POS terminal; your cart comes with you and sales sync automatically when the connection is back.'
+          : 'The internet connection was lost. The offline POS is not ready on this device (sign in and open the terminal once while online), so please wait for the connection to return.') +
+        '</p><div class="btns">' +
+        (ready ? '<button type="button" class="go">Go to offline POS terminal</button>' : '') ;
+      document.body.appendChild(modal);
+      var go = modal.querySelector('.go');
+      if (go) go.onclick = function () {
+        closePrompt();
+        window.POSOfflineBoot.handoff(lines || pageCart(), add || null);
+      };
+      modal.querySelector('.wait').onclick = function () { dismissed = true; closePrompt(); };
+    });
+  }
+  window.addEventListener('offline', function () { dismissed = false; prompt(); });
+  window.addEventListener('online', function () { dismissed = false; closePrompt(); });
+
   function sync() {
     if (!signedIn && !onShell) return;
     if (!P.isOnline()) { P.emit(false); return; }
@@ -79,7 +118,6 @@
   }, 30000);
   document.addEventListener('DOMContentLoaded', function () { sync(); P.emit(false); });
 
-  /* ---- signing out locks offline selling on this device (unsynced sales are kept) ---- */
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('a[href*="/users/logout"]');
     if (!a) return;
@@ -88,13 +126,13 @@
     Promise.race([P.lock(), new Promise(function (r) { setTimeout(r, 400); })]).then(go, go);
   }, true);
 
-  /* ---- online terminal -> offline terminal, carrying the cart ---- */
   window.POSOfflineBoot = {
-    // lines: [{variant_id, price, quantity}] as embedded in the cart panel; add: {variantId} the click that failed
     handoff: function (lines, add) {
       var mapped = (lines || []).map(function (l) { return { variantId: l.variant_id, qty: l.quantity, price: l.price }; });
       return P.setHandoff({ lines: mapped, add: add || null }).then(function () { location.href = OFFLINE_URL; });
     },
+    prompt: function (lines, add) { return dismissed ? Promise.resolve() : prompt(lines, add); },
     lock: function () { return P.lock(); }
   };
+  document.addEventListener('DOMContentLoaded', function () { if (P.isOnline() === false) prompt(); });
 })();

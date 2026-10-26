@@ -1,4 +1,4 @@
-/* assistant.js - floating help chat widget (vanilla JS, no dependencies). */
+
 (function () {
     'use strict';
 
@@ -17,12 +17,11 @@
 
     var URL_CHAT = root.dataset.url;
     var CSRF = root.dataset.csrf;
-    var KEY = 'assistant:v1:' + (root.dataset.user || '0');   // per user, so a shared till never shows someone else's chat
+    var KEY = 'assistant:v1:' + (root.dataset.user || '0');   
     var MAX_SEND = 12, MAX_KEEP = 20;
     var history = [];
     var busy = false;
 
-    /* ---------- storage (per browser tab) ---------- */
     function load() {
         try {
             var saved = JSON.parse(sessionStorage.getItem(KEY) || '[]');
@@ -37,7 +36,6 @@
         try { sessionStorage.setItem(KEY, JSON.stringify(history.slice(-MAX_KEEP))); } catch (e) { /* storage unavailable */ }
     }
 
-    /* ---------- safe rendering (DOM nodes only, never innerHTML) ---------- */
     function el(tag, cls) { var n = document.createElement(tag); if (cls) n.className = cls; return n; }
 
     function inline(node, text) {
@@ -98,7 +96,6 @@
         return row;
     }
 
-    /* ---------- state ---------- */
     function setBusy(state) {
         busy = state;
         sendBtn.disabled = state;
@@ -119,7 +116,6 @@
         return 'Something went wrong. Please try again.';
     }
 
-    /* ---------- talking to the server ---------- */
     function ask(text) {
         text = (text || '').trim();
         if (!text || busy) return;
@@ -160,8 +156,8 @@
                     history.push({ role: 'assistant', text: r.data.reply });
                 } else {
                     addMessage('bot', r.data.error || fallbackError(r.status), 'assistant-msg-error');
-                    history.pop();                 // don't keep an unanswered question in the context
-                    input.value = text;            // let them retry with one tap
+                    history.pop();                 
+                    input.value = text;           
                     autoGrow();
                 }
             })
@@ -184,7 +180,6 @@
             });
     }
 
-    /* ---------- open / close ---------- */
     function openPanel() {
         panel.hidden = false;
         fab.setAttribute('aria-expanded', 'true');
@@ -225,7 +220,6 @@
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
     });
 
-    /* ---------- boot: restore this tab's conversation ---------- */
     load();
     history.forEach(function (m) { addMessage(m.role, m.text); });
     updateChips();

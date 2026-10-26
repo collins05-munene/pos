@@ -1,8 +1,3 @@
-/* "Already paid? Enter your M-Pesa code" panel on /billing/.
-   Reads /billing/ as JSON and posts to the manual-payment endpoint.
-   Feedback is a dismissible card under the button that clears as soon as the shop edits the
-   code; what the shop needs to remember (balance due, credit, waiting codes) is shown in the
-   notice cards at the top of the page, which billing.js draws from live figures. */
 (() => {
   const panel = document.getElementById('manual-pay');
   if (!panel) return;
@@ -15,7 +10,6 @@
   const money = (v) => Duka.money(v);
   const when = (iso) => iso ? new Date(iso).toLocaleDateString('en-KE', { dateStyle: 'medium' }) : '';
 
-  /* ---- small helpers ---- */
   function csrf() {
     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
     if (m) return decodeURIComponent(m[1]);
@@ -43,9 +37,8 @@
 
   function currentPlan() {
     return (overview.plans || []).find((p) => String(p.term_months) === termSel.value);
-  }
+  } 
 
-  // What the shop would still pay for the selected term, after credit.
   function dueForSelected() {
     const plan = currentPlan();
     if (!plan) return null;
@@ -54,7 +47,6 @@
     return Math.max(Number(plan.total) - Number(overview.credit_balance || 0), 0);
   }
 
-  /* ---- rendering ---- */
   function renderSteps() {
     const mp = overview.manual_pay || {};
     const due = dueForSelected();
@@ -121,7 +113,6 @@
     panel.hidden = false;
   }
 
-  // STK push isn't live yet (Daraja pending): intercept the button before billing.js sees it.
   document.addEventListener('click', (e) => {
     const target = e.target.closest && e.target.closest('#pay-btn');
     if (!target || (overview && overview.stk_enabled)) return;
@@ -134,7 +125,6 @@
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, true);
 
-  /* ---- submit ---- */
   async function submit(useCredit) {
     const code = codeIn.value.trim();
     if (!useCredit && !code) {
@@ -160,7 +150,7 @@
           (d.reason ? ' ' + d.reason : ''), 12000);
         codeIn.value = '';
       } else if (d.status === 'PARTIAL') {
-        showResult('warn', 'Part payment received', d.reason);   // live balance sits in the card at the top
+        showResult('warn', 'Part payment received', d.reason);   
         codeIn.value = '';
       } else if (d.status === 'PENDING') {
         showResult('info', 'Waiting for confirmation',
@@ -179,6 +169,6 @@
   btn.addEventListener('click', () => submit(false));
   creditBtn.addEventListener('click', () => submit(true));
   codeIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(false); } });
-  codeIn.addEventListener('input', clearResult);      // start a new attempt -> old verdict goes away
+  codeIn.addEventListener('input', clearResult);      
   load();
 })();
