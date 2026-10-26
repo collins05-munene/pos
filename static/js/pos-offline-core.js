@@ -1,21 +1,4 @@
-/*
- * pos-offline-core.js
- *
- * Everything the till needs to keep selling with no connection and to catch up
- * afterwards. No DOM in here, so it can be unit-tested under Node
- * (see tests/pos-offline-core.test.mjs).
- *
- *   snapshot   /pos/offline/snapshot/ -> IndexedDB (catalogue, stock, register, who is signed in)
- *   outbox     every sale rung up offline waits here until the server confirms it
- *   flush()    POST the outbox to /pos/offline/sync/. Safe to call any time, from any tab,
- *              as often as you like: each sale carries its own uuid and the server records
- *              a uuid once.
- *
- * Why IndexedDB and not localStorage: base.html's inactivity logout runs
- * localStorage.clear(); that must never be able to delete money.
- *
- * Money is handled in integer cents and stock in integer milli-units, never floats.
- */
+
 (function (global) {
   'use strict';
 
@@ -43,7 +26,7 @@
       }
     } catch (e) { channel = null; }
 
-    /* ------------------------------------------------------------------ utils */
+  
     function coded(code, message, extra) {
       var err = new Error(message || code);
       err.code = code;
@@ -68,8 +51,6 @@
       h = h.join('');
       return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
     }
-    // Same shape the server generates (INV-YYYYMMDD-XXXXXX, UTC date) so the number on the
-    // paper receipt is the number that ends up in the books.
     function makeInvoice(date) {
       var d = (date || new Date()).toISOString().slice(0, 10).replace(/-/g, '');
       return 'INV-' + d + '-' + randomHex(3).toUpperCase();
@@ -91,7 +72,6 @@
         function (e) { if (timer) env.clearTimeout(timer); throw e; });
     }
 
-    /* -------------------------------------------------------------- IndexedDB */
     function openDb() {
       if (dbPromise) return dbPromise;
       dbPromise = new Promise(function (resolve, reject) {
@@ -114,7 +94,6 @@
         request.onerror = function () { rej(request.error); };
       });
     }
-    // fn(tx) may return a request-promise; the value is delivered once the transaction commits.
     function run(stores, mode, fn) {
       return openDb().then(function (db) {
         return new Promise(function (resolve, reject) {
@@ -132,7 +111,6 @@
     function kvDelete(key) { return run(['meta'], 'readwrite', function (t) { t.objectStore('meta').delete(key); }); }
     function getAll(store) { return run([store], 'readonly', function (t) { return wrap(t.objectStore(store).getAll()); }); }
 
-    /* --------------------------------------------------------------- status */
     function listen(fn) { listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; }
 
     function status() {
@@ -144,7 +122,7 @@
           online: isOnline(),
           pending: waiting.length,
           failed: out.length - waiting.length,
-          // sales that belong to a cashier who has to sign in to send them
+          
           foreign: me && me.role === 'CASHIER' ? waiting.filter(function (s) { return s.cashierId !== me.id; }).length : 0,
           syncing: !!flushing,
           authRequired: !!r[2],
@@ -162,8 +140,6 @@
       });
     }
 
-    /* ----------------------------------------------------- state / lock / expiry */
-    // Can this device sell offline right now, and if not, why not?
     function getState() {
       return Promise.all([kvGet('snapshot'), kvGet('locked')]).then(function (r) {
         var snap = r[0];
@@ -175,10 +151,8 @@
         return { ok: true, snap: snap };
       });
     }
-    // Called when someone logs out (or the inactivity timer does it for them). Unsynced sales are untouched.
     function lock() { return kvSet('locked', true).then(function () { return emit(); }); }
 
-    /* ------------------------------------------------------------- catalogue */
     function loadCatalog(force) {
       if (catalog && !force) return Promise.resolve(catalog);
       return Promise.all([getAll('variants'), getAll('stock'), kvGet('snapshot')]).then(function (r) {
@@ -195,8 +169,6 @@
       });
     }
 
-    // Whole units of THIS variant's own unit that the shared pool can still supply,
-    // after what is already in the cart (other lines drawing on the same pool).
     function freeUnits(cat, v, cartLines, ignoreVariantId) {
       var free = cat.stock.get(v.base) || 0;
       (cartLines || []).forEach(function (l) {
@@ -206,7 +178,6 @@
       });
       return Math.max(0, Math.floor(free / v._per));
     }
-    // Mirrors POSCart.validate_stock on the server.
     function checkStock(cat, lines) {
       var used = new Map(), problems = [];
       lines.forEach(function (l) {
@@ -219,7 +190,6 @@
       });
       return problems;
     }
-    // Everything on one screenful: SKU hit first, then name/SKU contains. categoryId matches the category or its children.
     function search(cat, q, categoryId, limit) {
       var needle = (q || '').trim().toLowerCase();
       var out = [], exact = null;
@@ -237,7 +207,6 @@
       return out;
     }
 
-    /* -------------------------------------------------------------- snapshot */
     function refreshSnapshot(opts) {
       opts = opts || {};
       return Promise.all([kvGet('snapshot'), kvGet('deniedAt')]).then(function (r) {
@@ -268,7 +237,6 @@
         var perPackById = new Map();
         data.variants.forEach(function (v) { perPackById.set(v.id, v); });
 
-        // Server stock does not yet include sales still waiting in the outbox.
         var stock = {};
         Object.keys(data.stock || {}).forEach(function (k) { stock[k] = toMilli(data.stock[k]); });
         pending.forEach(function (sale) {
@@ -298,12 +266,6 @@
       });
     }
 
-    /* ----------------------------------------------------------------- sales */
-    // Rings up a sale with no server involved. Throws an Error with .code:
-    //   NO_SNAPSHOT | LOCKED | EXPIRED | NO_REGISTER   this till may not sell offline right now
-    //   UNKNOWN_PRODUCT | BAD_QUANTITY | INSUFFICIENT_STOCK (.details = problems) | SHORT_PAYMENT
-    // opts.fromOnlineCart: the customer has ALREADY paid at a till that lost its connection mid-checkout.
-    // Never refuse that sale on a stock check; the server will record it and flag it.
     function recordSale(opts) {
       return getState().then(function (st) {
         if (!st.ok) throw coded(st.reason, 'Offline selling is not available: ' + st.reason);
@@ -384,7 +346,7 @@
     function listOutbox() { return getAll('outbox').then(function (rows) { return rows.sort(function (a, b) { return a.createdAt - b.createdAt; }); }); }
     function getRecent() { return kvGet('recent').then(function (r) { return r || []; }); }
 
-    /* ------------------------------------------------------------------ sync */
+    
     function toWire(s) {
       return {
         uuid: s.uuid, invoice: s.invoice, occurred_at: s.occurredAt, session_id: s.sessionId,
@@ -402,7 +364,6 @@
       return fn();
     }
 
-    // Send everything that is waiting. Resolves { sent, failed, stopped } and never rejects on a network problem.
     function flush() {
       if (flushing) return flushing;
       flushing = withLock(doFlush).then(function (r) { flushing = null; emit(); return r; },
@@ -416,7 +377,6 @@
         var me = r[1] && r[1].user;
         var queue = r[0].filter(function (s) {
           if (s.status === 'failed') return false;
-          // A cashier only sends their own sales; a manager/admin may send anyone's.
           return me && (me.role !== 'CASHIER' || s.cashierId === me.id);
         });
         if (!queue.length) return { sent: 0, failed: 0 };
@@ -469,7 +429,7 @@
           var os = t.objectStore('outbox');
           batch.forEach(function (s) {
             var r = byUuid.get(s.uuid);
-            if (!r) { stopped = true; return; }                       // the server stopped before reaching it
+            if (!r) { stopped = true; return; }            
             if (r.status === 'created' || r.status === 'duplicate') {
               os.delete(s.uuid); sent++;
               recent.unshift({ uuid: s.uuid, invoice: r.invoice, total: s.total, at: s.createdAt,
@@ -477,7 +437,7 @@
             } else if (r.status === 'rejected') {
               s.status = 'failed'; s.reason = r.reason || 'Rejected by the server.'; s.code = r.code || '';
               os.put(s); failed++;
-            } else {                                                   // 'error': retry later, keep order
+            } else {                         
               s.attempts = (s.attempts || 0) + 1; os.put(s); stopped = true;
             }
           });
@@ -487,7 +447,6 @@
       }).then(function () { return { sent: sent, failed: failed, stopped: stopped }; });
     }
 
-    // Put a rejected sale back in the queue (e.g. after the register was opened).
     function retryFailed() {
       return run(['outbox'], 'readwrite', function (t) {
         var os = t.objectStore('outbox');
@@ -503,10 +462,8 @@
       return listOutbox().then(function (rows) { return JSON.stringify(rows, null, 2); });
     }
 
-    /* -------------------------------------------- cart drafts and hand-off */
     function saveDraftCart(lines) { return kvSet('draftCart', lines || []); }
     function getDraftCart() { return kvGet('draftCart').then(function (r) { return r || []; }); }
-    // The online terminal lost its connection mid-sale: leave its cart for the offline terminal to pick up.
     function setHandoff(payload) { return kvSet('handoff', Object.assign({ at: Date.now() }, payload)); }
     function takeHandoff() {
       return kvGet('handoff').then(function (h) {
@@ -516,17 +473,12 @@
     }
 
     return {
-      // state
       getState: getState, lock: lock, listen: listen, status: status, emit: emit, isOnline: isOnline,
-      // catalogue
       refreshSnapshot: refreshSnapshot, loadCatalog: loadCatalog, search: search,
       freeUnits: freeUnits, checkStock: checkStock, displayName: displayName,
-      // sales
       recordSale: recordSale, getSale: getSale, listOutbox: listOutbox, getRecent: getRecent,
       flush: flush, retryFailed: retryFailed, exportOutbox: exportOutbox,
-      // drafts
       saveDraftCart: saveDraftCart, getDraftCart: getDraftCart, setHandoff: setHandoff, takeHandoff: takeHandoff,
-      // helpers
       toCents: toCents, toMilli: toMilli, fmtCents: fmtCents, newUuid: newUuid, makeInvoice: makeInvoice
     };
   }

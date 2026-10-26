@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#2563eb">
     <title>Cashier Terminal Login</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
     <link rel="stylesheet" href="{% static 'users/css/auth.css' %}">
 </head>
 
@@ -17,8 +19,11 @@
             <div class="auth-progress-bar"></div>
         </div>
 
+        <div class="auth-logo">
+            <img src="{% static 'img/unisale-logo.png' %}" alt="UniSale Systems" width="409" height="141">
+        </div>
+
         <h2 class="auth-title">Cashier Login</h2>
-        <p class="auth-subtitle">Enter your shop code, username, and PIN to login.</p>
 
         <form method="POST" id="authForm">
             {% csrf_token %}

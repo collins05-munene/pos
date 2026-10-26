@@ -1,6 +1,6 @@
 {
-  "name": "POS System",
-  "short_name": "POS",
+  "name": "UniSale POS",
+  "short_name": "UniSale",
   "description": "Point of Sale, Inventory and Payments management system",
   "start_url": "/?source=pwa",
   "id": "/",

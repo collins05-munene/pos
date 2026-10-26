@@ -43,6 +43,18 @@ body{
 }
 
 
+.auth-logo{
+    text-align:center;
+    margin-bottom:18px;
+}
+
+.auth-logo img{
+    display:inline-block;
+    width:100%;
+    max-width:220px;
+    height:auto;
+}
+
 .auth-title{
     font-size:22px;
     font-weight:600;
@@ -71,7 +83,7 @@ label{
 input{
     width:100%;
     min-height:46px;
-    font-size:16px;              /* 16px stops iOS zooming the page on focus */
+    font-size:16px;             
     font-family:inherit;
     padding:10px 12px;
     border-radius:8px;
@@ -218,6 +230,9 @@ input:focus{
     }
     .auth-title{
         font-size:20px;
+    }
+    .auth-logo img{
+        max-width:190px;
     }
     .auth-subtitle{
         font-size:15px;

@@ -1,6 +1,4 @@
-/* Live search + filters. Fetches JSON from the current list URL and builds the table rows.
-   Needs: form[data-live-form], tbody#live-body, div#live-pager, and (for Restore buttons)
-   an element #live-csrf containing {% csrf_token %}. */
+
 (function () {
   'use strict';
   var form = document.querySelector('form[data-live-form]');
@@ -14,7 +12,6 @@
   var csrf = csrfInput ? csrfInput.value : '';
   var DELAY = 300, timer = null, controller = null;
 
-  // Restore state from the URL (refresh / shared link).
   var initial = new URLSearchParams(window.location.search);
   var show = initial.get('show') || '';
   var page = parseInt(initial.get('page'), 10) || 1;
@@ -37,7 +34,6 @@
     return params.toString();
   }
 
-  // ---------- rendering ----------
   function cell(c) {
     var td = el('td', 'brand-name');
     if (typeof c === 'string') { td.textContent = c; return td; }
@@ -127,7 +123,6 @@
     nav.appendChild(ul); box.appendChild(info); box.appendChild(nav); pager.appendChild(box);
   }
 
-  // ---------- loading ----------
   function showError() {
     body.textContent = '';
     body.appendChild(emptyRow({ title: 'Could not load results', hint: 'Check your connection and try again.' }));
@@ -166,7 +161,6 @@
       });
   }
 
-  // ---------- events ----------
   form.addEventListener('input', function (e) {
     if (e.target.matches('input[type="search"], input[type="text"]')) {
       clearTimeout(timer);

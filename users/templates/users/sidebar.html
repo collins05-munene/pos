@@ -1,3 +1,4 @@
+{% load static %}
 <style>
     .modal-overlay {
         position: fixed;
@@ -89,17 +90,23 @@
     }
 
     @media screen and (max-width: 480px) {
-        .modal-content { padding: 18px; }
-        .modal-actions { flex-direction: column-reverse; }
-        .modal-actions .btn-save,
-        .modal-actions .btn-cancel { width: 100%; min-height: 44px; }
+        .modal-content { 
+            padding: 18px; 
+        }
+        .modal-actions { 
+            flex-direction: column-reverse; 
+        }
+        .modal-actions .btn-save, .modal-actions .btn-cancel { 
+            width: 100%; min-height: 44px; 
+        }
     }
 </style>
 {% if user.get_role_display == 'Admin' %}
 <aside class="sidebar" id="mainSidebar">
     <div class="logo">
-        <h2>UniSale Systems</h2>
-        <p>POS Retail Suite</p>
+        <a href="/" class="logo-link" aria-label="UniSale Systems home">
+            <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
+        </a>
     </div>
 
     <ul class="menu">
@@ -150,8 +157,9 @@
 {% else %}
 <aside class="sidebar" id="mainSidebar">
     <div class="logo">
-        <h2>POS</h2>
-        <p>Retail Suite</p>
+        <a href="/" class="logo-link" aria-label="UniSale Systems home">
+            <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
+        </a>
     </div>
     <ul class="menu">
         <li class="menu-title">Sales</li>
@@ -180,7 +188,13 @@
 </aside>
 {% endif %}
 
-<button id="sidebarToggle" aria-label="Toggle Sidebar" aria-expanded="true" aria-controls="mainSidebar">☰</button>
+<script>
+    (function () {
+        var s = document.getElementById('mainSidebar');
+        if (s && !window.matchMedia('(max-width: 900px)').matches) s.classList.add('sidebar-hidden');
+    }());
+</script>
+<button id="sidebarToggle" aria-label="Toggle Sidebar" aria-expanded="false" aria-controls="mainSidebar">☰</button>
 <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
 
@@ -223,8 +237,6 @@
 <script>
 (function () {
     'use strict';
-
-    // Same breakpoint as responsive.css: at <= 900px the sidebar is a slide-in drawer
     var MOBILE = window.matchMedia('(max-width: 900px)');
 
     function initSidebarToggle() {
@@ -243,7 +255,6 @@
             if (MOBILE.matches) {
                 setDrawer(!document.body.classList.contains('sidebar-open'));
             } else {
-                // desktop: unchanged collapse/expand behaviour
                 var isHidden = sidebar.classList.toggle('sidebar-hidden');
                 toggle.setAttribute('aria-expanded', String(!isHidden));
             }
@@ -251,7 +262,6 @@
 
         if (backdrop) backdrop.addEventListener('click', function () { setDrawer(false); });
 
-        // tapping a menu link closes the drawer (also covers the "Cash In" modal link)
         sidebar.addEventListener('click', function (e) {
             if (MOBILE.matches && e.target.closest('.menu a')) setDrawer(false);
         });
@@ -262,7 +272,7 @@
 
         function syncToViewport() {
             if (MOBILE.matches) {
-                sidebar.classList.remove('sidebar-hidden');   // drawer state is body.sidebar-open on mobile
+                sidebar.classList.remove('sidebar-hidden');   
                 setDrawer(false);
             } else {
                 document.body.classList.remove('sidebar-open');

@@ -69,15 +69,17 @@
     border-bottom: 1px solid var(--sidebar-border);
 }
 
-.logo h2 {
-    font-size: 24px;
-    margin: 0;
+.logo-link {
+    display: block;
+    line-height: 0;
 }
 
-.logo p {
-    font-size: 13px;
-    opacity: 0.6;
-    margin: 4px 0 0 0;
+.logo-img {
+    display: block;
+    width: 100%;
+    max-width: 200px;
+    height: auto;
+    margin: 0 auto;
 }
 
 .menu {
@@ -133,4 +135,10 @@
 
 .sidebar-footer a:hover {
     text-decoration: underline;
+}
+
+/* Sidebar is collapsed by default on desktop: keep the topbar clear of the floating toggle button. */
+@media screen and (min-width: 901px) {
+    .main-content .topbar { transition: padding-left 0.3s ease; }
+    .sidebar.sidebar-hidden ~ .main-content .topbar { padding-left: 76px; }
 }
