@@ -19,6 +19,30 @@
             </div>
         </div>
 
+        {% if active_branch %}
+        <div class="branch-switch" title="Branch you are working at">
+            {% if switchable_branches %}
+            <select id="branchSwitchSelect" aria-label="Switch branch" style="padding:4px 8px;border-radius:6px;">
+                {% for b in switchable_branches %}
+                <option value="{{ b.pk }}" {% if b.pk == active_branch.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            <script>
+            document.getElementById('branchSwitchSelect').addEventListener('change', async function () {
+                const m = document.cookie.match(/(^| )csrftoken=([^;]+)/);
+                const res = await fetch('/branches/switch/', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': m ? decodeURIComponent(m[2]) : ''},
+                    body: JSON.stringify({branch_id: this.value})
+                });
+                if (res.ok) window.location.reload();
+            });
+            </script>
+            {% else %}
+            <span>{{ active_branch.name }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="status">
             {% if user.role == 'ADMIN' %}
                 Admin

@@ -63,6 +63,7 @@ class PurchaseOrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['branch'].queryset = Branch.objects.filter(is_active=True)   # no archived / unpaid branches
         self.fields['supplier'].required = False
         self.fields['supplier'].empty_label = "No supplier (market / individual / other source)"
 
@@ -128,6 +129,7 @@ class StockAdjustmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['branch'].queryset = Branch.objects.filter(is_active=True)
         self.fields['variant'].queryset = _variant_queryset()
         self.fields['quantity_changed'].help_text = (
             "In the selected variant's own unit (e.g. 2 = two boxes). "

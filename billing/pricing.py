@@ -8,12 +8,15 @@ def _kes(value):
     return Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
-def quote(term_months, *, include_install_fee=False, monthly_price=None):
+def quote(term_months, *, include_install_fee=False, monthly_price=None, extra_branches=0):
     discounts = conf.get("TERM_DISCOUNT_PERCENT")
     if term_months not in discounts:
         raise ValueError(f"Unsupported term: {term_months} months.")
 
+    extra_branches = max(int(extra_branches or 0), 0)
     monthly = Decimal(monthly_price if monthly_price is not None else conf.get("MONTHLY_PRICE"))
+    branch_monthly = Decimal(conf.get("BRANCH_MONTHLY_PRICE")) * extra_branches
+    monthly += branch_monthly
     pct = Decimal(discounts[term_months])
     list_price = _kes(monthly * term_months)
     subscription = _kes(monthly * term_months * (Decimal(100) - pct) / Decimal(100))
@@ -29,11 +32,14 @@ def quote(term_months, *, include_install_fee=False, monthly_price=None):
         "total": subscription + install,
         "effective_monthly": (subscription / term_months).quantize(Decimal("0.01")),
         "currency": conf.get("CURRENCY"),
+        "extra_branches": extra_branches,
+        "branch_monthly": branch_monthly,
     }
 
 
-def quote_table(*, include_install_fee=False, monthly_price=None):
+def quote_table(*, include_install_fee=False, monthly_price=None, extra_branches=0):
     return [
-        quote(t, include_install_fee=include_install_fee, monthly_price=monthly_price)
+        quote(t, include_install_fee=include_install_fee, monthly_price=monthly_price,
+              extra_branches=extra_branches)
         for t in sorted(conf.get("TERM_DISCOUNT_PERCENT"))
     ]

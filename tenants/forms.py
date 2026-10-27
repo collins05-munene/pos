@@ -18,6 +18,36 @@ class SignupForm(forms.Form):
     phone = forms.CharField(max_length=20, help_text="M-Pesa number, e.g. 0712345678")
     password = forms.CharField(widget=forms.PasswordInput)
     term_months = forms.TypedChoiceField(coerce=int, choices=(), initial=1)
+    # How many branches, and their names (one per line / JSON list). Branch 1 is included in the base price.
+    branch_count = forms.IntegerField(min_value=1, initial=1, required=False)
+    branch_names = forms.JSONField(required=False)
+
+    def clean_branch_count(self):
+        n = self.cleaned_data.get("branch_count") or 1
+        if n > conf.get("MAX_BRANCHES"):
+            raise forms.ValidationError(f"At most {conf.get('MAX_BRANCHES')} branches at signup.")
+        return n
+
+    def clean_branch_names(self):
+        raw = self.cleaned_data.get("branch_names") or []
+        if not isinstance(raw, list):
+            raise forms.ValidationError("Branch names must be a list.")
+        return [str(x).strip() for x in raw]
+
+    def clean(self):
+        data = super().clean()
+        n = data.get("branch_count") or 1
+        names = list(data.get("branch_names") or [])
+        if "branch_count" in self.errors or "branch_names" in self.errors:
+            return data
+        names = (names + [""] * n)[:n]
+        names = [nm or ("Main Branch" if i == 0 else f"Branch {i + 1}") for i, nm in enumerate(names)]
+        if len({nm.lower() for nm in names}) != len(names):
+            self.add_error("branch_names", "Give each branch a different name.")
+        if any(len(nm) > 100 for nm in names):
+            self.add_error("branch_names", "Branch names must be under 100 characters.")
+        data["branch_count"], data["branch_names"] = n, names
+        return data
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -198,6 +198,8 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
         branch_id = self.request.GET.get('branch')
         if branch_id:
             initial['branch'] = branch_id
+        elif getattr(self.request, 'branch', None):
+            initial['branch'] = self.request.branch.pk      # default to where the user is working
         # Older products may still carry a default supplier; use it as a convenience.
         for variant in self._requested_variants():
             if variant.product.supplier_id:
@@ -433,6 +435,8 @@ class StockAdjustmentCreateView(CashierRequiredMixin, CreateView):
             initial['variant'] = variant_id
         if branch_id:
             initial['branch'] = branch_id
+        elif getattr(self.request, 'branch', None):
+            initial['branch'] = self.request.branch.pk
 
         return initial
 

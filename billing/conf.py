@@ -7,6 +7,10 @@ DEFAULTS = {
     "CURRENCY": "KES",
     "MONTHLY_PRICE": Decimal("10"),
     "INSTALL_FEE": Decimal("2"),         
+    # Every shop includes ONE branch in MONTHLY_PRICE. Each extra branch adds this per month
+    # (term discounts apply to it too). PLACEHOLDER -- set the real figure in settings.BILLING.
+    "BRANCH_MONTHLY_PRICE": Decimal("500"),
+    "MAX_BRANCHES": 10,                  # hard ceiling per shop (signup form + add-branch)
     "TERM_DISCOUNT_PERCENT": {1: 0, 3: 30, 6: 30, 12: 30},
     "GRACE_DAYS": 5,           
     "TRIAL_DAYS": 0,         

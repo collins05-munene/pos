@@ -72,6 +72,12 @@
             <div class="err"></div>
           </div>
 
+          <div class="field" data-field="branch_id">
+            <label for="branch_id">Branch</label>
+            <select id="branch_id" name="branch_id"></select>
+            <div class="err"></div>
+          </div>
+
           <div class="field" data-field="credential">
             <label for="credential" id="credential-label">PIN (4-6 digits)</label>
             <input id="credential" name="credential" type="password" autocomplete="new-password" required>
@@ -90,6 +96,7 @@
               <th>Name</th>
               <th>Username</th>
               <th>Role</th>
+              <th>Branch</th>
               <th>Phone</th>
               <th>ID</th>
               <th>Email</th>
@@ -99,7 +106,7 @@
             </tr>
           </thead>
           <tbody id="staff-rows">
-            <tr class="empty-row"><td colspan="9">Loading&hellip;</td></tr>
+            <tr class="empty-row"><td colspan="10">Loading&hellip;</td></tr>
           </tbody>
         </table>
       </div>

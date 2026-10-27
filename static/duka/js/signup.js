@@ -6,6 +6,11 @@
   const submitBtn = document.getElementById('submit-btn');
   let selectedTerm = 1;
   let plans = [];
+  let branchCount = 1;
+  let branchInfo = { max: 10, extra_monthly: 0 };
+  const branchSelect = document.getElementById('branch_count');
+  const branchNote = document.getElementById('branch-note');
+  const branchNamesEl = document.getElementById('branch-names');
 
   function showAlert(msg) {
     alertBox.textContent = msg;
@@ -46,6 +51,43 @@
     });
   }
 
+  function branchNames() {
+    return Array.from(branchNamesEl.querySelectorAll('input')).map(i => i.value.trim());
+  }
+
+  function renderBranchInputs() {
+    const old = branchNames();
+    branchNamesEl.innerHTML = '';
+    for (let i = 0; i < branchCount; i++) {
+      const input = Duka.el('input', {
+        type: 'text', maxlength: '100',
+        placeholder: i === 0 ? 'Main Branch' : `Branch ${i + 1} name`,
+        value: old[i] || '',
+      });
+      branchNamesEl.appendChild(Duka.el('div', { class: 'field' }, [
+        Duka.el('label', { text: i === 0 ? 'Branch 1 (main)' : `Branch ${i + 1}` }), input,
+      ]));
+    }
+    branchNote.textContent = branchCount === 1
+      ? 'One branch is included. You can add more any time from Branches.'
+      : `Branch 1 is included. ${branchCount - 1} extra ${branchCount === 2 ? 'branch costs' : 'branches cost'} ` +
+        `${Duka.money(Number(branchInfo.extra_monthly) * (branchCount - 1))}/month in total ` +
+        `(${Duka.money(branchInfo.extra_monthly)} each, before any prepay discount).`;
+  }
+
+  function initBranchSelect() {
+    branchSelect.innerHTML = '';
+    for (let n = 1; n <= Number(branchInfo.max); n++) {
+      branchSelect.appendChild(Duka.el('option', { value: String(n), text: n === 1 ? '1 branch' : `${n} branches` }));
+    }
+    branchSelect.value = String(branchCount);
+    branchSelect.addEventListener('change', () => {
+      branchCount = Number(branchSelect.value);
+      renderBranchInputs();
+      loadPricing();
+    });
+  }
+
   function updateNote() {
     const p = plans.find(x => x.term_months === selectedTerm);
     if (!p) return;
@@ -56,8 +98,13 @@
 
   async function loadPricing() {
     try {
-      const data = await Duka.api('.');
+      const data = await Duka.api(`.?branches=${branchCount}`);
       plans = data.pricing;
+      if (data.branches && !branchSelect.options.length) {
+        branchInfo = data.branches;
+        initBranchSelect();
+        renderBranchInputs();
+      }
       renderPlans();
       updateNote();
     } catch (e) {
@@ -80,6 +127,8 @@
       phone: form.phone.value.trim(),
       password: form.password.value,
       term_months: selectedTerm,
+      branch_count: branchCount,
+      branch_names: branchNames(),
     };
 
     try {

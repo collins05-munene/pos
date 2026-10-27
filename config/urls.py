@@ -40,6 +40,7 @@ urlpatterns = [
     path("platform/", include("platform_admin.urls")),
 
     path("staff/", include("tenants.staff_urls")),
+    path("branches/", include("tenants.branch_urls")),
     
     path("backups/", include("backups.urls")),
 

@@ -11,21 +11,46 @@ User = get_user_model()
 
 
 class Branch(TenantOwnedModel):
+    """
+    One physical outlet of a shop.
+
+    State is two flags so older code that filters on `is_active=True` keeps working:
+      active            is_active=True
+      archived          is_active=False, awaiting_payment=False  (history kept, restorable)
+      awaiting payment  is_active=False, awaiting_payment=True   (added beyond the paid
+                        branch allowance; switches on by itself when the invoice is paid)
+    """
     name = models.CharField(max_length=100)
+    code = models.CharField(max_length=10, blank=True, help_text="Short code, e.g. NRB, WLK.")
     location = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    is_main = models.BooleanField(default=False, help_text="The shop's first branch. Cannot be archived.")
     is_active = models.BooleanField(default=True)
+    awaiting_payment = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         verbose_name_plural = "Branches"
+        ordering = ["-is_main", "name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "name"],
                 name="unique_tenant_branch_name"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["tenant"], condition=models.Q(is_main=True),
+                name="one_main_branch_per_tenant",
+            ),
         ]
 
     def __str__(self):
         return self.name
+
+    @property
+    def status(self):
+        if self.is_active:
+            return "ACTIVE"
+        return "AWAITING_PAYMENT" if self.awaiting_payment else "ARCHIVED"
 
 
 class StockLevel(TenantOwnedModel):

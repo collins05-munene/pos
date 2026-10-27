@@ -12,7 +12,7 @@
   const drawerContent = document.getElementById('drawer-content');
   const drawerClose = document.getElementById('drawer-close');
 
-  const COLS = 9;  // keep in sync with the <th> count in staff.html
+  const COLS = 10;  // keep in sync with the <th> count in staff.html
 
   function showAlert(msg, kind = 'bad') { alertBox.className = `alert show ${kind}`; alertBox.textContent = msg; }
   function clearAlert() { alertBox.className = 'alert'; alertBox.textContent = ''; }
@@ -36,6 +36,18 @@
     return Object.values(errors || {}).map(m => (Array.isArray(m) ? m : [m]).join(' ')).join(' ');
   }
 
+  const branchSelect = document.getElementById('branch_id');
+  let branches = [];
+  function fillBranchSelect(select, selectedId, allowNone) {
+    select.innerHTML = '';
+    if (allowNone) select.appendChild(Duka.el('option', { value: '', text: 'No fixed branch (starts at main)' }));
+    branches.forEach(b => {
+      const o = Duka.el('option', { value: String(b.id), text: b.name });
+      if (String(selectedId) === String(b.id)) o.selected = true;
+      select.appendChild(o);
+    });
+  }
+
   function syncCredentialField() {
     const isCashier = roleSelect.value === 'CASHIER';
     credentialLabel.textContent = isCashier ? 'PIN (4-6 digits)' : 'Password';
@@ -53,6 +65,7 @@
       Duka.el('td', { text: s.full_name || '\u2014' }),
       Duka.el('td', { text: s.handle }),
       Duka.el('td', { text: s.role === 'CASHIER' ? 'Cashier' : 'Manager' }),
+      Duka.el('td', { text: s.branch_name || '\u2014' }),
       Duka.el('td', { text: s.phone || '\u2014' }),
       Duka.el('td', { text: s.national_id || '\u2014' }),
       Duka.el('td', { text: s.email || '\u2014' }),
@@ -66,6 +79,8 @@
     try {
       const data = await Duka.api('/staff/');
       shopLine.textContent = `${data.shop.name} \u00b7 code: ${data.shop.slug}`;
+      branches = data.branches || [];
+      fillBranchSelect(branchSelect, branchSelect.value, false);
       rowsEl.innerHTML = '';
       if (data.staff.length === 0) {
         rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: String(COLS), text: "No staff yet -- add your first cashier above." })));
@@ -93,6 +108,7 @@
           email: addForm.email.value.trim(),
           role: roleSelect.value,
           credential: credentialInput.value,
+          branch_id: branchSelect.value,
         }),
       });
       addForm.reset();
@@ -160,6 +176,19 @@
         Object.entries(inputs).map(([k, el]) => [k, el.value.trim()])
       )),
     }));
+
+    // ---- Branch
+    drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
+    drawerContent.appendChild(Duka.el('h2', { text: 'Branch', style: 'font-size:15px;' }));
+    const branchPick = Duka.el('select');
+    fillBranchSelect(branchPick, s.branch_id, s.role !== 'CASHIER');
+    drawerContent.appendChild(Duka.el('div', { class: 'override-form' }, [
+      branchPick,
+      Duka.el('button', { class: 'secondary', text: 'Move', onclick: () => act(s.id, 'set-branch', { branch_id: branchPick.value }) }),
+    ]));
+    if (s.role !== 'CASHIER') {
+      drawerContent.appendChild(Duka.el('p', { class: 'plan-note', text: 'Managers can switch between branches from the top bar; this is where they start.' }));
+    }
 
     // ---- Credential
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
