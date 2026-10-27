@@ -1,0 +1,80 @@
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block title %}Branches -- UniSale Systems{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+{% endblock %}
+
+{% block content %}
+    <header class="masthead">
+      <div class="wrap">
+        <div class="wordmark">{{ request.tenant.name }}</div>
+        <div class="masthead-meta"><a href="/billing/" style="text-decoration:underline;">Billing</a></div>
+        <div class="masthead-meta"><a href="{% url 'admin-dashboard' %}" style="text-decoration:underline;">Dashboard</a></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap">
+        <h1>Branches</h1>
+        <p class="lede" id="plan-line">Loading&hellip;</p>
+
+        <div id="alert" class="alert" role="alert"></div>
+
+        <section id="add-section">
+          <h2>Add a branch</h2>
+          <form id="add-form" novalidate>
+            <div class="field-row">
+              <div class="field" data-field="name">
+                <label for="name">Branch name</label>
+                <input id="name" name="name" type="text" placeholder="e.g. Westlands" required>
+                <div class="err"></div>
+              </div>
+              <div class="field" data-field="code">
+                <label for="code">Code <small>(optional)</small></label>
+                <input id="code" name="code" type="text" maxlength="10" placeholder="WLK">
+                <div class="err"></div>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field" data-field="location">
+                <label for="location">Location</label>
+                <input id="location" name="location" type="text" placeholder="Street / town">
+                <div class="err"></div>
+              </div>
+              <div class="field" data-field="phone">
+                <label for="phone">Phone <small>(optional)</small></label>
+                <input id="phone" name="phone" type="tel" placeholder="0712 345 678">
+                <div class="err"></div>
+              </div>
+            </div>
+            <p class="plan-note" id="add-note"></p>
+            <button type="submit" class="primary" id="add-btn" style="width:auto;">Add branch</button>
+          </form>
+          <hr class="rule">
+        </section>
+
+        <h2>Your branches</h2>
+        <table class="ledger">
+          <thead>
+            <tr><th>Name</th><th>Code</th><th>Location</th><th>Phone</th><th>Staff</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="branch-rows">
+            <tr class="empty-row"><td colspan="7">Loading&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
+      <div id="drawer-content"></div>
+    </aside>
+
+  <script src="{% static 'duka/js/duka-api.js' %}"></script>
+  <script src="{% static 'duka/js/branches.js' %}"></script>
+  <script src="{% static 'duka/js/billing.js' %}"></script>
+{% endblock %}

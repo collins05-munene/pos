@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 
+from .branch_context import reset_current_branch, set_current_branch
 from .context import reset_current_tenant, set_current_tenant
 from .models import Tenant
 
@@ -30,10 +31,26 @@ class TenantMiddleware:
             return JsonResponse({"error": "tenant_mismatch"}, status=403)
 
         token = set_current_tenant(tenant)
+        branch_token = None
         try:
+            request.branch = self._resolve_branch(request, tenant)
+            branch_token = set_current_branch(request.branch)
             return self.get_response(request)
         finally:
+            if branch_token is not None:
+                reset_current_branch(branch_token)
             reset_current_tenant(token)
+
+    @staticmethod
+    def _resolve_branch(request, tenant):
+        """Needs the tenant context already set (branch lookups are tenant-scoped)."""
+        if tenant is None:
+            return None
+        from .branches import resolve_active_branch
+        user = request.user
+        if user.is_superuser:           # support session: no home branch
+            return None
+        return resolve_active_branch(user, request.session)
 
     @staticmethod
     def _resolve(request):

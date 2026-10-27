@@ -102,6 +102,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 "assistant.context_processors.assistant",
+                "tenants.context_processors.branch_switcher",
             ],
         },
     },

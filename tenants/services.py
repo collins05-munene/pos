@@ -22,8 +22,8 @@ def compose_username(business_code, handle):
 
 @transaction.atomic
 def register_business(*, business_name, business_type, owner_name, email, phone,
-                      password, term_months):
-    """Public sign-up: tenant + owner + default branch + subscription + first invoice."""
+                      password, term_months, branch_count=1, branch_names=None):
+    """Public sign-up: tenant + owner + branches + subscription + first invoice."""
     from billing.services import start_subscription  # local import: avoids app-load cycle
 
     User = get_user_model()
@@ -48,23 +48,35 @@ def register_business(*, business_name, business_type, owner_name, email, phone,
     except IntegrityError:
         raise ValidationError("An account with this email already exists.")
 
-    with tenant_context(tenant):
-        provision_workspace(tenant, owner)
+    branch_count = max(int(branch_count or 1), 1)
+    names = list(branch_names or [])
+    names = (names + [""] * branch_count)[:branch_count]
+    names = [nm or ("Main Branch" if i == 0 else f"Branch {i + 1}") for i, nm in enumerate(names)]
 
-    _subscription, invoice = start_subscription(tenant, term_months)
+    with tenant_context(tenant):
+        provision_workspace(tenant, owner, branch_names=names)
+
+    # The shop pays for every branch it registers up front; the first is included in the base price.
+    _subscription, invoice = start_subscription(tenant, term_months, branch_slots=branch_count)
     return tenant, owner, invoice
 
 
-def provision_workspace(tenant, owner):
+def provision_workspace(tenant, owner, branch_names=None):
     """
     Runs inside tenant_context(tenant). Everything a brand-new shop starts with.
     Reference data (units, categories) is per-tenant, so it must be seeded here.
     Branch on tenant.business_type as pharmacy/other needs grow.
     """
     from django.apps import apps
-    from inventory.models import Branch
-
-    Branch.objects.create(name="Main Branch")
+    from .branches import create_branch
+    names = branch_names or ["Main Branch"]
+    for i, name in enumerate(names):
+        # Signup branches are active straight away: the shop is locked until the first invoice
+        # (which already includes them) is paid, so nothing is used for free.
+        branch = create_branch(tenant, name=name, is_main=(i == 0), active=True)
+        if i == 0:
+            owner.branch = branch
+            owner.save(update_fields=["branch"])
 
     if apps.is_installed("products"):
         from products.models import Category, UnitOfMeasure
@@ -115,7 +127,7 @@ def set_staff_active(user, *, is_active):
     return user
 
 
-def create_staff_user(*, tenant, handle, role, first_name="", last_name="", email="", phone="", national_id=None, password=None, pin=None):
+def create_staff_user(*, tenant, handle, role, first_name="", last_name="", email="", phone="", national_id=None, password=None, pin=None, branch=None):
     """Owner/admin creates a cashier or manager inside their own tenant."""
     User = get_user_model()
     handle = handle.strip().lower()
@@ -126,7 +138,7 @@ def create_staff_user(*, tenant, handle, role, first_name="", last_name="", emai
     if role not in User.Roles.values:
         raise ValidationError("Unknown role.")
 
-    user = User(username=compose_username(tenant.slug, handle), first_name=first_name, last_name=last_name, email=email, phone=phone,national_id=national_id or None, role=role, tenant=tenant)
+    user = User(username=compose_username(tenant.slug, handle), first_name=first_name, last_name=last_name, email=email, phone=phone,national_id=national_id or None, role=role, tenant=tenant, branch=branch)
 
     if password:
         from django.contrib.auth.password_validation import validate_password

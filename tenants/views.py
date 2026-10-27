@@ -10,7 +10,9 @@ from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, render, redirect
 
+from billing import conf
 from billing.pricing import quote_table
+from .branches import active_branches, assign_user_branch
 from .forms import SignupForm, StaffDetailsForm
 from .mixins import OwnerRequiredMixin
 from .rendering import html_or_json
@@ -27,8 +29,15 @@ def _form_errors(form):
 class SignupView(View):
     def get(self, request):
         """The sign-up page for a browser; pricing JSON for that page's own fetch()."""
-        return html_or_json(request, "tenants/signup.html",
-                            {"pricing": quote_table(include_install_fee=True)})
+        try:
+            count = max(min(int(request.GET.get("branches", 1)), conf.get("MAX_BRANCHES")), 1)
+        except (TypeError, ValueError):
+            count = 1
+        return html_or_json(request, "tenants/signup.html", {
+            "pricing": quote_table(include_install_fee=True, extra_branches=count - 1),
+            "branches": {"count": count, "max": conf.get("MAX_BRANCHES"),
+                         "extra_monthly": conf.get("BRANCH_MONTHLY_PRICE")},
+        })
 
     def post(self, request):
         if request.content_type == "application/json":
@@ -74,6 +83,7 @@ def _staff_payload(user):
         "full_name": user.get_full_name(), "email": user.email, "phone": user.phone,
         "national_id": user.national_id or "",
         "role": user.role, "is_active": user.is_active, "date_joined": user.date_joined,
+        "branch_id": user.branch_id, "branch_name": user.branch.name if user.branch_id else "",
         "login_method": "PIN" if user.role == "CASHIER" else "password",
     }
 
@@ -83,7 +93,8 @@ class StaffListView(OwnerRequiredMixin, View):
     def get(self, request):
         payload = {
             "shop": {"name": request.tenant.name, "slug": request.tenant.slug},
-            "staff": [_staff_payload(u) for u in list_staff(request.tenant)],
+            "staff": [_staff_payload(u) for u in list_staff(request.tenant).select_related("branch")],
+            "branches": [{"id": b.pk, "name": b.name} for b in active_branches(request.tenant)],
         }
         return html_or_json(request, "tenants/staff.html", payload)
 
@@ -100,7 +111,11 @@ class StaffListView(OwnerRequiredMixin, View):
         if not form.is_valid():
             return JsonResponse({"errors": _form_errors(form)}, status=400)
 
-        kwargs = dict(tenant=request.tenant, handle=handle, role=role, **form.cleaned_data)
+        branch = active_branches(request.tenant).filter(pk=request.POST.get("branch_id") or 0).first()
+        if branch is None and role == "CASHIER":
+            return JsonResponse({"errors": {"branch_id": ["Choose which branch this cashier works at."]}}, status=400)
+
+        kwargs = dict(tenant=request.tenant, handle=handle, role=role, branch=branch, **form.cleaned_data)
         kwargs["pin" if role == "CASHIER" else "password"] = credential
         try:
             user = create_staff_user(**kwargs)
@@ -121,6 +136,9 @@ class StaffActionView(OwnerRequiredMixin, View):
                 set_staff_active(user, is_active=False)
             elif action == "activate":
                 set_staff_active(user, is_active=True)
+            elif action == "set-branch":
+                branch = active_branches(request.tenant).filter(pk=request.POST.get("branch_id") or 0).first()
+                assign_user_branch(user, branch)
             elif action == "update-details":
                 form = StaffDetailsForm(request.POST, tenant=request.tenant, instance=user)
                 if not form.is_valid():

@@ -12,17 +12,14 @@ from .receipts import create_receipt
 
 def resolve_user_branch(user):
     """
-    The branch a user operates from, used to look up the ONE shared
-    cash-pool session for that branch.
+    The branch a user operates from, used to look up the ONE shared cash-pool session.
 
-    Branch.objects is tenant-scoped (TenantManager), so .first() here
-    already only ever sees the current tenant's branches.
+    Cashiers: always the branch they are assigned to.
+    Owner/admin/manager: the branch they switched to this session, else their own branch,
+    else the shop's main branch (see tenants/branches.py).
     """
-    if hasattr(user, 'branch') and user.branch:
-        return user.branch
-    if hasattr(user, 'profile') and hasattr(user.profile, 'branch'):
-        return user.profile.branch
-    return Branch.objects.first()
+    from tenants.branches import branch_for_user
+    return branch_for_user(user)
 
 
 def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_received=None,

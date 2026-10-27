@@ -34,6 +34,8 @@ class Subscription(models.Model):
     )
 
     custom_monthly_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    branch_slots = models.PositiveSmallIntegerField(
+        default=1, help_text="Branches this shop has paid for (1 is included in the base price).")
     comp_until = models.DateTimeField(null=True, blank=True,
                                       help_text="Free access until this moment, regardless of payment.")
     override_note = models.CharField(max_length=255, blank=True)
@@ -80,6 +82,10 @@ class Invoice(models.Model):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     subscription_amount = models.DecimalField(max_digits=12, decimal_places=2)
     install_fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    branch_slots = models.PositiveSmallIntegerField(
+        default=1, help_text="Branches this invoice covers; applied to the subscription when paid.")
+    is_upgrade = models.BooleanField(
+        default=False, help_text="Mid-term add-on (extra branches). Paying it never extends the period.")
     total = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=6, choices=Status.choices, default=Status.OPEN, db_index=True)
     issued_at = models.DateTimeField(auto_now_add=True)

@@ -53,7 +53,9 @@ class BillingOverviewView(OwnerRequiredMixin, View):
             "plans": quote_table(
                 include_install_fee=not Invoice.objects.filter(
                     tenant=tenant, status=Invoice.Status.PAID, install_fee_amount__gt=0).exists(),
-                monthly_price=sub.custom_monthly_price),
+                monthly_price=sub.custom_monthly_price,
+                extra_branches=services.billable_branches(tenant) - 1),
+            "branch_slots": sub.branch_slots,
             "invoices": list(Invoice.objects.filter(tenant=tenant).values(
                 "number", "status", "total", "term_months", "issued_at", "paid_at", "period_end")[:20]),
             "credit_balance": balance,
