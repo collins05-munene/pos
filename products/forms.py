@@ -41,9 +41,8 @@ class UnitOfMeasureForm(forms.ModelForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        # Supplier is recorded on the purchase, not here.
         fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure',
-                  'description', 'has_variations', 'is_active']
+                  'description', 'has_variations']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Paracetamol 500mg'}),
             'sku_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. PARA-500'}),
@@ -52,7 +51,6 @@ class ProductForm(forms.ModelForm):
             'unit_of_measure': forms.Select(attrs={'class': 'searchable', 'data-placeholder': 'Search unit…'}),
             'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
             'has_variations': forms.CheckboxInput(attrs={'class': 'form-checkbox', 'id': 'toggle-variations'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):
