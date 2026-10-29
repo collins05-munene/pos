@@ -6,14 +6,14 @@ from decimal import Decimal
 from operator import sub
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import transaction
 from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
 
 from . import conf, mpesa
 from .models import BillingCredit, BillingEvent, Invoice, MpesaPayment, Subscription
-from .pricing import quote, _kes
+from .pricing import quote
 from .signals import billing_event
 
 logger = logging.getLogger(__name__)
@@ -34,34 +34,14 @@ def record_event(event_type, tenant=None, **payload):
     billing_event.send_robust(sender=BillingEvent, event=event)
     return event
 
-def billable_branches(tenant):
-    """
-    Branches the shop is (or wants to be) billed for: everything not archived, never below
-    what it has already paid for unless branches were archived, and never below 1.
-    """
-    from inventory.models import Branch
-    return max(Branch.all_objects.filter(tenant=tenant)
-               .filter(models.Q(is_active=True) | models.Q(awaiting_payment=True)).count(), 1)
-
-
-def activate_paid_branches(tenant, slots):
-    """Switch on branches that were waiting for payment, oldest first, up to `slots` active."""
-    from inventory.models import Branch
-    active = Branch.all_objects.filter(tenant=tenant, is_active=True).count()
-    room = max(slots - active, 0)
-    for b in Branch.all_objects.filter(tenant=tenant, awaiting_payment=True).order_by("created_at", "pk")[:room]:
-        Branch.all_objects.filter(pk=b.pk).update(is_active=True, awaiting_payment=False)
-
-
 @transaction.atomic
-def start_subscription(tenant, term_months=1, branch_slots=1):
+def start_subscription(tenant, term_months=1):
     """-> event `subscription.created`; returns (subscription, first_invoice)."""
     now = timezone.now()
     trial_days = conf.get("TRIAL_DAYS")
     sub = Subscription.objects.create(
         tenant=tenant,
         term_months=term_months,
-        branch_slots=max(int(branch_slots), 1),
         status=Subscription.Status.TRIALING if trial_days else Subscription.Status.PENDING,
         trial_ends_at=now + timedelta(days=trial_days) if trial_days else None,
     )
@@ -83,19 +63,13 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
             tenant=tenant, status=Invoice.Status.PAID, install_fee_amount__gt=0
         ).exists()
 
-    wanted = billable_branches(tenant)
     q = quote(term_months, include_install_fee=include_install_fee,
-              monthly_price=sub.custom_monthly_price, extra_branches=wanted - 1)
+              monthly_price=sub.custom_monthly_price)
 
     open_invoices = list(Invoice.objects.select_for_update()
                          .filter(tenant=tenant, status=Invoice.Status.OPEN))
     for inv in open_invoices:
-        if inv.is_upgrade:
-            # A pending mid-term branch add-on must survive the re-issues the payment screens
-            # make on every attempt; run_billing_cycle voids it when the real renewal is due.
-            return apply_credit(inv)
-    for inv in open_invoices:
-        if inv.term_months == term_months and inv.total == q["total"] and inv.branch_slots == wanted:
+        if inv.term_months == term_months and inv.total == q["total"]:
             return apply_credit(inv)
     for inv in open_invoices:
         inv.status = Invoice.Status.VOID
@@ -109,58 +83,10 @@ def issue_invoice(tenant, term_months, *, include_install_fee=None):
         list_price_amount=q["list_price"], discount_amount=q["discount_amount"],
         subscription_amount=q["subscription_amount"],
         install_fee_amount=q["install_fee"], total=q["total"],
-        branch_slots=wanted,
         period_start=start, period_end=end,  
     )
     record_event("invoice.created", tenant, invoice=invoice.number, total=invoice.total,
                  term_months=term_months)
-    return apply_credit(invoice)
-
-
-@transaction.atomic
-def issue_branch_upgrade(tenant):
-    """
-    The shop has more branches than it has paid for. Returns the invoice to pay.
-
-    * Shop already has an open (first / renewal) invoice  -> re-issue it with the new branch count.
-    * Mid-term and paid up -> a pro-rated add-on invoice for the rest of the current term.
-      Paying it activates the waiting branches and never extends the subscription period.
-    """
-    sub = Subscription.objects.select_for_update().get(tenant=tenant)
-    wanted = billable_branches(tenant)
-    now = timezone.now()
-
-    open_invoices = list(Invoice.objects.select_for_update()
-                         .filter(tenant=tenant, status=Invoice.Status.OPEN))
-    if any(not i.is_upgrade for i in open_invoices):
-        return issue_invoice(tenant, sub.term_months)           # folds the new branch in
-    for inv in open_invoices:                                    # stale add-on -> replace
-        inv.status = Invoice.Status.VOID
-        inv.save(update_fields=["status"])
-
-    running = (sub.status in (Subscription.Status.ACTIVE, Subscription.Status.PAST_DUE)
-               and sub.current_period_start and sub.current_period_end
-               and sub.current_period_end > now)
-    if not running or wanted <= sub.branch_slots:
-        return issue_invoice(tenant, sub.term_months, include_install_fee=False)
-
-    extra_now = wanted - sub.branch_slots
-    period = (sub.current_period_end - sub.current_period_start).total_seconds()
-    left = (sub.current_period_end - now).total_seconds()
-    fraction = Decimal(str(max(min(left / period, 1), 0))) if period else Decimal(1)
-    discounts = conf.get("TERM_DISCOUNT_PERCENT")
-    pct = Decimal(discounts.get(sub.term_months, 0))
-    list_price = Decimal(conf.get("BRANCH_MONTHLY_PRICE")) * extra_now * sub.term_months * fraction
-    total = max(_kes(list_price * (Decimal(100) - pct) / Decimal(100)), Decimal(1))
-
-    invoice = Invoice.objects.create(
-        tenant=tenant, term_months=sub.term_months, is_upgrade=True, branch_slots=wanted,
-        list_price_amount=_kes(list_price), discount_amount=_kes(list_price) - total,
-        subscription_amount=total, install_fee_amount=0, total=total,
-        period_start=sub.current_period_start, period_end=sub.current_period_end,
-    )
-    record_event("invoice.created", tenant, invoice=invoice.number, total=invoice.total,
-                 term_months=sub.term_months, kind="branch_upgrade", branch_slots=wanted)
     return apply_credit(invoice)
 
 
@@ -291,23 +217,6 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
         sub = Subscription.objects.select_for_update().get(tenant_id=invoice.tenant_id)
         previous_status = sub.status
 
-        if invoice.is_upgrade:
-            # Add-on: unlock the extra branches only. The period and term are untouched.
-            invoice.status = Invoice.Status.PAID
-            invoice.paid_at = paid_at
-            invoice.save()
-            added = max(invoice.branch_slots - sub.branch_slots, 0)
-            pct = Decimal(conf.get("TERM_DISCOUNT_PERCENT").get(sub.term_months, 0))
-            sub.monthly_equivalent += (Decimal(conf.get("BRANCH_MONTHLY_PRICE")) * added
-                                       * (Decimal(100) - pct) / Decimal(100)).quantize(Decimal("0.01"))
-            sub.branch_slots = max(invoice.branch_slots, sub.branch_slots)
-            sub.save()
-            activate_paid_branches(invoice.tenant, sub.branch_slots)
-            record_event("invoice.payment_succeeded", invoice.tenant, invoice=invoice.number,
-                         total=invoice.total, receipt=receipt, kind="branch_upgrade",
-                         branch_slots=sub.branch_slots)
-            return invoice
-
         still_running = bool(sub.current_period_end and sub.current_period_end > paid_at
                              and previous_status in (Subscription.Status.ACTIVE,
                                                      Subscription.Status.PAST_DUE))
@@ -327,9 +236,7 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
         sub.suspended_at = None
         sub.cancel_at_period_end = False
         sub.monthly_equivalent = (invoice.subscription_amount / invoice.term_months).quantize(Decimal("0.01"))
-        sub.branch_slots = max(invoice.branch_slots, 1)
         sub.save()
-        activate_paid_branches(invoice.tenant, sub.branch_slots)
 
         tenant = invoice.tenant
         record_event("invoice.payment_succeeded", tenant, invoice=invoice.number,
@@ -430,8 +337,6 @@ def run_billing_cycle(now=None):
 
     for sub in list(base.filter(status__in=[S.ACTIVE, S.PAST_DUE], cancel_at_period_end=False,
                                 current_period_end__lte=now + notice)):
-        Invoice.objects.filter(tenant=sub.tenant, status=Invoice.Status.OPEN,
-                               is_upgrade=True).update(status=Invoice.Status.VOID)
         if not Invoice.objects.filter(tenant=sub.tenant, status=Invoice.Status.OPEN).exists():
             issue_invoice(sub.tenant, sub.term_months, include_install_fee=False)
             stats["renewal_invoices"] += 1
