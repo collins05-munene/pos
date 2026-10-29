@@ -68,8 +68,7 @@ def _record_payment(po, user, amount, method, reference, session):
         cash_transaction=cash_txn,
     )
 
-
-class StockLevelListView(LiveSearchMixin, CashierRequiredMixin, ListView):
+class StockLevelListView(LiveSearchMixin, AdminRequiredMixin, ListView):
     model = StockLevel
     template_name = 'inventory/stocklevel_list.html'
     context_object_name = 'stock_levels'
@@ -199,8 +198,7 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
         if branch_id:
             initial['branch'] = branch_id
         elif getattr(self.request, 'branch', None):
-            initial['branch'] = self.request.branch.pk      # default to where the user is working
-        # Older products may still carry a default supplier; use it as a convenience.
+            initial['branch'] = self.request.branch.pk
         for variant in self._requested_variants():
             if variant.product.supplier_id:
                 initial['supplier'] = variant.product.supplier_id
@@ -418,7 +416,7 @@ class PurchasePaymentCreateView(AdminRequiredMixin, View):
         return redirect('purchase-order-detail', pk=po.pk)
 
 
-class StockAdjustmentCreateView(CashierRequiredMixin, CreateView):
+class StockAdjustmentCreateView(AdminRequiredMixin, CreateView):
     model = StockAdjustment
     form_class = StockAdjustmentForm
     template_name = 'inventory/adjustment_form.html'

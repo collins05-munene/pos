@@ -1,22 +1,4 @@
-"""
-Manual M-Pesa payments, for as long as Daraja STK push isn't available.
 
-Flow
-----
-1. The tenant pays your Till/Paybill and receives an SMS with a 10-character code.
-2. You paste that SMS into the platform admin  -> `register_mpesa_code()`.
-3. The tenant types the code on /billing/      -> `submit_manual_payment()`.
-   * code is listed and unused -> its amount becomes the shop's credit. If the credit covers the
-                                  invoice, it is paid and any surplus stays as credit for the next
-                                  invoice; if not, the request is PARTIAL and the shop pays the rest
-                                  with another code.
-   * code isn't listed yet                         -> request waits as PENDING and is approved
-                                                      automatically the moment you add the code
-   * code is used / voided                         -> rejected, nothing is consumed
-
-Everything funnels through `services.mark_invoice_paid`, so a manual payment extends the
-subscription exactly like an STK payment does.
-"""
 import json
 import logging
 import re
@@ -37,9 +19,6 @@ NAIROBI = ZoneInfo("Africa/Nairobi")
 CODE_RE = re.compile(r"[A-Z0-9]{8,12}")
 
 
-# --------------------------------------------------------------------------
-# Small helpers
-# --------------------------------------------------------------------------
 def read_payload(request):
     """Accept JSON bodies and normal form posts alike. Raises ValueError on bad JSON."""
     if (request.content_type or "").startswith("application/json"):
@@ -74,9 +53,6 @@ def parse_amount(raw):
     return amount.quantize(Decimal("0.01"))
 
 
-# --------------------------------------------------------------------------
-# SMS parsing
-# --------------------------------------------------------------------------
 _SMS_CODE = re.compile(r"\b([A-Z0-9]{10})\s+Confirmed", re.I)
 _SMS_AMOUNT = re.compile(r"Ksh\.?\s?([\d,]+(?:\.\d{1,2})?)\s+received", re.I)
 _SMS_FROM = re.compile(r"received\s+from\s+(.+?)\s+on\s+\d{1,2}/\d{1,2}/\d{2,4}", re.I | re.S)
@@ -121,9 +97,6 @@ def parse_mpesa_sms(text):
     return out
 
 
-# --------------------------------------------------------------------------
-# Core settlement (caller holds the row locks)
-# --------------------------------------------------------------------------
 def _resolve(req, status, reason="", mcode=None):
     req.status = status
     req.reason = reason[:255]
@@ -139,15 +112,10 @@ def _settle(req, mcode, *, by=None):
     now = timezone.now()
     tenant = req.tenant
     who = getattr(by, "username", None)
-    # Lock order is always Subscription (per-shop credit lock) -> Invoice, same as
-    # services.apply_credit, so two requests can't deadlock each other.
     Subscription.objects.select_for_update().get(tenant_id=tenant.pk)
     invoice = Invoice.objects.select_for_update().get(pk=req.invoice_id)
 
     if invoice.status == Invoice.Status.VOID:
-        # The shop switched term after submitting this code, so the invoice it was entered
-        # against was replaced. Settle against the shop's current invoice instead, otherwise
-        # we'd quote an amount and an invoice number the shop can no longer see.
         current = Invoice.objects.select_for_update().filter(
             tenant=tenant, status=Invoice.Status.OPEN).first()
         if current is not None:
@@ -162,8 +130,6 @@ def _settle(req, mcode, *, by=None):
         record_event("manual_payment.code_reuse_attempt", tenant, code=mcode.code,
                      invoice=invoice.number, first_used_by=getattr(mcode.used_by_tenant, "slug", None))
         if mcode.used_by_tenant_id == tenant.pk:
-            # Their own earlier entry (e.g. a part payment): say where the money went, and
-            # don't tell them anything about other shops' payments.
             return _resolve(req, ManualPaymentRequest.Status.REJECTED,
                             f"That code has already been used: its KES {kes(mcode.amount)} "
                             "was added to your credit when you first entered it.")
@@ -172,8 +138,7 @@ def _settle(req, mcode, *, by=None):
 
     if invoice.status == Invoice.Status.PAID:
         return _resolve(req, ManualPaymentRequest.Status.REJECTED, "This invoice is already paid.")
-
-    # The code is genuine and unused: bank it as credit, then see if the credit covers the invoice.
+    
     mcode.used_at = now
     mcode.used_by_tenant = tenant
     mcode.used_invoice = invoice
@@ -204,9 +169,6 @@ def _settle(req, mcode, *, by=None):
     return _resolve(req, ManualPaymentRequest.Status.APPROVED, note, mcode)
 
 
-# --------------------------------------------------------------------------
-# Tenant side
-# --------------------------------------------------------------------------
 def _check_throttle(tenant):
     """Cool-off for shops that keep sending codes we can't match (guessing)."""
     limit = conf.get("MANUAL_MAX_ATTEMPTS_PER_HOUR")
@@ -243,13 +205,11 @@ def submit_manual_payment(tenant, *, user, invoice, raw_code):
 
         mcode = MpesaCode.objects.select_for_update().filter(code=code).first()
         if mcode is None:
-            return req            # PENDING: approved automatically when you list the code
+            return req           
         return _settle(req, mcode)
 
 
-# --------------------------------------------------------------------------
-# Platform-admin side
-# --------------------------------------------------------------------------
+
 def register_mpesa_code(*, by, code, amount, phone="", name="", transaction_at=None, raw_message=""):
     """
     List a received payment. Returns (MpesaCode, [approved ManualPaymentRequest]).

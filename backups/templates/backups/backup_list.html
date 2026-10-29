@@ -18,11 +18,6 @@
       <form method="post" action="{% url 'backup-create' %}">{% csrf_token %}
         <button type="submit" class="btn btn-primary">Back up now</button>
       </form>
-      {% if encrypted %}
-        <div class="notice ok">Stored backups are encrypted on the server. Downloads are decrypted for you.</div>
-      {% else %}
-        <div class="notice warn">Backups are not encrypted. Ask your administrator to set an encryption key.</div>
-      {% endif %}
     </div>
 
     <div class="card">

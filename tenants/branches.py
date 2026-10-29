@@ -36,7 +36,7 @@ def active_branches(tenant):
     return tenant_branches(tenant).filter(is_active=True)
 
 
-# ---------------------------------------------------------------- who works where
+
 def user_home_branch(user):
     """Assigned branch if it is still usable, else the shop's main branch."""
     b = getattr(user, "branch", None)
