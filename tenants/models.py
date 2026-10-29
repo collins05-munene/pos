@@ -52,7 +52,7 @@ class Tenant(models.Model):
         """May this tenant's users use the product right now?"""
         if not self.is_active:
             return False
-        sub = getattr(self, "subscription", None)  # missing row -> AttributeError subclass
+        sub = getattr(self, "subscription", None) 
         return bool(sub and sub.grants_access())
 
 
@@ -161,9 +161,6 @@ class TenantOwnedModel(models.Model):
         super().save(*args, **kwargs)
 
 
-# --------------------------------------------------------------------------
-# Per-tenant document numbering (each shop's invoices start at 000001)
-# --------------------------------------------------------------------------
 class TenantSequence(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="sequences")
     name = models.CharField(max_length=30)

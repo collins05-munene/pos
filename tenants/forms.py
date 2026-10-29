@@ -18,7 +18,6 @@ class SignupForm(forms.Form):
     phone = forms.CharField(max_length=20, help_text="M-Pesa number, e.g. 0712345678")
     password = forms.CharField(widget=forms.PasswordInput)
     term_months = forms.TypedChoiceField(coerce=int, choices=(), initial=1)
-    # How many branches, and their names (one per line / JSON list). Branch 1 is included in the base price.
     branch_count = forms.IntegerField(min_value=1, initial=1, required=False)
     branch_names = forms.JSONField(required=False)
 

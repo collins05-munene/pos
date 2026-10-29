@@ -178,6 +178,7 @@ class CloseRegisterView(CashierRequiredMixin, View):
                level=level, roles=MANAGEMENT, exclude_user=request.user)
         
         messages.success(request, f"Register closed. Discrepancy: KSH {discrepancy:.2f}")
+        
         return redirect('pos_terminal')
 
 
@@ -311,7 +312,6 @@ class PosTerminalView(CashierRequiredMixin, View):
         if q:
             products = products.filter(Q(sku__icontains=q) | Q(product__name__icontains=q))
 
-        # Always capped: an unfiltered or broad search must not render the whole catalogue.
         products = _attach_availability(products[:60 if (q or category_id) else 24], branch)
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
