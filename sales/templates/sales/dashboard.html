@@ -399,6 +399,11 @@
       <div class="value">KSH {{ metrics.refunds|floatformat:2 }}</div>
       <p class="card-footer">Already deducted from the revenue, cost and profit above.</p>
     </div>
+    <div class="card metric-card card-red">
+      <h3>Write-offs (unsellable returns)</h3>
+      <div class="value">KSH {{ metrics.writeoffs|floatformat:2 }}</div>
+      <p class="card-footer">Cost of refunded goods that could not be resold. Already deducted from profit.</p>
+    </div>
   </div>
 
   <h2 class="section-divider">Cumulative Cash & Vault Overview</h2>

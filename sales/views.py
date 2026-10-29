@@ -587,6 +587,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'profit': profit,
             'margin': margin,
             'refunds': period_refunds['amount'],
+            'writeoffs': period_refunds['writeoffs'],
         }
 
         total_cash_sales_all_time = orders.filter(

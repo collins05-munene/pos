@@ -33,7 +33,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper
 from django.utils import timezone
 
 from inventory.stock import change_stock
@@ -181,12 +181,31 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
 
 
 def refund_totals(start=None, end=None):
-    """Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures."""
+    """
+    Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures.
+
+    cogs       full cost of every refunded item (the sale is undone, so its cost is reversed)
+    writeoffs  cost of refunded items that were NOT restocked (lost stock, shown as its own line)
+    profit     profit given up = amount - cogs + writeoffs  (== amount - restocked cost)
+    """
     qs = Refund.objects.all()
     if start is not None:
         qs = qs.filter(created_at__gte=start)
     if end is not None:
         qs = qs.filter(created_at__lt=end)
-    agg = qs.aggregate(amount=Sum('total_amount'), cogs=Sum('cogs_reversed'), profit=Sum('profit_reversed'))
+
     zero = Decimal('0.00')
-    return {k: (v or zero) for k, v in agg.items()}
+    head = qs.aggregate(amount=Sum('total_amount'), profit=Sum('profit_reversed'))
+
+    cost = ExpressionWrapper(F('quantity') * F('unit_cost'),
+                             output_field=DecimalField(max_digits=14, decimal_places=2))
+    items = RefundItem.objects.filter(refund__in=qs).aggregate(
+        cogs=Sum(cost),
+        writeoffs=Sum(cost, filter=Q(restocked=False)),
+    )
+    return {
+        'amount': head['amount'] or zero,
+        'profit': head['profit'] or zero,
+        'cogs': items['cogs'] or zero,
+        'writeoffs': items['writeoffs'] or zero,
+    }
