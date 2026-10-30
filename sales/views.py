@@ -1,6 +1,8 @@
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.urls import reverse
+from django.http import JsonResponse, HttpResponse
+from django.utils.text import slugify
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q, OuterRef, Subquery
@@ -20,6 +22,7 @@ from products.models import ProductVariant, Category
 from .cart import POSCart
 from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund
 from .refunds import refund_totals
+from .report_pdf import build_sales_report_pdf
 from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
@@ -785,6 +788,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         context['branch_rows'] = branch_rows
         context['top_branch'] = branch_rows[0] if branch_rows and branch_rows[0]['revenue'] > 0 else None
         context['all_branches_url'] = _dashboard_url(request, branch=None)
+        context['pdf_url'] = reverse('sales-report-pdf') + _dashboard_url(request)
 
         # --- the three record tables ------------------------------------------------------
         sessions_qs = period_sessions.select_related('opened_by', 'branch').order_by('-opened_at')
@@ -829,6 +833,34 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         context['timestamp'] = now
 
         return context
+
+
+class SalesReportPdfView(SalesDashboardView):
+    """
+    Downloads the dashboard as a PDF. Follows the same filters as the page (?branch=, the dates),
+    so "All branches" gives the overall business report and one branch gives that branch's.
+    Same access rules as the dashboard.
+    """
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        now = timezone.localtime()
+        tenant = getattr(request, 'tenant', None)
+
+        pdf = build_sales_report_pdf(
+            context,
+            shop_name=getattr(tenant, 'name', '') or '',
+            generated_by=request.user.get_full_name() or request.user.get_username(),
+            generated_at=now,
+        )
+
+        period = context['period']
+        filename = (f"sales-report-{slugify(context['scope_label'])}-"
+                    f"{period['start_date']}-to-{period['end_date']}.pdf")
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 class OrderDetailView(AdminRequiredMixin, DetailView):

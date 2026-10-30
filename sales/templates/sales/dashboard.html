@@ -28,6 +28,8 @@
     outline: 3px solid #93c5fd;
     outline-offset: 2px;
   }
+
+  /* ---------- page header ---------- */
   .sd-head {
     display: flex;
     justify-content: space-between;
@@ -36,7 +38,7 @@
     gap: 1rem;
     margin-bottom: 1.25rem;
   }
-  .sd-title { font-size: 1.75rem; font-weight: 400; letter-spacing: -0.01em; }
+  .sd-title { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; }
   .sd-scope { margin-top: 0.15rem; color: var(--sd-muted); }
   .sd-scope strong { color: var(--sd-ink); }
   .sd-btn-out {
@@ -51,7 +53,22 @@
     text-decoration: none;
   }
   .sd-btn-out:hover { background: #991b1b; }
+  .sd-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .sd-btn-pdf {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1.1rem;
+    border: 1px solid var(--sd-blue);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--sd-blue);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .sd-btn-pdf:hover { background: var(--sd-blue-soft); }
 
+  /* ---------- filters ---------- */
   .sd-filters {
     display: grid;
     gap: 1rem;
@@ -143,10 +160,12 @@
   }
   .sd-btn:hover { background: #1d4ed8; }
 
+  /* ---------- section headings ---------- */
   .sd-section { margin-top: 2.25rem; }
-  .sd-h2 { font-size: 1.3rem; font-weight: 400; }
+  .sd-h2 { font-size: 1.3rem; font-weight: 700; }
   .sd-hint { margin-top: 0.15rem; color: var(--sd-muted); font-size: 0.95rem; }
 
+  /* ---------- summary ---------- */
   .sd-panel {
     margin-top: 0.9rem;
     background: var(--sd-surface);
@@ -160,8 +179,8 @@
   .sd-hero-value {
     margin-top: 0.2rem;
     font-size: clamp(1.9rem, 5vw, 2.75rem);
-    font-weight: 300;
-    line-height: 1;
+    font-weight: 700;
+    line-height: 1.15;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
   }
@@ -179,7 +198,7 @@
   .sd-fact { padding: 1rem 1.5rem; }
   .sd-fact + .sd-fact { border-left: 1px solid var(--sd-line); }
   .sd-fact-label { color: var(--sd-muted); font-size: 0.95rem; }
-  .sd-fact-value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sd-fact-value { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .sd-fact-note { color: var(--sd-muted); font-size: 0.85rem; }
 
   .sd-more { margin-top: 0.75rem; }
@@ -204,6 +223,7 @@
   }
   .sd-more-item .sd-fact-value { font-size: 1.15rem; }
 
+  /* ---------- branch comparison ---------- */
   .sd-branches { padding: 0.35rem 0; }
   .sd-branch-row {
     display: grid;
@@ -236,6 +256,7 @@
     border-radius: 8px;
   }
 
+  /* ---------- cash ---------- */
   .sd-cash { display: grid; grid-template-columns: repeat(4, 1fr); }
   .sd-cash > div { padding: 1.1rem 1.5rem; }
   .sd-cash > div + div { border-left: 1px solid var(--sd-line); }
@@ -243,6 +264,7 @@
   .is-good { color: var(--sd-green); }
   .is-bad { color: var(--sd-red); }
 
+  /* ---------- records (tabs) ---------- */
   .sd-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -266,6 +288,7 @@
   .sd-tabpanel { padding-top: 0.75rem; }
   .sd-tabpanel[hidden] { display: none; }
 
+  /* ---------- tables (shared with the three table partials) ---------- */
   .table-responsive {
     width: 100%;
     overflow-x: auto;
@@ -320,6 +343,7 @@
   .pagination-links a:hover { background: var(--sd-blue-soft); }
   .pagination-links span.disabled { color: #cbd5e1; background: #f9fafb; }
 
+  /* ---------- small screens ---------- */
   @media (max-width: 760px) {
     .sd { padding: 0 0.9rem; }
     .sd-hero, .sd-facts, .sd-cash { grid-template-columns: 1fr; }
@@ -346,9 +370,13 @@
       <h1 class="sd-title">Sales overview</h1>
       <p class="sd-scope"><strong>{{ scope_label }}</strong> &ndash; {{ period.label }}</p>
     </div>
-    <a href="{% url 'record-cash-out' %}" class="sd-btn-out">Record cash taken out</a>
+    <div class="sd-actions">
+      <a href="{{ pdf_url }}" class="sd-btn-pdf" download>Download PDF report</a>
+      <a href="{% url 'record-cash-out' %}" class="sd-btn-out">Record cash taken out</a>
+    </div>
   </div>
 
+  <!-- Filters: which branch, and which dates -->
   <div class="sd-filters">
     {% if branches|length > 1 %}
     <form method="get" action="{% url 'sales-dashboard' %}" class="sd-filter-row">
@@ -389,6 +417,7 @@
     </div>
   </div>
 
+  <!-- 1. The answer most people come for -->
   <h2 class="sd-h2">How the business did</h2>
   <p class="sd-hint">{{ period.order_count }} order{{ period.order_count|pluralize }} {% if selected_branch %}at {{ selected_branch.name }}{% else %}across all branches{% endif %}.</p>
 
