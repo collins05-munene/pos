@@ -88,10 +88,10 @@
     <h2>Invoice history</h2>
     <table class="ledger">
       <thead>
-        <tr><th>Invoice</th><th>Term</th><th>Issued</th><th>Status</th><th class="num">Amount</th></tr>
+        <tr><th>Invoice</th><th>Term</th><th>Issued</th><th>Status</th><th class="num">Amount</th><th>Receipt</th></tr>
       </thead>
-      <tbody id="invoice-rows">
-        <tr class="empty-row"><td colspan="5">Loading&hellip;</td></tr>
+      <tbody id="invoice-rows" data-receipt-base="{% url 'billing:billing-overview' %}invoices/">
+        <tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr>
       </tbody>
     </table>
   </div>

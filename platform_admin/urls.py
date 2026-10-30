@@ -1,5 +1,5 @@
 from django.urls import path
-from . import payment_views, views
+from . import payment_views, receipt_views, views
 
 app_name = "platform_admin"
 urlpatterns = [
@@ -15,4 +15,12 @@ urlpatterns = [
     path("payments/api/codes/<int:pk>/void/", payment_views.PaymentVoidView.as_view(), name="payments-void"),
     path("payments/api/requests/<int:pk>/<slug:action>/", payment_views.RequestActionView.as_view(),
          name="payments-request-action"),
+
+    path("receipts/", receipt_views.ReceiptsPageView.as_view(), name="receipts"),
+    path("receipts/api/", receipt_views.ReceiptsListView.as_view(), name="receipts-api"),
+    path("receipts/api/generate/", receipt_views.ReceiptGenerateView.as_view(), name="receipts-generate"),
+    path("receipts/invoices/<str:number>/", receipt_views.InvoiceReceiptView.as_view(), name="invoice-receipt"),
+    path("receipts/<str:number>/download/", receipt_views.ReceiptDownloadView.as_view(), name="receipt-download"),
+    # keep after the download route: its <slug:action> would otherwise swallow 'download'
+    path("receipts/<str:number>/<slug:action>/", receipt_views.ReceiptVoidView.as_view(), name="receipt-void"),
 ]

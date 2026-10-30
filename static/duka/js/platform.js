@@ -173,13 +173,18 @@
     const table = Duka.el('table', { class: 'ledger' });
     const tbody = Duka.el('tbody');
     if (!d.invoices || d.invoices.length === 0) {
-      tbody.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '3', text: 'None yet.' })));
+      tbody.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '4', text: 'None yet.' })));
     } else {
       d.invoices.slice(0, 8).forEach(inv => {
         tbody.appendChild(Duka.el('tr', {}, [
           Duka.el('td', { text: inv.number }),
           Duka.el('td', {}, Duka.statusBadge(inv.status)),
           Duka.el('td', { class: 'num', text: Duka.money(inv.total) }),
+          // Paid invoices: download the receipt (it is created on the spot if it doesn't exist yet).
+          Duka.el('td', {}, inv.status === 'PAID'
+            ? Duka.el('a', { href: `/platform/receipts/invoices/${encodeURIComponent(inv.number)}/`,
+                             download: '', text: 'Receipt', style: 'text-decoration:underline;' })
+            : null),
         ]));
       });
     }

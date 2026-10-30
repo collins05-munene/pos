@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import BillingCredit, BillingEvent, Invoice, ManualPaymentRequest, MpesaCode, MpesaPayment, Subscription
+from .models import (BillingCredit, BillingEvent, Invoice, ManualPaymentRequest, MpesaCode, MpesaPayment,
+                     Receipt, Subscription)
 
 
 @admin.register(Subscription)
@@ -59,3 +60,17 @@ class BillingCreditAdmin(admin.ModelAdmin):
     list_display = ("created_at", "tenant", "amount", "kind", "invoice", "mpesa_code")
     list_filter = ("kind",)
     search_fields = ("tenant__name", "tenant__slug", "note")
+
+
+@admin.register(Receipt)
+class ReceiptAdmin(admin.ModelAdmin):
+    list_display = ("number", "customer_name", "amount", "payment_method", "payment_reference", "paid_at")
+    list_filter = ("payment_method",)
+    search_fields = ("number", "customer_name", "payment_reference", "invoice__number", "tenant__slug")
+    readonly_fields = [f.name for f in Receipt._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import timedelta
 
@@ -105,6 +106,78 @@ class Invoice(models.Model):
         super().save(*args, **kwargs)
         if self.number.startswith("TMP-"):
             self.number = f"INV-{self.pk:06d}"
+            super().save(update_fields=["number"])
+
+
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"      # no 0/O/1/I: easy to read out or retype
+
+
+def new_verify_code():
+    """12 random characters (about 60 bits): not guessable, unlike the sequential receipt number."""
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(12))
+
+
+class Receipt(models.Model):
+    """
+    Proof of payment for one PAID invoice. Created automatically when the invoice is paid
+    (STK push, M-Pesa code or credit) and never edited afterwards: the shop details and payment
+    reference are copied here, so the receipt stays correct even if the shop later renames itself.
+    Invoices paid before receipts existed get theirs the first time someone asks for it.
+    """
+
+    class Method(models.TextChoices):
+        MPESA_STK = "MPESA_STK", "M-Pesa (STK push)"
+        MPESA_MANUAL = "MPESA_MANUAL", "M-Pesa (paid to till/paybill)"
+        CREDIT = "CREDIT", "Account credit"
+        OTHER = "OTHER", "Other"
+
+    number = models.CharField(max_length=20, unique=True, blank=True)
+    invoice = models.OneToOneField(Invoice, on_delete=models.PROTECT, related_name="receipt")
+    tenant = models.ForeignKey(Tenant, on_delete=models.PROTECT, related_name="receipts")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_at = models.DateTimeField(db_index=True)
+    payment_method = models.CharField(max_length=14, choices=Method.choices, default=Method.OTHER)
+    payment_reference = models.CharField(
+        max_length=255, blank=True, help_text="M-Pesa code(s), comma separated.")
+    payer_name = models.CharField(max_length=120, blank=True)
+    payer_phone = models.CharField(max_length=20, blank=True)
+
+    # Snapshot of the shop at the time of payment.
+    customer_name = models.CharField(max_length=150)
+    customer_phone = models.CharField(max_length=20, blank=True)
+    customer_email = models.EmailField(blank=True)
+
+    generated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                     on_delete=models.SET_NULL, related_name="+",
+                                     help_text="Empty = created automatically when the payment landed.")
+    issued_at = models.DateTimeField(auto_now_add=True)
+
+    # Public verification (QR code on the PDF -> /billing/verify/<code>/)
+    verify_code = models.CharField(max_length=12, unique=True, blank=True, default=new_verify_code)
+    is_void = models.BooleanField(
+        default=False, help_text="Receipt withdrawn (e.g. payment reversed). The verify page says so.")
+    void_reason = models.CharField(max_length=255, blank=True)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                  on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+
+    def __str__(self):
+        return f"{self.number} ({self.customer_name})"
+
+    @property
+    def verify_code_display(self):
+        c = self.verify_code
+        return "-".join(c[i:i + 4] for i in range(0, len(c), 4))
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            self.number = f"TMP-{uuid.uuid4().hex[:12]}"
+        super().save(*args, **kwargs)
+        if self.number.startswith("TMP-"):
+            self.number = f"RCT-{self.pk:06d}"
             super().save(update_fields=["number"])
 
 

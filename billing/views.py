@@ -5,8 +5,10 @@ from django.conf import settings
 from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
 
@@ -18,8 +20,8 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import conf, manual, services
-from .models import BillingCredit, Invoice, ManualPaymentRequest, MpesaPayment
+from . import conf, manual, receipts, services
+from .models import BillingCredit, Invoice, ManualPaymentRequest, MpesaPayment, Receipt
 from .mpesa import MpesaError
 from .pricing import quote_table
 
@@ -123,11 +125,19 @@ class ManualPaymentView(OwnerRequiredMixin, View):
         invoice.refresh_from_db()
         status = req.status if req else ManualPaymentRequest.Status.APPROVED
         reason = req.reason if req else "Paid from your credit."
+
+        receipt_url = None
+        if status == ManualPaymentRequest.Status.APPROVED:
+            paid = req.invoice if req else invoice        # settling may have swapped in the current invoice
+            paid.refresh_from_db()
+            if paid.status == Invoice.Status.PAID:
+                receipt_url = reverse("billing:invoice-receipt", args=[paid.number])
         return JsonResponse({
             "status": status, "reason": reason, "invoice": invoice.number,
             "has_access": fresh.has_access, "period_end": fresh.subscription.current_period_end,
             "credit_balance": services.credit_balance(tenant),
             "amount_due": services.amount_due(invoice),
+            "receipt_url": receipt_url,
         }, status=422 if status == ManualPaymentRequest.Status.REJECTED else 200)
 
 
@@ -135,9 +145,29 @@ class PaymentStatusView(OwnerRequiredMixin, View):
     """Front-end polls this every ~3s after the STK prompt."""
 
     def get(self, request, pk):
-        payment = get_object_or_404(MpesaPayment, pk=pk, tenant=request.tenant)
+        payment = get_object_or_404(MpesaPayment.objects.select_related("invoice"),
+                                    pk=pk, tenant=request.tenant)
+        receipt_url = None
+        if payment.status == MpesaPayment.Status.SUCCESS and payment.invoice.status == Invoice.Status.PAID:
+            receipt_url = reverse("billing:invoice-receipt", args=[payment.invoice.number])
         return JsonResponse({"status": payment.status, "result_desc": payment.result_desc,
-                             "has_access": request.tenant.has_access})
+                             "has_access": request.tenant.has_access, "receipt_url": receipt_url})
+
+
+class InvoiceReceiptView(OwnerRequiredMixin, View):
+    """
+    GET /billing/invoices/<number>/receipt/ -> the receipt PDF as a download
+    (add ?view=1 to open it in the browser instead). Only the shop's own paid invoices.
+    Receipts for invoices paid before this feature existed are created on first request.
+    """
+
+    def get(self, request, number):
+        invoice = get_object_or_404(Invoice.objects.select_related("tenant"),
+                                    number=number, tenant=request.tenant)
+        if invoice.status != Invoice.Status.PAID:
+            raise Http404("This invoice has not been paid, so there is no receipt.")
+        receipt = receipts.issue_receipt(invoice)
+        return receipts.pdf_response(receipt, inline=request.GET.get("view") == "1", request=request)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -165,3 +195,26 @@ def locked_view(request):
     resp = render(request, "billing/locked.html", {"is_owner": is_owner})
     resp.status_code = 402
     return resp
+
+@method_decorator(never_cache, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="30/m", method="GET", block=True), name="get")
+class VerifyReceiptView(View):
+    """
+    PUBLIC (no login): where the QR code / verification code on a receipt leads. Reads the live
+    record, so a forged or altered PDF can't pass: the page shows what is really on file.
+    Deliberately shows little: no phone, e-mail or M-Pesa code, and the shop name is partly masked.
+    """
+
+    def get(self, request, code):
+        clean = "".join(ch for ch in (code or "").upper() if ch.isalnum())
+        receipt = (Receipt.objects.select_related("invoice").filter(verify_code=clean).first()
+                   if len(clean) == 12 else None)
+        ctx = {"code": code, "found": receipt is not None}
+        if receipt:
+            ctx.update(
+                receipt=receipt, shop=receipts.mask_name(receipt.customer_name),
+                term_months=receipt.invoice.term_months, currency=conf.get("CURRENCY"),
+                company=conf.get("COMPANY_NAME"))
+        else:
+            ctx["company"] = conf.get("COMPANY_NAME")
+        return render(request, "billing/verify.html", ctx, status=200 if receipt else 404)

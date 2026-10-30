@@ -1,0 +1,79 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Receipts -- UniSale Systems</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+<style>
+  .wrap.pf { max-width: 960px; }
+  .card { border: 1px solid var(--rule, #ddd); border-radius: 8px; padding: 16px; margin: 18px 0; }
+  .card h2 { margin-top: 0; }
+  .mono { font-family: var(--mono, monospace); }
+  .tbl-wrap { overflow-x: auto; }
+  .sub { font-size: 12px; color: var(--ink-soft); }
+  .err-text { color: #b3261e; font-size: 12.5px; min-height: 16px; }
+  .ok-text { color: #1b7f3b; font-size: 13px; margin-top: 8px; }
+  a.dl { text-decoration: underline; margin-right: 10px; }
+</style>
+</head>
+<body>
+{% csrf_token %}
+<header class="masthead">
+  <div class="wrap pf">
+    <div class="wordmark">UniSale<span> Systems</span> <span style="font-family:var(--mono);font-size:13px;color:var(--ink-soft);">platform</span></div>
+    <div class="masthead-meta"><a href="{% url 'platform_admin:overview' %}" style="text-decoration:underline;">Shops</a></div>
+    <div class="masthead-meta"><a href="{% url 'platform_admin:payments' %}" style="text-decoration:underline;">Payments</a></div>
+    <div class="masthead-meta"><a href="{% url 'helpdesk:page' %}" style="text-decoration:underline;">Help desk</a></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap pf"
+       data-api="{% url 'platform_admin:receipts-api' %}"
+       data-generate="{% url 'platform_admin:receipts-generate' %}">
+    <h1>Receipts</h1>
+    <p class="lede">A receipt is created automatically whenever a shop's subscription payment is confirmed. Find it here to download or re-send it later.</p>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Receipts issued</div><div class="value" id="kpi-count">--</div></div>
+      <div class="kpi"><div class="label">Total received</div><div class="value" id="kpi-total">--</div></div>
+      <div class="kpi"><div class="label">Paid, no receipt yet</div><div class="value" id="kpi-missing">--</div></div>
+    </div>
+
+    <section class="card" id="missing-card" hidden>
+      <h2>Paid invoices without a receipt</h2>
+      <p class="sub">These were paid before receipts existed. Generate a receipt to keep a record for the shop.</p>
+      <div class="tbl-wrap">
+      <table class="ledger">
+        <thead><tr><th>Shop</th><th>Invoice</th><th>Paid</th><th class="num">Amount</th><th></th></tr></thead>
+        <tbody id="missing-rows"></tbody>
+      </table>
+      </div>
+      <div class="row-actions" style="margin-top:12px;">
+        <button class="primary" id="gen-all" type="button" style="width:auto;">Generate all missing receipts</button>
+      </div>
+      <div class="err-text" id="e-missing"></div>
+      <div class="ok-text" id="ok-missing" role="status"></div>
+    </section>
+
+    <h2>All receipts</h2>
+    <div class="filter-bar">
+      <input id="search" type="text" placeholder="Search receipt no., shop, invoice or M-Pesa code&hellip;">
+    </div>
+    <div class="tbl-wrap">
+    <table class="ledger">
+      <thead><tr><th>Receipt</th><th>Shop</th><th>Paid</th><th>Method</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody id="receipt-rows"><tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr></tbody>
+    </table>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;">
+      <button class="secondary" id="prev" hidden>Previous</button>
+      <button class="secondary" id="next" hidden>Next</button>
+    </div>
+  </div>
+</main>
+
+<script src="{% static 'duka/js/platform-receipts.js' %}"></script>
+</body>
+</html>

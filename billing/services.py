@@ -14,6 +14,7 @@ from django.utils import timezone
 from . import conf, mpesa
 from .models import BillingCredit, BillingEvent, Invoice, MpesaPayment, Subscription
 from .pricing import quote, _kes
+from .receipts import issue_receipt
 from .signals import billing_event
 
 logger = logging.getLogger(__name__)
@@ -276,10 +277,26 @@ def handle_stk_callback(payload):
     return payment
 
 
+def _issue_receipt_safely(invoice, reference):
+    """
+    A receipt is a record of money already received, so a failure here must never undo or block
+    the payment. The savepoint keeps a database error from poisoning the surrounding transaction;
+    a missing receipt is recreated the first time anyone asks for it.
+    """
+    try:
+        with transaction.atomic():
+            return issue_receipt(invoice, reference=reference)
+    except Exception:
+        logger.exception("Could not create the receipt for %s", invoice.number)
+        return None
+
+
 def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
     """
     Extend the subscription. Also accepts VOID invoices: if the customer paid a
     prompt we'd since replaced, the money is real, so honour it.
+    A Receipt is created for the invoice at the same time (`receipt` here is the payment
+    reference: an M-Pesa code, or "credit").
     -> events `invoice.payment_succeeded`, plus `subscription.activated` /
        `subscription.reactivated` when relevant.
     """
@@ -303,6 +320,7 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
             sub.branch_slots = max(invoice.branch_slots, sub.branch_slots)
             sub.save()
             activate_paid_branches(invoice.tenant, sub.branch_slots)
+            _issue_receipt_safely(invoice, receipt)
             record_event("invoice.payment_succeeded", invoice.tenant, invoice=invoice.number,
                          total=invoice.total, receipt=receipt, kind="branch_upgrade",
                          branch_slots=sub.branch_slots)
@@ -330,6 +348,7 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
         sub.branch_slots = max(invoice.branch_slots, 1)
         sub.save()
         activate_paid_branches(invoice.tenant, sub.branch_slots)
+        _issue_receipt_safely(invoice, receipt)
 
         tenant = invoice.tenant
         record_event("invoice.payment_succeeded", tenant, invoice=invoice.number,

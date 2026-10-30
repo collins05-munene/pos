@@ -29,9 +29,15 @@
     clearTimeout(hideTimer);
     result.textContent = '';
   }
-  function showResult(kind, title, body, autoHideMs) {
+  function showResult(kind, title, body, autoHideMs, receiptUrl) {
     clearResult();
-    result.appendChild(Duka.notice(kind, title, body, { dismiss: clearResult }));
+    const card = Duka.notice(kind, title, body, { dismiss: clearResult });
+    if (receiptUrl) {
+      card.querySelector('.notice-main').appendChild(
+        Duka.el('a', { href: receiptUrl, download: '', text: 'Download receipt (PDF)',
+                       style: 'display:inline-block;margin-top:8px;text-decoration:underline;' }));
+    }
+    result.appendChild(card);
     if (autoHideMs) hideTimer = setTimeout(clearResult, autoHideMs);
   }
 
@@ -147,7 +153,7 @@
       } else if (d.status === 'APPROVED') {
         showResult('good', 'Payment confirmed',
           'Your subscription is active' + (d.period_end ? ' until ' + when(d.period_end) : '') + '.' +
-          (d.reason ? ' ' + d.reason : ''), 12000);
+          (d.reason ? ' ' + d.reason : ''), d.receipt_url ? 0 : 12000, d.receipt_url);
         codeIn.value = '';
       } else if (d.status === 'PARTIAL') {
         showResult('warn', 'Part payment received', d.reason);   

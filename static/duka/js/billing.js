@@ -24,10 +24,15 @@
   }
   function clearAlert() { alertBox.className = 'alert'; alertBox.textContent = ''; }
 
+  // /billing/invoices/<number>/receipt/ -- the PDF download for a paid invoice
+  function receiptUrl(number) {
+    return `${rowsEl.dataset.receiptBase}${encodeURIComponent(number)}/receipt/`;
+  }
+
   function renderInvoiceRows(invoices) {
     rowsEl.innerHTML = '';
     if (!invoices || invoices.length === 0) {
-      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '5', text: 'No invoices yet.' })));
+      rowsEl.appendChild(Duka.el('tr', { class: 'empty-row' }, Duka.el('td', { colspan: '6', text: 'No invoices yet.' })));
       return;
     }
     invoices.forEach(inv => {
@@ -37,6 +42,10 @@
         Duka.el('td', { text: Duka.dt(inv.issued_at) }),
         Duka.el('td', {}, Duka.statusBadge(inv.status)),
         Duka.el('td', { class: 'num', text: Duka.money(inv.total) }),
+        Duka.el('td', {}, inv.status === 'PAID'
+          ? Duka.el('a', { href: receiptUrl(inv.number), download: '', text: 'Download',
+                           style: 'text-decoration:underline;' })
+          : null),
       ]);
       rowsEl.appendChild(tr);
     });
@@ -234,6 +243,11 @@
           clearInterval(pollTimer);
           stkStatus.textContent = '';
           showAlert('Payment received -- your account is active.', 'good');
+          if (data.receipt_url) {
+            alertBox.appendChild(document.createTextNode(' '));
+            alertBox.appendChild(Duka.el('a', { href: data.receipt_url, download: '',
+                                                text: 'Download your receipt', style: 'text-decoration:underline;' }));
+          }
           payBtn.disabled = false;
           payBtn.textContent = 'Send STK push';
           load();

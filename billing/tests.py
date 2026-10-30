@@ -492,3 +492,240 @@ class CreditNoticeTests(TestCase):
         services.issue_invoice(self.tenant, 1, include_install_fee=False)
         self.assertTrue(Notification.objects.filter(tenant=self.tenant,
                                                     title="Invoice paid from your credit").exists())
+
+
+# ---------------------------------------------------------------------------------------------
+# Subscription receipts
+# ---------------------------------------------------------------------------------------------
+import unittest
+
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
+from django.test import RequestFactory
+
+from billing import receipts
+from billing.models import Receipt
+
+try:
+    import reportlab  # noqa: F401
+    HAVE_REPORTLAB = True
+except ImportError:                                              # pragma: no cover
+    HAVE_REPORTLAB = False
+
+
+class ReceiptTestBase(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
+        self.tenant, self.owner, self.invoice = make_shop()          # 1 month = KES 3 incl. install fee
+
+    def pay(self, code="SJK3L9X2QP", amount="3"):
+        manual.register_mpesa_code(by=self.admin, code=code, amount=amount)
+        return manual.submit_manual_payment(self.tenant, user=self.owner, invoice=self.invoice, raw_code=code)
+
+    def get(self, view, user, path="/x/", **kwargs):
+        req = RequestFactory().get(path)
+        req.user, req.tenant = user, self.tenant
+        return view.as_view()(req, **kwargs)
+
+
+class ReceiptTests(ReceiptTestBase):
+
+    # ---- creation
+    def test_paying_creates_one_receipt_with_the_payment_details(self):
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        self.assertTrue(r.number.startswith("RCT-"))
+        self.assertEqual((r.tenant, r.amount), (self.tenant, Decimal("3")))
+        self.assertEqual(r.payment_method, Receipt.Method.MPESA_MANUAL)
+        self.assertEqual(r.payment_reference, "SJK3L9X2QP")
+        self.assertEqual(r.customer_name, "Shop A")
+        self.assertIsNone(r.generated_by)
+
+    def test_marking_paid_again_never_makes_a_second_receipt(self):
+        self.pay()
+        self.invoice.refresh_from_db()
+        services.mark_invoice_paid(self.invoice, receipt="SJK3L9X2QP")
+        receipts.issue_receipt(self.invoice)
+        self.assertEqual(Receipt.objects.filter(invoice=self.invoice).count(), 1)
+
+    def test_part_payments_list_every_code(self):
+        self.pay("PART000001", "1")
+        self.pay("PART000002", "2")
+        r = Receipt.objects.get(invoice=self.invoice)
+        self.assertEqual(r.payment_reference, "PART000001, PART000002")
+        self.assertEqual(r.amount, Decimal("3"))
+
+    def test_invoice_paid_from_credit_is_marked_as_credit(self):
+        self.pay("BIG0000001", "20")
+        nxt = services.issue_invoice(self.tenant, 1, include_install_fee=False)
+        self.assertEqual(nxt.status, Invoice.Status.PAID)
+        self.assertEqual(Receipt.objects.get(invoice=nxt).payment_method, Receipt.Method.CREDIT)
+
+    def test_shop_name_is_frozen_on_the_receipt(self):
+        self.pay()
+        Tenant.objects.filter(pk=self.tenant.pk).update(name="Renamed Ltd")
+        self.assertEqual(Receipt.objects.get(invoice=self.invoice).customer_name, "Shop A")
+
+    def test_unpaid_invoice_has_no_receipt(self):
+        with self.assertRaises(ValueError):
+            receipts.issue_receipt(self.invoice)
+
+    def test_old_paid_invoice_gets_its_receipt_on_demand(self):
+        self.pay()
+        Receipt.objects.all().delete()
+        self.invoice.refresh_from_db()
+        r = receipts.issue_receipt(self.invoice, generated_by=self.admin)
+        self.assertEqual((r.payment_reference, r.generated_by), ("SJK3L9X2QP", self.admin))
+
+    # ---- shop download
+    @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
+    def test_owner_downloads_a_pdf(self):
+        from billing.views import InvoiceReceiptView
+        self.pay()
+        resp = self.get(InvoiceReceiptView, self.owner, number=self.invoice.number)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertIn("attachment", resp["Content-Disposition"])
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+
+    def test_shop_cannot_download_unpaid_or_other_shops_receipts(self):
+        from billing.views import InvoiceReceiptView
+        with self.assertRaises(Http404):                                  # unpaid
+            self.get(InvoiceReceiptView, self.owner, number=self.invoice.number)
+        self.pay()
+        other, other_owner, _inv = make_shop("Shop B", "b@example.com")
+        req = RequestFactory().get("/x/")
+        req.user, req.tenant = other_owner, other
+        with self.assertRaises(Http404):                                  # someone else's invoice
+            InvoiceReceiptView.as_view()(req, number=self.invoice.number)
+
+    def test_manual_payment_response_links_to_the_receipt(self):
+        from billing.views import ManualPaymentView
+        manual.register_mpesa_code(by=self.admin, code="SJK3L9X2QP", amount="3")
+        req = RequestFactory().post("/billing/manual-payment/",
+                                    json.dumps({"code": "SJK3L9X2QP", "term_months": 1}),
+                                    content_type="application/json")
+        req.user, req.tenant = self.owner, self.tenant
+        body = json.loads(ManualPaymentView.as_view()(req).content)
+        self.assertEqual(body["status"], "APPROVED")
+        self.assertEqual(body["receipt_url"], f"/billing/invoices/{self.invoice.number}/receipt/")
+
+    # ---- platform admin
+    @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
+    def test_platform_admin_downloads_and_generates(self):
+        from platform_admin import receipt_views as rv
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        resp = self.get(rv.ReceiptDownloadView, self.admin, number=r.number)
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+
+        Receipt.objects.all().delete()
+        resp = self.get(rv.InvoiceReceiptView, self.admin, number=self.invoice.number)
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+        self.assertEqual(Receipt.objects.get(invoice=self.invoice).generated_by, self.admin)
+        self.assertTrue(BillingEvent.objects.filter(type="receipt.generated").exists())
+
+    def test_platform_admin_lists_missing_and_bulk_generates(self):
+        from platform_admin import receipt_views as rv
+        self.pay()
+        Receipt.objects.all().delete()
+        data = json.loads(self.get(rv.ReceiptsListView, self.admin).content)
+        self.assertEqual(data["summary"]["missing"], 1)
+        self.assertEqual(data["missing"][0]["invoice"], self.invoice.number)
+
+        req = RequestFactory().post("/x/", json.dumps({"all": True}), content_type="application/json")
+        req.user = self.admin
+        out = json.loads(rv.ReceiptGenerateView.as_view()(req).content)
+        self.assertEqual((out["generated"], out["remaining"]), (1, 0))
+        self.assertEqual(Receipt.objects.count(), 1)
+
+    def test_only_superusers_reach_platform_receipts(self):
+        from platform_admin import receipt_views as rv
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        for view, kw in ((rv.ReceiptsListView, {}), (rv.ReceiptDownloadView, {"number": r.number})):
+            with self.assertRaises(PermissionDenied):
+                self.get(view, self.owner, **kw)
+
+    @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
+    def test_pdf_renders_for_every_payment_kind(self):
+        self.pay()
+        for method in Receipt.Method.values:
+            Receipt.objects.filter(invoice=self.invoice).update(payment_method=method)
+            r = Receipt.objects.get(invoice=self.invoice)
+            self.assertTrue(receipts.render_receipt_pdf(r).startswith(b"%PDF"))
+
+
+class ReceiptVerificationTests(ReceiptTestBase):
+    """Public verify page, verification codes and void/restore."""
+
+    def verify(self, code):
+        from billing.views import VerifyReceiptView
+        req = RequestFactory().get("/billing/verify/x/")
+        return VerifyReceiptView.as_view()(req, code=code)
+
+    def test_every_receipt_gets_its_own_unguessable_code(self):
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        self.assertRegex(r.verify_code, r"^[A-HJ-NP-Z2-9]{12}$")
+        self.assertRegex(r.verify_code_display, r"^\w{4}-\w{4}-\w{4}$")
+        self.assertNotIn(r.number, r.verify_code)
+        from billing.models import new_verify_code
+        self.assertEqual(len({new_verify_code() for _ in range(200)}), 200)
+
+    def test_verify_page_shows_the_record_but_not_private_details(self):
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        for typed in (r.verify_code, r.verify_code_display, r.verify_code.lower()):
+            resp = self.verify(typed)
+            self.assertEqual(resp.status_code, 200)
+            html = resp.content.decode()
+            self.assertIn("Genuine receipt", html)
+            self.assertIn(r.number, html)
+            self.assertIn("Shop A", html)                             # two short words: nothing to mask
+            self.assertNotIn("0712000000", html)                      # shop phone
+            self.assertNotIn("SJK3L9X2QP", html)                      # M-Pesa code
+
+    def test_unknown_code_is_a_404_page(self):
+        resp = self.verify("ABCDEFGHJKLM")
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("No receipt found", resp.content.decode())
+        self.assertEqual(self.verify("short").status_code, 404)
+
+    def test_mask_name(self):
+        self.assertEqual(receipts.mask_name("Mama Njeri Mini Mart"), "Mama N**** M*** M***")
+        self.assertEqual(receipts.mask_name("Duka"), "Duk*")
+        self.assertEqual(receipts.mask_name(""), "")
+
+    def test_voiding_changes_the_verify_page_and_can_be_undone(self):
+        from platform_admin.receipt_views import ReceiptVoidView
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+
+        def post(action, payload):
+            req = RequestFactory().post("/x/", json.dumps(payload), content_type="application/json")
+            req.user = self.admin
+            return ReceiptVoidView.as_view()(req, number=r.number, action=action)
+
+        self.assertEqual(post("void", {}).status_code, 400)                # a reason is required
+        self.assertEqual(post("void", {"reason": "Payment reversed"}).status_code, 200)
+        r.refresh_from_db()
+        self.assertTrue(r.is_void)
+        self.assertEqual((r.void_reason, r.voided_by), ("Payment reversed", self.admin))
+        self.assertIn("Receipt withdrawn", self.verify(r.verify_code).content.decode())
+        self.assertTrue(BillingEvent.objects.filter(type="receipt.voided").exists())
+
+        self.assertEqual(post("restore", {}).status_code, 200)
+        r.refresh_from_db()
+        self.assertFalse(r.is_void)
+        self.assertIn("Genuine receipt", self.verify(r.verify_code).content.decode())
+        with self.assertRaises(Http404):
+            post("explode", {})
+
+    @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
+    def test_pdf_with_qr_and_void_stamp_renders(self):
+        self.pay()
+        r = Receipt.objects.get(invoice=self.invoice)
+        self.assertTrue(receipts.render_receipt_pdf(r, base_url="https://app.example.com").startswith(b"%PDF"))
+        r.is_void, r.void_reason = True, "Payment reversed"
+        self.assertTrue(receipts.render_receipt_pdf(r).startswith(b"%PDF"))      # no site URL: no QR, still fine

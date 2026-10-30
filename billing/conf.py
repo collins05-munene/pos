@@ -20,7 +20,16 @@ DEFAULTS = {
     "MANUAL_PAY_LABEL": "Till number",    
     "MANUAL_PAY_NUMBER": "",              
     "MANUAL_PAY_NAME": "",               
-    "MANUAL_MAX_ATTEMPTS_PER_HOUR": 8,    
+    "MANUAL_MAX_ATTEMPTS_PER_HOUR": 8,
+    # Printed in the header of every subscription receipt (override in settings.BILLING).
+    "COMPANY_NAME": "UniSale Systems",
+    "COMPANY_ADDRESS": "",
+    "COMPANY_PHONE": "",
+    "COMPANY_EMAIL": "",
+    "RECEIPT_FOOTER": "Thank you for your business.",
+    # Public address of the site, e.g. "https://app.unisale.co.ke". Used for the QR code on receipts.
+    # Leave empty to use whatever host the download request came in on.
+    "SITE_URL": "",
 }
 
 
