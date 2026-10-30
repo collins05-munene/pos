@@ -6,6 +6,7 @@ from .models import Order, OrderItem
 from inventory.models import Branch
 from inventory.stock import change_stock, available_units, InsufficientStock
 from products.models import ProductVariant
+from promotions.pricing import PriceBook, LinePrice, money
 from .exceptions import InsufficientStockError
 from .receipts import create_receipt
 
@@ -20,6 +21,34 @@ def resolve_user_branch(user):
     """
     from tenants.branches import branch_for_user
     return branch_for_user(user)
+
+
+def price_sale_line(book, variant, quantity, client_price, *, offline, flags):
+    """
+    Decide what one sale line is recorded as: (list price, discount per unit, Discount | None).
+
+    Online, the cart's own price is the list price and the server works out the discount itself:
+    nothing a browser sends can create a discount.
+
+    Offline, the sale has already happened and the customer paid what the till showed, so the
+    server never refuses it. It checks the price against what the rules say it should have been:
+      * equals the discounted price the rules give    -> recorded as that discount
+      * equals the plain list price                   -> no discount (customer paid full price)
+      * anything else                                 -> kept as paid, flagged PRICE_MISMATCH
+    """
+    if not offline:
+        line = book.price(variant, quantity, list_price=client_price)
+        return line.list_price, line.discount_per_unit, line.discount
+
+    current = money(variant.retail_price)
+    expected = book.price(variant, quantity)
+    if expected.has_discount and money(client_price) == expected.net_price:
+        return expected.list_price, expected.discount_per_unit, expected.discount
+    if money(client_price) == current:
+        return current, Decimal('0.00'), None
+    flags.append({"type": "PRICE_MISMATCH", "sku": variant.sku,
+                  "sold_at": str(client_price), "current_price": str(variant.retail_price)})
+    return client_price, Decimal('0.00'), None
 
 
 def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_received=None,
@@ -74,9 +103,12 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             synced_at=timezone.now() if offline else None,
         )
 
+        running_subtotal = Decimal('0.00')
+        running_discount = Decimal('0.00')
         running_revenue = Decimal('0.00')
         running_cogs = Decimal('0.00')
         sold_variants = []
+        book = PriceBook(tenant=order.tenant, branch=branch, at=occurred_at)
 
         for loop_var in cart:
             if isinstance(loop_var, (tuple, list)):
@@ -98,7 +130,7 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
                 variant = variant_obj
             else:
                 variant_id = getattr(item, 'variant_id', None) or item_key
-                variant = ProductVariant.objects.select_related('base_variant').get(id=variant_id)
+                variant = ProductVariant.objects.select_related('base_variant', 'product', 'product__category').get(id=variant_id)
 
             retail_price = Decimal(str(raw_price))
             quantity_sold = int(raw_qty)
@@ -109,26 +141,32 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
             except InsufficientStock:
                 raise InsufficientStockError(variant, int(available_units(branch, variant)), quantity_sold)
 
-            if offline:
-                if stock.quantity < 0:
-                    flags.append({"type": "NEGATIVE_STOCK", "sku": variant.sku, "stock_after": str(stock.quantity)})
-                if retail_price != variant.retail_price:
-                    flags.append({"type": "PRICE_MISMATCH", "sku": variant.sku,
-                                  "sold_at": str(retail_price), "current_price": str(variant.retail_price)})
+            if offline and stock.quantity < 0:
+                flags.append({"type": "NEGATIVE_STOCK", "sku": variant.sku, "stock_after": str(stock.quantity)})
+
+            list_price, discount_per_unit, discount = price_sale_line(
+                book, variant, quantity_sold, retail_price, offline=offline, flags=flags)
 
             OrderItem(
                 order=order,
                 variant=variant,
                 quantity=quantity_sold,
-                retail_price=retail_price,
-                cost_price=cost_price
+                retail_price=list_price,
+                cost_price=cost_price,
+                discount=discount,
+                discount_name=discount.name if discount else '',
+                discount_per_unit=discount_per_unit,
             ).save()
 
             sold_variants.append(variant) 
 
-            running_revenue += retail_price * quantity_sold
+            running_subtotal += list_price * quantity_sold
+            running_discount += discount_per_unit * quantity_sold
+            running_revenue += (list_price - discount_per_unit) * quantity_sold
             running_cogs += cost_price * quantity_sold
 
+        order.subtotal = running_subtotal
+        order.discount_total = running_discount
         order.total_revenue = running_revenue
         order.total_cogs = running_cogs
         order.total_profit = running_revenue - running_cogs

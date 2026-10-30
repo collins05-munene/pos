@@ -137,6 +137,8 @@
         <li><a href="{% url 'staff:staff-list' %}">Staff</a></li>
         <li><a href="{% url 'branches:branch-list' %}">Branches</a></li>
         <li class="menu-title">System</li>
+        <li><a href="{% url 'settings' %}">Settings</a></li>
+        <li><a href="{% url 'discount-list' %}">Discounts</a></li>
         <li><a href="{% url 'backup-list' %}">Backups</a></li>
         <li><a href="{% url 'activity-logs' %}">Audit Logs</a></li>
         <li class="menu-title">Support</li>
@@ -172,8 +174,14 @@
         <li><a href="{% url 'category-list' %}">Categories</a></li>
         <li><a href="{% url 'brand-list' %}">Brands</a></li>
         <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
+        <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
         <li class="menu-title">Register</li>
         <li><a href="{% url 'close_register' %}">Close Register</a></li>
+        {% if user.role == 'MANAGER' %}
+        <li class="menu-title">Settings</li>
+        <li><a href="{% url 'settings' %}">Settings</a></li>
+        <li><a href="{% url 'discount-list' %}">Discounts</a></li>
+        {% endif %}
         <li class="menu-title">Account</li>
         <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
         <li class="menu-title">Support</li>

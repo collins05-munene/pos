@@ -33,11 +33,13 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper
+from django.db.models import Sum
 from django.utils import timezone
 
 from inventory.stock import change_stock
 from tenants.models import next_number as next_tenant_number
+
+from tenants.models import get_settings
 
 from .models import CashRegisterSession, Order, Refund, RefundItem
 from .receipts import _line_name
@@ -49,8 +51,13 @@ class RefundError(Exception):
     """A refund that cannot be made; the message is safe to show to the user."""
 
 
-def refund_window_days():
-    """How long after a sale a manager may refund it. Admins may go past it."""
+def refund_window_days(tenant=None):
+    """
+    How long after a sale a manager may refund it (Settings -> Refunds). Admins may go past it.
+    Falls back to the platform default when no shop is known.
+    """
+    if tenant is not None:
+        return int(get_settings(tenant).refund_window_days)
     return int(getattr(settings, 'POS_REFUND_WINDOW_DAYS', 30))
 
 
@@ -74,7 +81,7 @@ def refundable_lines(order):
             'item': item,
             'name': _line_name(item.variant),
             'sku': item.variant.sku,
-            'unit_price': item.retail_price,
+            'unit_price': item.net_price,          # what the customer actually paid per unit (after any discount)
             'sold': item.quantity,
             'refunded': refunded,
             'refundable': item.quantity - refunded,
@@ -101,9 +108,10 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
                 return existing, False
 
         age_days = (timezone.now() - order.created_at).days
-        if age_days > refund_window_days() and not _is_admin(user):
+        window = refund_window_days(order.tenant)
+        if age_days > window and not _is_admin(user):
             raise RefundError(
-                f"This sale is {age_days} days old. Refunds are allowed within {refund_window_days()} days; "
+                f"This sale is {age_days} days old. Refunds are allowed within {window} days; "
                 f"an admin can approve older ones.")
 
         branch = order.branch
@@ -138,7 +146,7 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
         built = []
         for line, qty, restock in wanted:
             item = line['item']
-            amount = _money(item.retail_price * qty)
+            amount = _money(item.net_price * qty)            # discounted price: never refund more than was paid
             cogs = _money(item.cost_price * qty) if restock else Decimal('0.00')
             total += amount
             cogs_back += cogs
@@ -174,41 +182,19 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
             RefundItem(
                 refund=refund, order_item=item, variant=item.variant,
                 description=line['name'], sku=line['sku'], quantity=qty,
-                unit_price=item.retail_price, unit_cost=item.cost_price,
+                unit_price=item.net_price, unit_cost=item.cost_price,
                 restocked=restock, amount=amount, cogs_reversed=cogs,
             ).save()
         return refund, True
 
 
-def refund_totals(start=None, end=None, branch=None):
-    """
-    Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures.
-    Pass branch to count only that branch's refunds.
-
-    cogs       full cost of every refunded item (the sale is undone, so its cost is reversed)
-    writeoffs  cost of refunded items that were NOT restocked (lost stock, shown as its own line)
-    profit     profit given up = amount - cogs + writeoffs  (== amount - restocked cost)
-    """
+def refund_totals(start=None, end=None):
+    """Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures."""
     qs = Refund.objects.all()
-    if branch is not None:
-        qs = qs.filter(branch=branch)
     if start is not None:
         qs = qs.filter(created_at__gte=start)
     if end is not None:
         qs = qs.filter(created_at__lt=end)
-
+    agg = qs.aggregate(amount=Sum('total_amount'), cogs=Sum('cogs_reversed'), profit=Sum('profit_reversed'))
     zero = Decimal('0.00')
-    head = qs.aggregate(amount=Sum('total_amount'), profit=Sum('profit_reversed'))
-
-    cost = ExpressionWrapper(F('quantity') * F('unit_cost'),
-                             output_field=DecimalField(max_digits=14, decimal_places=2))
-    items = RefundItem.objects.filter(refund__in=qs).aggregate(
-        cogs=Sum(cost),
-        writeoffs=Sum(cost, filter=Q(restocked=False)),
-    )
-    return {
-        'amount': head['amount'] or zero,
-        'profit': head['profit'] or zero,
-        'cogs': items['cogs'] or zero,
-        'writeoffs': items['writeoffs'] or zero,
-    }
+    return {k: (v or zero) for k, v in agg.items()}

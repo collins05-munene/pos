@@ -10,7 +10,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
 
-from tenants.models import next_number as next_tenant_number
+from tenants.models import get_settings, next_number as next_tenant_number
 
 from .models import Receipt
 
@@ -42,13 +42,20 @@ def create_receipt(order, issued_at=None):
         return existing
 
     items = order.items.select_related('variant__product', 'variant__base_variant')
-    lines = [{
-        'name': _line_name(i.variant),
-        'sku': i.variant.sku,
-        'quantity': i.quantity,
-        'unit_price': _money(i.retail_price),
-        'line_total': _money(i.revenue_line),
-    } for i in items]
+    lines = []
+    for i in items:
+        line = {
+            'name': _line_name(i.variant),
+            'sku': i.variant.sku,
+            'quantity': i.quantity,
+            # list price x quantity; a discount, if any, is shown on its own line beneath it
+            'unit_price': _money(i.retail_price),
+            'line_total': _money(i.retail_price * i.quantity),
+        }
+        if i.discount_per_unit > 0:
+            line['discount'] = _money(i.discount_line)
+            line['discount_name'] = i.discount_name
+        lines.append(line)
 
     branch = order.branch
     cashier = order.cashier
@@ -63,7 +70,10 @@ def create_receipt(order, issued_at=None):
         cashier_name=cashier.get_full_name() or cashier.get_username(),
         payment_method=order.payment_method,
         lines=lines,
+        subtotal=order.subtotal,
+        discount_total=order.discount_total,
         total=order.total_revenue,
+        footer=get_settings(order.tenant).receipt_footer,
         amount_received=order.amount_received,
         change_given=order.change_given,
         issued_at=issued_at or timezone.now(),

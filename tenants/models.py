@@ -52,7 +52,7 @@ class Tenant(models.Model):
         """May this tenant's users use the product right now?"""
         if not self.is_active:
             return False
-        sub = getattr(self, "subscription", None) 
+        sub = getattr(self, "subscription", None)  # missing row -> AttributeError subclass
         return bool(sub and sub.grants_access())
 
 
@@ -161,6 +161,9 @@ class TenantOwnedModel(models.Model):
         super().save(*args, **kwargs)
 
 
+# --------------------------------------------------------------------------
+# Per-tenant document numbering (each shop's invoices start at 000001)
+# --------------------------------------------------------------------------
 class TenantSequence(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="sequences")
     name = models.CharField(max_length=30)
@@ -181,3 +184,63 @@ def next_number(tenant, name, prefix="", width=6):
         seq.last_value += 1
         seq.save(update_fields=["last_value"])
     return f"{prefix}{seq.last_value:0{width}d}"
+
+# --------------------------------------------------------------------------
+# Per-shop business rules (Settings page)
+# --------------------------------------------------------------------------
+class TenantSettings(TenantOwnedModel):
+    """
+    One row per shop holding the rules the owner/admin can change without a developer.
+
+    Add a new rule by adding a field here + one entry in tenants/settings_registry.py;
+    the Settings page, validation and audit trail pick it up from the registry.
+    Always read it through get_settings(tenant): it creates the row with defaults on first use.
+    """
+    class BelowCost(models.TextChoices):
+        LIMIT = "LIMIT", "Stop the discount at cost price (recommended)"
+        ALLOW = "ALLOW", "Allow selling below cost"
+
+    # ---- discounts
+    discounts_enabled = models.BooleanField(
+        default=True, help_text="Master switch. Off = no discount is applied anywhere, nothing is deleted.")
+    managers_can_manage_discounts = models.BooleanField(
+        default=True, help_text="Off = only admins can create, edit or switch discounts.")
+    max_discount_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=50,
+        help_text="No sale line may ever be discounted by more than this %, whoever set it up.")
+    manager_max_discount_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=20,
+        help_text="The most a manager (not an admin) may give on one product.")
+    below_cost_policy = models.CharField(max_length=10, choices=BelowCost.choices, default=BelowCost.LIMIT)
+
+    # ---- refunds
+    refund_window_days = models.PositiveIntegerField(
+        default=30, help_text="Managers can refund a sale up to this many days after it. Admins can go past it.")
+
+    # ---- receipts
+    receipt_footer = models.CharField(
+        max_length=200, blank=True, default="", help_text="Printed at the bottom of every receipt, e.g. 'Goods once sold are not returnable'.")
+
+    # ---- offline selling
+    offline_max_hours = models.PositiveIntegerField(
+        default=72, help_text="How long a till may keep selling without internet before it must reconnect.")
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Tenant settings"
+        constraints = [models.UniqueConstraint(fields=["tenant"], name="uniq_settings_per_tenant")]
+
+    def __str__(self):
+        return f"Settings for {self.tenant_id}"
+
+
+def get_settings(tenant=None):
+    """The shop's settings row (created with defaults the first time). `tenant` defaults to the active one."""
+    tenant = tenant or get_current_tenant()
+    if tenant is None:
+        return TenantSettings()          # unsaved defaults: callers outside a tenant still get sane rules
+    obj = TenantSettings.all_objects.filter(tenant=tenant).first()
+    if obj is None:
+        obj, _ = TenantSettings.all_objects.get_or_create(tenant=tenant)
+    return obj

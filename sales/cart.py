@@ -3,21 +3,45 @@ from decimal import Decimal
 
 from products.models import ProductVariant
 from inventory.models import StockLevel
+from promotions.pricing import PriceBook
+from tenants.context import get_current_tenant
 from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 
 
 class CartItem:
-    def __init__(self, variant_id, name, sku, price, quantity):
+    """
+    One cart line. `price` is the LIST price per unit; any discount is carried separately so the
+    till can show 'was / now'. `total_price` is what the customer pays for the line.
+    """
+    def __init__(self, variant_id, name, sku, price, quantity, discount_per_unit=0, discount_name=''):
         self.variant_id = int(variant_id)
         self.name = name
         self.sku = sku
         self.price = Decimal(price)
         self.quantity = int(quantity)
+        self.discount_per_unit = Decimal(discount_per_unit)
+        self.discount_name = discount_name or ''
+
+    @property
+    def net_price(self):
+        return self.price - self.discount_per_unit
+
+    @property
+    def list_total(self):
+        return self.price * self.quantity
+
+    @property
+    def discount_total(self):
+        return self.discount_per_unit * self.quantity
 
     @property
     def total_price(self):
-        return self.price * self.quantity
+        return self.net_price * self.quantity
+
+    @property
+    def has_discount(self):
+        return self.discount_per_unit > 0
 
 
 class POSCart:
@@ -31,6 +55,7 @@ class POSCart:
     def __init__(self, request):
         self.session = request.session
         self.user = request.user
+        self._priced = None
         cart = self.session.get('pos_cart')
         if not cart:
             cart = self.session['pos_cart'] = {}
@@ -144,19 +169,44 @@ class POSCart:
         return problems
 
     def save(self):
+        self._priced = None
         self.session.modified = True
 
+    def _pricing(self):
+        """{variant_id(str): LinePrice | None} for the whole cart, computed once per request."""
+        if self._priced is None:
+            ids = [int(k) for k in self.cart]
+            variants = {v.id: v for v in ProductVariant.objects
+                        .select_related('product', 'product__category').filter(id__in=ids)} if ids else {}
+            tenant = get_current_tenant() or getattr(self.user, 'tenant', None)
+            book = PriceBook(tenant=tenant, branch=resolve_user_branch(self.user))
+            priced = {}
+            for key, item in self.cart.items():
+                variant = variants.get(int(item['variant_id']))
+                priced[key] = (book.price(variant, int(item['quantity']), list_price=Decimal(item['price']))
+                               if variant is not None else None)
+            self._priced = priced
+        return self._priced
+
     def __iter__(self):
-        for item in self.cart.values():
-            yield CartItem(**item)
+        priced = self._pricing()
+        for key, item in self.cart.items():
+            line = priced.get(key)
+            yield CartItem(**item,
+                           discount_per_unit=line.discount_per_unit if line else 0,
+                           discount_name=line.discount_name if line else '')
 
     @property
     def as_json(self):
-        """The cart lines as JSON (embedded in the page so a dropped connection can hand the cart to the offline terminal)."""
+        """
+        The cart lines as JSON (embedded in the page so a dropped connection can hand the cart to the
+        offline terminal). `price` is what the customer pays per unit (discount already taken off);
+        the server re-derives the discount from it when the sale syncs.
+        """
         return json.dumps([
-            {'variant_id': int(i['variant_id']), 'name': i['name'], 'sku': i['sku'],
-             'price': str(i['price']), 'quantity': int(i['quantity'])}
-            for i in self.cart.values()
+            {'variant_id': int(i.variant_id), 'name': i.name, 'sku': i.sku,
+             'price': str(i.net_price), 'list_price': str(i.price), 'quantity': int(i.quantity)}
+            for i in self
         ])
 
     @property
@@ -164,5 +214,19 @@ class POSCart:
         return sum(int(item['quantity']) for item in self.cart.values())
 
     @property
+    def get_subtotal(self):
+        """Value of the cart at list price, before discounts."""
+        return sum((Decimal(item['price']) * int(item['quantity']) for item in self.cart.values()), Decimal('0.00'))
+
+    @property
+    def get_discount_total(self):
+        return sum((l.discount_total for l in self._pricing().values() if l), Decimal('0.00'))
+
+    @property
+    def has_discounts(self):
+        return self.get_discount_total > 0
+
+    @property
     def get_total_price(self):
-        return sum(Decimal(item['price']) * int(item['quantity']) for item in self.cart.values())
+        """What the customer pays: subtotal minus discounts."""
+        return self.get_subtotal - self.get_discount_total

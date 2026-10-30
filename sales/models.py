@@ -203,7 +203,14 @@ class Order(TenantOwnedModel):
     cashier = models.ForeignKey(User, on_delete=models.PROTECT, related_name='sales')
     cash_session = models.ForeignKey(CashRegisterSession, on_delete=models.PROTECT, related_name='orders', null=True, blank=True)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
-    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    total_revenue = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00,
+        help_text="What the customer actually paid for the goods: subtotal minus discounts.")
+    subtotal = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00,
+        help_text="Value of the goods at list price, before discounts (0 on sales made before discounts existed).")
+    discount_total = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00, help_text="Total discounts given on this sale.")
     total_cogs = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_profit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     amount_received = models.DecimalField(
@@ -265,14 +272,30 @@ class OrderItem(TenantOwnedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
-    retail_price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Selling price per unit")
+    retail_price = models.DecimalField(max_digits=12, decimal_places=2, help_text="List selling price per unit, before any discount")
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Buying price per unit")
-    revenue_line = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.ForeignKey('promotions.Discount', null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name='order_items', help_text="The discount rule that was applied, if any")
+    discount_name = models.CharField(max_length=120, blank=True, default='',
+                                     help_text="Name of the discount at the time of sale (survives edits/deletes)")
+    discount_per_unit = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                            help_text="KSH taken off each unit")
+    revenue_line = models.DecimalField(max_digits=12, decimal_places=2,
+                                       help_text="What the customer paid for this line (after discount)")
     cogs_line = models.DecimalField(max_digits=12, decimal_places=2)
     profit_line = models.DecimalField(max_digits=12, decimal_places=2)
 
+    @property
+    def net_price(self):
+        """What the customer actually paid per unit. Refunds hand back exactly this."""
+        return self.retail_price - self.discount_per_unit
+
+    @property
+    def discount_line(self):
+        return self.discount_per_unit * self.quantity
+
     def save(self, *args, **kwargs):
-        self.revenue_line = self.retail_price * self.quantity
+        self.revenue_line = self.net_price * self.quantity
         self.cogs_line = self.cost_price * self.quantity
         self.profit_line = self.revenue_line - self.cogs_line
         super().save(*args, **kwargs)
@@ -293,7 +316,11 @@ class Receipt(TenantOwnedModel):
     cashier_name = models.CharField(max_length=150)
     payment_method = models.CharField(max_length=10, default='CASH')
     lines = models.JSONField(default=list)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                   help_text="Before discounts (0 on receipts issued before discounts existed)")
+    discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2)
+    footer = models.CharField(max_length=200, blank=True, default='', help_text="Shop's footer text at the time of sale")
     amount_received = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     change_given = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
  

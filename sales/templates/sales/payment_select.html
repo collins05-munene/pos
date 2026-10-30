@@ -108,6 +108,10 @@
                 <p>Enter the amount received from the customer.</p>
             </div>
             <div style="text-align: right;">
+                {% if cart.has_discounts %}
+                    <span style="font-size: 0.8rem; color: #9ca3af; display: block; text-decoration: line-through;">KSH {{ cart.get_subtotal }}</span>
+                    <span style="font-size: 0.8rem; color: #b45309; font-weight:600; display: block;">Discounts: &minus;KSH {{ cart.get_discount_total }}</span>
+                {% endif %}
                 <span style="font-size: 0.85rem; color: #6b7280; display: block;">Total Due:</span>
                 <strong id="total-due" data-amount="{{ total_amount }}" data-cart="{{ cart.as_json }}" style="font-size: 1.5rem; color: #2563eb;">KSH {{ total_amount }}</strong>
             </div>

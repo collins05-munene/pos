@@ -65,6 +65,9 @@
                     <div style="flex: 1.8;">
                         <span style="font-weight: 500; display:block; font-size:0.9rem;">{{ item.name }}</span>
                         <small style="color:#6b7280; font-family: monospace;">{{ item.sku }}</small>
+                        {% if item.has_discount %}
+                            <small style="display:block; color:#b45309; font-weight:600;">&#127991; {{ item.discount_name }}: &minus;KSH {{ item.discount_total }}</small>
+                        {% endif %}
                     </div>
 
                     <div style="flex: 1.2; text-align: center;">
@@ -77,6 +80,7 @@
                     </div>
 
                     <div style="flex: 1; text-align: right; font-weight: 500;">
+                        {% if item.has_discount %}<small style="display:block; color:#9ca3af; text-decoration:line-through; font-weight:400;">KSH {{ item.list_total }}</small>{% endif %}
                         KSH {{ item.total_price }}
                     </div>
 
@@ -98,8 +102,16 @@
     </div>
  
     <div class="cart-totals-footer">
+        {% if cart.has_discounts %}
+        <div style="display: flex; justify-content: space-between; font-size: 0.95rem; color:#6b7280; margin-bottom: 0.25rem;">
+            <span>Subtotal:</span><span>KSH {{ cart.get_subtotal }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.95rem; color:#b45309; font-weight:600; margin-bottom: 0.5rem;">
+            <span>Discounts:</span><span>&minus;KSH {{ cart.get_discount_total }}</span>
+        </div>
+        {% endif %}
         <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; margin-bottom: 1.5rem;">
-            <span>Subtotal Baseline:</span>
+            <span>{% if cart.has_discounts %}Total:{% else %}Subtotal Baseline:{% endif %}</span>
             <span style="color: #2563eb;">KSH {{ cart.get_total_price|default:"0.00" }}</span>
         </div>
 

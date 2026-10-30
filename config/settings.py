@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'payments',
     'products',
     'supplier',
+    'promotions',
     'sales',
     'users',
     "tenants", 

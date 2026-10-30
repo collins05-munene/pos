@@ -15,7 +15,15 @@
     {% endif %}
 
     <span class="tile-sku">{{ variant.sku }}</span>
-    <div class="tile-price" style="margin-bottom: 0.25rem;">KSH {{ variant.retail_price }}</div>
+    {% if variant.has_promo %}
+        <span style="display:inline-block; align-self:flex-start; background:#fef3c7; color:#92400e; font-size:0.75rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:10px; margin-bottom:0.25rem;">&#127991; {{ variant.promo_name }}</span>
+        <div class="tile-price" style="margin-bottom: 0.25rem;">
+            KSH {{ variant.net_price }}
+            <small style="color:#9ca3af; text-decoration:line-through; font-weight:500; margin-left:0.35rem;">{{ variant.retail_price }}</small>
+        </div>
+    {% else %}
+        <div class="tile-price" style="margin-bottom: 0.25rem;">KSH {{ variant.retail_price }}</div>
+    {% endif %}
     <small style="display:block; margin-bottom:0.6rem; font-weight:600; color:{% if variant.available <= 0 %}#991b1b{% elif variant.available <= 5 %}#b45309{% else %}#166534{% endif %};">
         {% if variant.available <= 0 %}Out of stock{% else %}{{ variant.available }} available{% endif %}
     </small>

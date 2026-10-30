@@ -20,6 +20,7 @@ from django.conf.urls.static import static
 from django.urls import include, path
 
 from users.views import HomepageView
+from tenants.settings_views import SettingsView
 from config.pwa_views import service_worker_view, OfflineView
 
 urlpatterns = [
@@ -43,6 +44,9 @@ urlpatterns = [
     path("branches/", include("tenants.branch_urls")),
     
     path("backups/", include("backups.urls")),
+
+    path("settings/", SettingsView.as_view(), name="settings"),
+    path("discounts/", include("promotions.urls")),
 
     path("", include("notifications.urls")),
 
