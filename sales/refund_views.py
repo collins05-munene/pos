@@ -69,7 +69,7 @@ class RefundListView(AdminRequiredMixin, View):
         return render(request, 'sales/refund_list.html', {
             'page_obj': page_obj, 'q': q, 'find': find, 'found': found, 'total_refunded': total,
             'date_from': request.GET.get('from', ''), 'date_to': request.GET.get('to', ''),
-            'qs_without_page': params.urlencode(), 'window_days': refund_window_days(),
+            'qs_without_page': params.urlencode(), 'window_days': refund_window_days(request.tenant),
         })
 
 
@@ -91,7 +91,7 @@ class RefundCreateView(AdminRequiredMixin, View):
             'notes_value': (posted or {}).get('notes', ''),
             'nothing_left': all(l['refundable'] == 0 for l in lines),
             'refunds': order.refunds.select_related('processed_by'),
-            'window_days': refund_window_days(),
+            'window_days': refund_window_days(order.tenant),
         }
 
     def get(self, request, receipt_pk):

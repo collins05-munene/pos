@@ -1,0 +1,66 @@
+{% extends 'users/base.html' %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="directory-container" style="max-width:900px;">
+  <div class="page-header">
+    <div class="header-text">
+      <h2>Settings</h2>
+      <p>The rules your shop runs by. Changes apply immediately and are recorded in the audit log.</p>
+    </div>
+  </div>
+
+  {% if saved %}<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;margin-bottom:12px;">Settings saved.</div>{% endif %}
+  {% if not editable %}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:10px 14px;border-radius:8px;margin-bottom:12px;">
+      You can see these rules, but only an admin can change them.
+    </div>
+  {% endif %}
+  {% if form.non_field_errors %}<div class="field-error-message">{{ form.non_field_errors }}</div>{% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for s in sections %}
+    <div class="form-card" style="margin-bottom:16px;">
+      <div class="form-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <h3 class="form-title">{{ s.title }}</h3>
+          <p class="form-subtitle">{{ s.desc }}</p>
+        </div>
+        {% if s.link %}<a class="btn" href="{{ s.link.url }}">{{ s.link.label }}</a>{% endif %}
+      </div>
+      <div class="form-fields-stack">
+        {% for field in s.bound %}
+          <div class="form-field-group {% if field.errors %}has-errors{% endif %}">
+            {% if field.field.widget.input_type == 'checkbox' %}
+              <label class="field-label" style="display:flex;gap:10px;align-items:center;">{{ field }} {{ field.label }}</label>
+            {% else %}
+              <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+              <div class="field-widget-container">{{ field }}</div>
+            {% endif %}
+            {% if field.help_text %}<div class="field-help-text">{{ field.help_text }}</div>{% endif %}
+            {% for e in field.errors %}<div class="field-error-message">{{ e }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if editable %}
+      <div class="form-actions" style="margin-bottom:24px;">
+        <button type="submit" class="btn btn-submit">Save settings</button>
+      </div>
+    {% endif %}
+  </form>
+
+  {% if shortcuts %}
+  <h3 style="margin:24px 0 8px;">Also in the system</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+    {% for sc in shortcuts %}
+      <a href="{{ sc.url }}" style="display:block;padding:14px;border:1px solid #e5e7eb;border-radius:8px;text-decoration:none;color:inherit;background:#fff;">
+        <strong>{{ sc.label }}</strong><br><small style="color:#6b7280;">{{ sc.desc }}</small>
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -34,6 +34,8 @@ from django.utils.dateparse import parse_datetime
 
 from inventory.models import StockLevel
 from products.models import Category, ProductVariant, fmt_qty
+from promotions.pricing import PriceBook
+from tenants.models import get_settings
 from users.mixins import MANAGEMENT_ROLES
 
 from .cart import CartItem
@@ -48,8 +50,10 @@ MAX_QTY = 100_000
 TWO_PLACES = Decimal("0.01")
 
 
-def max_offline_hours():
-    """How long a till may sell offline on one snapshot before it must reconnect."""
+def max_offline_hours(tenant=None):
+    """How long a till may sell offline on one snapshot before it must reconnect (Settings -> Offline selling)."""
+    if tenant is not None:
+        return int(get_settings(tenant).offline_max_hours)
     return int(getattr(settings, "POS_OFFLINE_MAX_HOURS", 72))
 
 
@@ -70,27 +74,33 @@ def build_snapshot(user, tenant):
     session = CashRegisterSession.get_active_session(branch) if branch else None
 
     variants = []
+    # "price" is what the customer pays per unit TODAY (running discounts already taken off), so the
+    # offline till needs no discount logic of its own. When the sale syncs, the server checks the
+    # price against its own rules (see sales.utils.price_sale_line).
+    book = PriceBook(tenant=tenant, branch=branch)
     rows = (ProductVariant.objects
             .filter(is_active=True, product__is_active=True)
-            .values("id", "sku", "size", "color", "retail_price", "unit_name",
-                    "base_variant_id", "units_per_pack",
-                    "product__name", "product__category_id", "product__category__parent_id")
+            .select_related("product", "product__category")
             .order_by("product__name", "sku"))
-    for r in rows:
-        detail = " / ".join(x for x in (r["size"], r["color"]) if x)
-        variants.append({
-            "id": r["id"],
-            "sku": r["sku"],
-            "name": r["product__name"],
+    for v in rows:
+        detail = " / ".join(x for x in (v.size, v.color) if x)
+        line = book.price(v, 1)
+        entry = {
+            "id": v.id,
+            "sku": v.sku,
+            "name": v.product.name,
             "detail": detail,
-            "pack": (f'{r["unit_name"]} \u00d7{fmt_qty(r["units_per_pack"])}'
-                     if r["base_variant_id"] else ""),
-            "price": str(r["retail_price"]),
-            "per_pack": str(r["units_per_pack"]),
-            "base": r["base_variant_id"] or r["id"],
-            "cat": r["product__category_id"],
-            "pcat": r["product__category__parent_id"],
-        })
+            "pack": (f'{v.unit_name} \u00d7{fmt_qty(v.units_per_pack)}' if v.base_variant_id else ""),
+            "price": str(line.net_price),
+            "per_pack": str(v.units_per_pack),
+            "base": v.base_variant_id or v.id,
+            "cat": v.product.category_id,
+            "pcat": v.product.category.parent_id,
+        }
+        if line.has_discount:
+            entry["was"] = str(line.list_price)
+            entry["promo"] = line.discount_name
+        variants.append(entry)
 
     stock = {}
     if branch:
@@ -108,7 +118,7 @@ def build_snapshot(user, tenant):
         },
         "session": ({"id": session.pk, "opened_at": session.opened_at.isoformat()}
                     if session else None),
-        "max_offline_hours": max_offline_hours(),
+        "max_offline_hours": max_offline_hours(tenant),
         "categories": list(Category.objects.values("id", "name", "parent_id")),
         "variants": variants,
         "stock": stock,

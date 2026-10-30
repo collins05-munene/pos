@@ -1,0 +1,94 @@
+{% extends 'users/base.html' %}
+{% block title %}Discounts{% endblock %}
+{% block content %}
+<div class="directory-container">
+  <div class="page-header">
+    <div class="header-text">
+      <h2>Discounts</h2>
+      <p>Set a price reduction once; the till applies it automatically while it runs.</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="{% url 'settings' %}" class="btn">Settings</a>
+      {% if can_manage %}<a href="{% url 'discount-create' %}" class="btn btn-primary">New discount</a>{% endif %}
+    </div>
+  </div>
+
+  {% if not shop.discounts_enabled %}
+    <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:8px;margin-bottom:12px;">
+      Discounts are switched <strong>off</strong> for this shop, so none of these are being applied. An admin can turn them back on in Settings.
+    </div>
+  {% endif %}
+  {% if not can_manage %}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:10px 14px;border-radius:8px;margin-bottom:12px;">
+      You can view discounts but only admins can change them in this shop.
+    </div>
+  {% endif %}
+
+  <form method="get" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by name, product or category…"
+           style="flex:1; max-width:360px; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px;">
+    <select name="status" onchange="this.form.submit()" style="padding:8px; border:1px solid #d1d5db; border-radius:6px;">
+      <option value="">All</option>
+      <option value="running" {% if status == 'running' %}selected{% endif %}>Running now</option>
+      <option value="scheduled" {% if status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+      <option value="ended" {% if status == 'ended' %}selected{% endif %}>Ended</option>
+      <option value="off" {% if status == 'off' %}selected{% endif %}>Switched off</option>
+    </select>
+    <button class="btn" type="submit">Search</button>
+  </form>
+
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Discount</th><th>Applies to</th><th>When</th><th>Status</th>
+          <th style="text-align:right;">Used</th><th style="text-align:right;">Given away</th>
+          {% if can_manage %}<th style="text-align:right;">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in discounts %}
+        <tr>
+          <td><strong>{{ d.name }}</strong><br><small>{{ d.value_label }}{% if d.min_quantity > 1 %} &middot; from {{ d.min_quantity }} units{% endif %}</small></td>
+          <td>
+            {% if d.target == 'ALL' %}Every product
+            {% elif d.target == 'PRODUCTS' %}{{ d.products.all|length }} product{{ d.products.all|length|pluralize }}: {% for p in d.products.all|slice:":3" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if d.products.all|length > 3 %}…{% endif %}
+            {% else %}{% for c in d.categories.all|slice:":3" %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
+            <br><small>{% if d.branches.all %}{% for b in d.branches.all %}{{ b.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}All branches{% endif %}</small>
+          </td>
+          <td><small>{{ d.starts_at|date:"d M Y H:i" }}<br>{% if d.ends_at %}to {{ d.ends_at|date:"d M Y H:i" }}{% else %}no end date{% endif %}</small></td>
+          <td>
+            {% with st=d.status %}
+              <span style="padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:700;
+                {% if st == 'RUNNING' %}background:#dcfce7;color:#166534;{% elif st == 'SCHEDULED' %}background:#dbeafe;color:#1e40af;{% elif st == 'ENDED' %}background:#f3f4f6;color:#4b5563;{% else %}background:#fee2e2;color:#991b1b;{% endif %}">{{ st }}</span>
+            {% endwith %}
+          </td>
+          <td style="text-align:right;">{{ d.times_used }} sale{{ d.times_used|pluralize }}</td>
+          <td style="text-align:right;">KSH {{ d.total_given|floatformat:2 }}</td>
+          {% if can_manage %}
+          <td style="text-align:right; white-space:nowrap;">
+            <a class="edit-link" href="{% url 'discount-update' d.pk %}">Edit</a>
+            <form method="post" action="{% url 'discount-toggle' d.pk %}" style="display:inline;">
+              {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button type="submit" class="edit-link" style="background:none;border:none;cursor:pointer;">{% if d.is_active %}Switch off{% else %}Switch on{% endif %}</button>
+            </form>
+            <a class="delete-link" href="{% url 'discount-delete' d.pk %}">Delete</a>
+          </td>
+          {% endif %}
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="empty-state-row"><div class="empty-state"><p>No discounts{% if q or status %} match your search{% else %} yet{% endif %}.</p></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}">&larr; Newer</a>{% endif %}
+    <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}">Older &rarr;</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

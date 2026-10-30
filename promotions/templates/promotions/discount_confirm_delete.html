@@ -1,0 +1,25 @@
+{% extends 'users/base.html' %}
+{% block title %}Delete discount{% endblock %}
+{% block content %}
+<div class="delete-page-container">
+  <div class="delete-card">
+    <div class="delete-card-body">
+      <div class="delete-text-content">
+        <h4 class="delete-title">Delete this discount?</h4>
+        <p class="delete-message">
+          <strong>"{{ object.name }}"</strong> ({{ object.value_label }}) will stop applying straight away.
+          Past sales and receipts keep the discount they were given, so your reports do not change.
+          If you might use it again, switch it off instead of deleting it.
+        </p>
+      </div>
+    </div>
+    <form method="POST" class="delete-form">
+      {% csrf_token %}
+      <div class="delete-actions">
+        <a href="{% url 'discount-list' %}" class="btn-cancel">Keep it</a>
+        <button type="submit" class="btn-danger">Yes, delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -18,6 +18,7 @@ class SignupForm(forms.Form):
     phone = forms.CharField(max_length=20, help_text="M-Pesa number, e.g. 0712345678")
     password = forms.CharField(widget=forms.PasswordInput)
     term_months = forms.TypedChoiceField(coerce=int, choices=(), initial=1)
+    # How many branches, and their names (one per line / JSON list). Branch 1 is included in the base price.
     branch_count = forms.IntegerField(min_value=1, initial=1, required=False)
     branch_names = forms.JSONField(required=False)
 
@@ -110,3 +111,40 @@ class StaffDetailsForm(forms.Form):
         if clash.exists():
             raise forms.ValidationError("Someone in your shop already has this ID.")
         return value
+
+
+# --------------------------------------------------------------------------
+# Settings page
+# --------------------------------------------------------------------------
+from decimal import Decimal as _Decimal
+
+from .models import TenantSettings as _TenantSettings
+
+
+class TenantSettingsForm(forms.ModelForm):
+    class Meta:
+        model = _TenantSettings
+        fields = ["discounts_enabled", "managers_can_manage_discounts", "max_discount_percent",
+                  "manager_max_discount_percent", "below_cost_policy", "refund_window_days",
+                  "receipt_footer", "offline_max_hours"]
+        widgets = {
+            "max_discount_percent": forms.NumberInput(attrs={"step": "0.5", "min": "0", "max": "100"}),
+            "manager_max_discount_percent": forms.NumberInput(attrs={"step": "0.5", "min": "0", "max": "100"}),
+            "refund_window_days": forms.NumberInput(attrs={"min": "0", "max": "3650"}),
+            "offline_max_hours": forms.NumberInput(attrs={"min": "1", "max": "720"}),
+            "receipt_footer": forms.TextInput(attrs={"placeholder": "e.g. Goods once sold are not returnable"}),
+        }
+
+    def clean(self):
+        cd = super().clean()
+        top, mgr = cd.get("max_discount_percent"), cd.get("manager_max_discount_percent")
+        for name, v in (("max_discount_percent", top), ("manager_max_discount_percent", mgr)):
+            if v is not None and not (_Decimal(0) <= v <= 100):
+                self.add_error(name, "Enter a percentage between 0 and 100.")
+        if top is not None and mgr is not None and mgr > top:
+            self.add_error("manager_max_discount_percent",
+                           "Managers' limit cannot be higher than the shop-wide limit.")
+        hours = cd.get("offline_max_hours")
+        if hours is not None and hours < 1:
+            self.add_error("offline_max_hours", "Must be at least 1 hour.")
+        return cd

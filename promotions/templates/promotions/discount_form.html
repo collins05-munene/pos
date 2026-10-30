@@ -1,0 +1,50 @@
+{% extends 'users/base.html' %}
+{% block title %}{% if object %}Edit discount{% else %}New discount{% endif %}{% endblock %}
+{% block content %}
+<div class="form-page-container">
+  <div class="form-card">
+    <div class="form-card-header">
+      <h3 class="form-title">{% if object %}Edit discount: {{ object.name }}{% else %}New discount{% endif %}</h3>
+      <p class="form-subtitle">
+        Applied automatically at the till while it is running; cashiers cannot change it.
+        You may give up to <strong>{{ ceiling|floatformat:"-2" }}%</strong> off a product.
+        {% if shop.below_cost_policy == 'LIMIT' %}A discount never takes a price below its cost.{% endif %}
+      </p>
+    </div>
+
+    <form method="POST" novalidate class="styled-form" id="discount-form">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="field-error-message">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-fields-stack">
+        {% for field in form %}
+          <div class="form-field-group {% if field.errors %}has-errors{% endif %}" data-field="{{ field.name }}">
+            <label for="{{ field.id_for_label }}" class="field-label">
+              {{ field.label }}{% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+            </label>
+            <div class="field-widget-container">{{ field }}</div>
+            {% if field.help_text %}<div class="field-help-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="field-error-message">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <hr class="form-divider">
+      <div class="form-actions">
+        <a href="{% url 'discount-list' %}" class="btn-link cancel-btn">Cancel</a>
+        <button type="submit" class="btn btn-submit">{% if object %}Save changes{% else %}Create discount{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  // Show only the picker that matches "Applies to".
+  var target = document.getElementById('id_target');
+  function sync() {
+    var v = target.value;
+    document.querySelector('[data-field=products]').style.display = v === 'PRODUCTS' ? '' : 'none';
+    document.querySelector('[data-field=categories]').style.display = v === 'CATEGORIES' ? '' : 'none';
+  }
+  target.addEventListener('change', sync); sync();
+}());
+</script>
+{% endblock %}

@@ -95,10 +95,20 @@
                 <td class="muted">{{ line.quantity }} x {{ line.unit_price }}</td>
                 <td class="num">{{ line.line_total }}</td>
             </tr>
+            {% if line.discount %}
+            <tr>
+                <td class="muted">&nbsp;&nbsp;{{ line.discount_name|default:"Discount" }}</td>
+                <td class="num">-{{ line.discount }}</td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </table>
         <hr>
 
+        {% if receipt.discount_total > 0 %}
+            <div class="row"><span>Subtotal</span><span>{{ receipt.subtotal }}</span></div>
+            <div class="row"><span>Discounts</span><span>-{{ receipt.discount_total }}</span></div>
+        {% endif %}
         <div class="row grand"><span>TOTAL (KSH)</span><span>{{ receipt.total }}</span></div>
         {% if receipt.amount_received is not None %}
             <div class="row"><span>{{ receipt.payment_method|title }} received</span><span>{{ receipt.amount_received }}</span></div>
@@ -107,7 +117,9 @@
             <div class="row"><span>Paid by</span><span>{{ receipt.payment_method|title }}</span></div>
         {% endif %}
         <hr>
+        {% if receipt.discount_total > 0 %}<div class="center">You saved KSH {{ receipt.discount_total }}</div>{% endif %}
         <div class="center">Thank you for shopping with us.</div>
+        {% if receipt.footer %}<div class="center">{{ receipt.footer }}</div>{% endif %}
     </div>
 
     <form id="printed-form" method="POST" action="{% url 'receipt-printed' receipt.pk %}" style="display:none;">{% csrf_token %}</form>
