@@ -141,6 +141,34 @@ def build_sales_report_pdf(context, *, shop_name, generated_by, generated_at):
     story.append(Paragraph('Sales and profit', st['h2']))
     story.append(_table(body, [width * 0.68, width * 0.32], header=False))
 
+    # --- discounts ---
+    discounts = context.get('discounts') or {}
+    if discounts:
+        block = [
+            Paragraph('Discounts given', st['h2']),
+            Paragraph('Money taken off prices at the till in this period (before any refunds).', st['note']),
+            Spacer(1, 4),
+        ]
+        summary = [
+            [Paragraph('Total discounts given', st['cell']), Paragraph(_kes(discounts['total']), st['cell_r'])],
+            [Paragraph('Orders with a discount', st['cell']),
+             Paragraph(f'{discounts["orders"]:,} of {orders:,}', st['cell_r'])],
+        ]
+        block.append(_table(summary, [width * 0.68, width * 0.32], header=False))
+        if discounts['rows']:
+            data = [[Paragraph('Discount', st['head']), Paragraph('Amount given', st['head_r']),
+                     Paragraph('Items', st['head_r']), Paragraph('Orders', st['head_r'])]]
+            for row in discounts['rows']:
+                data.append([
+                    Paragraph(escape(row['name']), st['cell']),
+                    Paragraph(_kes(row['amount']), st['cell_r']),
+                    Paragraph(f'{row["units"]:,}', st['cell_r']),
+                    Paragraph(f'{row["orders"]:,}', st['cell_r']),
+                ])
+            block.append(Spacer(1, 6))
+            block.append(_table(data, [width * 0.4, width * 0.28, width * 0.16, width * 0.16]))
+        story.append(KeepTogether(block))
+
     # --- branches ---
     branch_rows = context.get('branch_rows') or []
     if branch_rows:

@@ -1,15 +1,18 @@
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.urls import reverse
+from django.http import JsonResponse, HttpResponse
+from django.utils.text import slugify
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q, OuterRef, Subquery
 from django.core.paginator import Paginator
 from django.views.generic import TemplateView, DetailView
 from datetime import datetime, time, timedelta
+from urllib.parse import urlencode
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.db.models import Sum, Count, F, ExpressionWrapper, DecimalField
 from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.views import View
@@ -20,6 +23,7 @@ from promotions.pricing import PriceBook
 from .cart import POSCart
 from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund
 from .refunds import refund_totals
+from .report_pdf import build_sales_report_pdf
 from .exceptions import InsufficientStockError
 from .utils import resolve_user_branch
 from users.mixins import AdminRequiredMixin, CashierRequiredMixin
@@ -179,6 +183,7 @@ class CloseRegisterView(CashierRequiredMixin, View):
                level=level, roles=MANAGEMENT, exclude_user=request.user)
         
         messages.success(request, f"Register closed. Discrepancy: KSH {discrepancy:.2f}")
+        
         return redirect('pos_terminal')
 
 
@@ -536,6 +541,33 @@ def _page_link_qs(request, page_param, page_number):
     return params.urlencode()
 
 
+DASHBOARD_PRESETS = (
+    ('today', 'Today'),
+    ('yesterday', 'Yesterday'),
+    ('this-week', 'This week'),
+    ('last-7-days', 'Last 7 days'),
+    ('this-month', 'This month'),
+)
+DASHBOARD_PAGE_PARAMS = ('sessions_page', 'txns_page', 'orders_page', 'table')
+
+
+def _dashboard_url(request, **overrides):
+    """
+    A dashboard link that keeps the current filters but drops table page numbers
+    (a new filter should start every table back on page 1). Pass key=None to remove a key.
+    """
+    params = request.GET.copy()
+    for key in DASHBOARD_PAGE_PARAMS:
+        params.pop(key, None)
+    for key, value in overrides.items():
+        if value is None:
+            params.pop(key, None)
+        else:
+            params[key] = str(value)
+    qs = params.urlencode()
+    return f'?{qs}' if qs else '?'
+
+
 class SalesDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'sales/dashboard.html'
 
@@ -553,15 +585,33 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
 
         return self.render_to_response(context)
 
+    def _selected_branch(self, branches):
+        """
+        ?branch=<id> narrows the whole dashboard to one branch. Anything else (no value, "all",
+        or an id that is not one of this shop's branches) means the overall business.
+        Matching against the shop's own branch list also stops a made-up id from leaking data.
+        """
+        raw = self.request.GET.get('branch', '').strip()
+        if raw.isdigit():
+            return next((b for b in branches if b.pk == int(raw)), None)
+        return None
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        request = self.request
 
         now = timezone.now()
-        period_start, period_end, period_label, is_custom_period, period_display_end = _resolve_report_period(self.request, now)
+        period_start, period_end, period_label, is_custom_period, period_display_end = _resolve_report_period(request, now)
 
-        orders = Order.objects.all()
+        branches = list(Branch.objects.order_by('name'))
+        branch = self._selected_branch(branches)
+
+        def for_branch(qs, field='branch'):
+            return qs.filter(**{field: branch}) if branch else qs
+
+        orders = for_branch(Order.objects.all())
         period_orders = orders.filter(created_at__gte=period_start, created_at__lt=period_end)
-        all_sessions = CashRegisterSession.objects.all()
+        all_sessions = for_branch(CashRegisterSession.objects.all())
         period_sessions = all_sessions.filter(opened_at__gte=period_start, opened_at__lt=period_end)
         closed_sessions = all_sessions.filter(status='CLOSED')
 
@@ -576,7 +626,7 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         profit = sales_agg['total_profit'] or (revenue - cogs)
 
         # Refunds reduce the period they were PAID in (when the cash left), not the sale's period.
-        period_refunds = refund_totals(period_start, period_end)
+        period_refunds = refund_totals(period_start, period_end, branch=branch)
         revenue -= period_refunds['amount']
         cogs -= period_refunds['cogs']
         profit -= period_refunds['profit']
@@ -589,12 +639,40 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'profit': profit,
             'margin': margin,
             'refunds': period_refunds['amount'],
+            'writeoffs': period_refunds['writeoffs'],
+        }
+
+        # --- discounts given in the period (recorded on each sale, so later edits don't change history) ---
+        discount_value = ExpressionWrapper(
+            F('discount_per_unit') * F('quantity'),
+            output_field=DecimalField(max_digits=14, decimal_places=2))
+        discounted_items = OrderItem.objects.filter(
+            order__in=period_orders, discount_per_unit__gt=0)
+        discount_rows = [
+            {
+                'name': r['discount_name'] or 'Discount (name not recorded)',
+                'units': r['units'] or 0,
+                'orders': r['orders'] or 0,
+                'amount': r['amount'] or Decimal('0.00'),
+            }
+            for r in discounted_items.order_by().values('discount_name').annotate(
+                units=Sum('quantity'), orders=Count('order', distinct=True), amount=Sum(discount_value)
+            ).order_by('-amount')
+        ]
+        discount_agg = period_orders.aggregate(given=Sum('discount_total'), list_value=Sum('subtotal'))
+        discount_given = discount_agg['given'] or Decimal('0.00')
+        discounted_orders = period_orders.filter(discount_total__gt=0).count()
+        context['discounts'] = {
+            'total': discount_given,
+            'orders': discounted_orders,
+            'share_of_orders': round(discounted_orders / order_count_all * 100) if (order_count_all := period_orders.count()) else 0,
+            'rows': discount_rows,
         }
 
         total_cash_sales_all_time = orders.filter(
             payment_method='CASH'
         ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
-        total_cash_sales_all_time -= refund_totals()['amount']      # refunds are always paid in cash
+        total_cash_sales_all_time -= refund_totals(branch=branch)['amount']      # refunds are always paid in cash
 
         latest_closed_session_id_per_branch = (
             CashRegisterSession.objects.filter(
@@ -621,8 +699,11 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             Sum('discrepancy')
         )['discrepancy__sum'] or Decimal('0.00')
 
-        active_session = all_sessions.filter(status='OPEN').select_related('branch').first()
-        live_pool_balance = active_session.get_current_expected_cash() if active_session else Decimal('0.00')
+        # One open register per branch, so "all branches" adds up every open register.
+        open_sessions = list(all_sessions.filter(status='OPEN').select_related('branch'))
+        live_pool_balance = sum(
+            (s.get_current_expected_cash() for s in open_sessions), Decimal('0.00')
+        )
 
         context['cumulative_cash'] = {
             'total_cash_revenue': total_cash_sales_all_time,
@@ -632,8 +713,9 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'total_vault_cash': all_time_closing_sum - total_opening_floats,
         }
 
-        period_cash_txns = CashTransaction.objects.filter(
-            created_at__gte=period_start, created_at__lt=period_end
+        period_cash_txns = for_branch(
+            CashTransaction.objects.filter(created_at__gte=period_start, created_at__lt=period_end),
+            'session__branch',
         )
 
         cash_in = period_cash_txns.filter(
@@ -649,63 +731,166 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         ).aggregate(Sum('discrepancy'))['discrepancy__sum'] or Decimal('0.00')
 
         context['cash_metrics'] = {
-            'active_sessions_count': all_sessions.filter(status='OPEN').count(),
+            'active_sessions_count': len(open_sessions),
             'cash_in': cash_in,
             'cash_out': cash_out,
             'refunds': period_refunds['amount'],
             'discrepancies': period_discrepancy,
         }
 
+        order_count = period_orders.count()
         context['period'] = {
             'label': period_label,
             'is_custom': is_custom_period,
             'start_input': timezone.localtime(period_start).strftime('%Y-%m-%dT%H:%M'),
             'end_input': timezone.localtime(period_display_end).strftime('%Y-%m-%dT%H:%M'),
-            'order_count': period_orders.count(),
+            'start_date': timezone.localtime(period_start).strftime('%Y-%m-%d'),
+            'end_date': timezone.localtime(period_display_end).strftime('%Y-%m-%d'),
+            'order_count': order_count,
         }
 
+        # --- filter bar -------------------------------------------------------------------
+        raw_preset = request.GET.get('period', '').strip()
+        preset_keys = [key for key, _ in DASHBOARD_PRESETS]
+        if not is_custom_period:
+            active_preset = 'this-month'            # the default window is month-to-date
+        elif raw_preset in preset_keys:
+            active_preset = raw_preset
+        else:
+            active_preset = 'custom'
+
+        context['branches'] = branches
+        context['selected_branch'] = branch
+        context['scope_label'] = branch.name if branch else 'All branches'
+        context['preset_links'] = [
+            {
+                'label': label,
+                'active': key == active_preset,
+                'url': _dashboard_url(request, period=key, period_start=None, period_end=None),
+            }
+            for key, label in DASHBOARD_PRESETS
+        ]
+        context['custom_active'] = active_preset == 'custom'
+        context['keep_params'] = [
+            (key, request.GET[key]) for key in ('period', 'period_start', 'period_end')
+            if request.GET.get(key)
+        ]
+
+        # --- branch-by-branch comparison (only when looking at the whole business) --------
+        branch_rows = []
+        if branch is None and len(branches) > 1:
+            sales_by_branch = {
+                row['branch']: row
+                for row in period_orders.order_by().values('branch').annotate(
+                    revenue=Sum('total_revenue'), profit=Sum('total_profit'), orders=Count('id'))
+            }
+            refunds_by_branch = {
+                row['branch']: row
+                for row in Refund.objects.filter(
+                    created_at__gte=period_start, created_at__lt=period_end
+                ).order_by().values('branch').annotate(
+                    amount=Sum('total_amount'), profit=Sum('profit_reversed'))
+            }
+
+            names = {b.pk: b.name for b in branches}
+            ids = [b.pk for b in branches]
+            if None in sales_by_branch or None in refunds_by_branch:
+                ids.append(None)
+                names[None] = 'Main (no branch set)'
+
+            zero = Decimal('0.00')
+            for branch_id in ids:
+                sold = sales_by_branch.get(branch_id, {})
+                back = refunds_by_branch.get(branch_id, {})
+                branch_rows.append({
+                    'name': names[branch_id],
+                    'revenue': (sold.get('revenue') or zero) - (back.get('amount') or zero),
+                    'profit': (sold.get('profit') or zero) - (back.get('profit') or zero),
+                    'orders': sold.get('orders') or 0,
+                    'url': _dashboard_url(request, branch=branch_id) if branch_id else None,
+                })
+
+            branch_rows.sort(key=lambda r: r['revenue'], reverse=True)
+            biggest = max((r['revenue'] for r in branch_rows), default=zero)
+            for row in branch_rows:
+                row['bar'] = int(row['revenue'] / biggest * 100) if biggest > 0 and row['revenue'] > 0 else 0
+
+        context['branch_rows'] = branch_rows
+        context['top_branch'] = branch_rows[0] if branch_rows and branch_rows[0]['revenue'] > 0 else None
+        context['all_branches_url'] = _dashboard_url(request, branch=None)
+        context['pdf_url'] = reverse('sales-report-pdf') + _dashboard_url(request)
+
+        # --- the three record tables ------------------------------------------------------
         sessions_qs = period_sessions.select_related('opened_by', 'branch').order_by('-opened_at')
         txns_qs = period_cash_txns.select_related('user').order_by('-created_at')
         orders_qs = (period_orders.select_related('branch')
                      .annotate(refunded=Coalesce(Sum('refunds__total_amount'), Decimal('0.00'), output_field=DecimalField(max_digits=12, decimal_places=2)))
                      .order_by('-created_at'))
 
-        sessions_page = _paginate(self.request, sessions_qs, 'sessions_page', page_size=15)
-        txns_page = _paginate(self.request, txns_qs, 'txns_page', page_size=15)
-        orders_page = _paginate(self.request, orders_qs, 'orders_page', page_size=15)
+        sessions_page = _paginate(request, sessions_qs, 'sessions_page', page_size=15)
+        txns_page = _paginate(request, txns_qs, 'txns_page', page_size=15)
+        orders_page = _paginate(request, orders_qs, 'orders_page', page_size=15)
 
         context['recent_sessions'] = sessions_page
         context['recent_cash_txns'] = txns_page
         context['recent_orders'] = orders_page
 
         context['sessions_prev_qs'] = (
-            _page_link_qs(self.request, 'sessions_page', sessions_page.previous_page_number())
+            _page_link_qs(request, 'sessions_page', sessions_page.previous_page_number())
             if sessions_page.has_previous() else None
         )
         context['sessions_next_qs'] = (
-            _page_link_qs(self.request, 'sessions_page', sessions_page.next_page_number())
+            _page_link_qs(request, 'sessions_page', sessions_page.next_page_number())
             if sessions_page.has_next() else None
         )
         context['txns_prev_qs'] = (
-            _page_link_qs(self.request, 'txns_page', txns_page.previous_page_number())
+            _page_link_qs(request, 'txns_page', txns_page.previous_page_number())
             if txns_page.has_previous() else None
         )
         context['txns_next_qs'] = (
-            _page_link_qs(self.request, 'txns_page', txns_page.next_page_number())
+            _page_link_qs(request, 'txns_page', txns_page.next_page_number())
             if txns_page.has_next() else None
         )
         context['orders_prev_qs'] = (
-            _page_link_qs(self.request, 'orders_page', orders_page.previous_page_number())
+            _page_link_qs(request, 'orders_page', orders_page.previous_page_number())
             if orders_page.has_previous() else None
         )
         context['orders_next_qs'] = (
-            _page_link_qs(self.request, 'orders_page', orders_page.next_page_number())
+            _page_link_qs(request, 'orders_page', orders_page.next_page_number())
             if orders_page.has_next() else None
         )
 
         context['timestamp'] = now
 
         return context
+
+
+class SalesReportPdfView(SalesDashboardView):
+    """
+    Downloads the dashboard as a PDF. Follows the same filters as the page (?branch=, the dates),
+    so "All branches" gives the overall business report and one branch gives that branch's.
+    Same access rules as the dashboard.
+    """
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        now = timezone.localtime()
+        tenant = getattr(request, 'tenant', None)
+
+        pdf = build_sales_report_pdf(
+            context,
+            shop_name=getattr(tenant, 'name', '') or '',
+            generated_by=request.user.get_full_name() or request.user.get_username(),
+            generated_at=now,
+        )
+
+        period = context['period']
+        filename = (f"sales-report-{slugify(context['scope_label'])}-"
+                    f"{period['start_date']}-to-{period['end_date']}.pdf")
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 class OrderDetailView(AdminRequiredMixin, DetailView):
