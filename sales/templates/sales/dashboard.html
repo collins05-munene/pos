@@ -466,6 +466,39 @@
     </div>
   </details>
 
+  <!-- Discounts -->
+  <div class="sd-section">
+    <h2 class="sd-h2">Discounts given</h2>
+    <p class="sd-hint">{{ scope_label }}. Money taken off prices at the till during the dates chosen above (before any refunds).</p>
+    <div class="sd-facts">
+      <div class="sd-fact">
+        <p class="sd-fact-label">Total discounts given</p>
+        <p class="sd-fact-value">KSH {{ discounts.total|floatformat:"0g" }}</p>
+      </div>
+      <div class="sd-fact">
+        <p class="sd-fact-label">Orders with a discount</p>
+        <p class="sd-fact-value">{{ discounts.orders }} <small>of {{ period.order_count }}</small></p>
+      </div>
+    </div>
+    {% if discounts.rows %}
+    <div class="sd-panel sd-branches">
+      <div class="sd-branch-row is-head">
+        <span>Discount</span><span>Amount given</span><span>Items</span><span>Orders</span>
+      </div>
+      {% for row in discounts.rows %}
+      <div class="sd-branch-row">
+        <span class="sd-branch-name">{{ row.name }}</span>
+        <span class="sd-num">KSH {{ row.amount|floatformat:"2g" }}</span>
+        <span class="sd-num" data-label="Items: ">{{ row.units }}</span>
+        <span class="sd-num" data-label="Orders: ">{{ row.orders }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="sd-hint">No discounts were given in this period.</p>
+    {% endif %}
+  </div>
+
   <!-- 2. Branch comparison, only when looking at the whole business -->
   {% if branch_rows %}
   <div class="sd-section">

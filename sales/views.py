@@ -642,6 +642,33 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'writeoffs': period_refunds['writeoffs'],
         }
 
+        # --- discounts given in the period (recorded on each sale, so later edits don't change history) ---
+        discount_value = ExpressionWrapper(
+            F('discount_per_unit') * F('quantity'),
+            output_field=DecimalField(max_digits=14, decimal_places=2))
+        discounted_items = OrderItem.objects.filter(
+            order__in=period_orders, discount_per_unit__gt=0)
+        discount_rows = [
+            {
+                'name': r['discount_name'] or 'Discount (name not recorded)',
+                'units': r['units'] or 0,
+                'orders': r['orders'] or 0,
+                'amount': r['amount'] or Decimal('0.00'),
+            }
+            for r in discounted_items.order_by().values('discount_name').annotate(
+                units=Sum('quantity'), orders=Count('order', distinct=True), amount=Sum(discount_value)
+            ).order_by('-amount')
+        ]
+        discount_agg = period_orders.aggregate(given=Sum('discount_total'), list_value=Sum('subtotal'))
+        discount_given = discount_agg['given'] or Decimal('0.00')
+        discounted_orders = period_orders.filter(discount_total__gt=0).count()
+        context['discounts'] = {
+            'total': discount_given,
+            'orders': discounted_orders,
+            'share_of_orders': round(discounted_orders / order_count_all * 100) if (order_count_all := period_orders.count()) else 0,
+            'rows': discount_rows,
+        }
+
         total_cash_sales_all_time = orders.filter(
             payment_method='CASH'
         ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
