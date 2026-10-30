@@ -180,15 +180,18 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
         return refund, True
 
 
-def refund_totals(start=None, end=None):
+def refund_totals(start=None, end=None, branch=None):
     """
     Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures.
+    Pass branch to count only that branch's refunds.
 
     cogs       full cost of every refunded item (the sale is undone, so its cost is reversed)
     writeoffs  cost of refunded items that were NOT restocked (lost stock, shown as its own line)
     profit     profit given up = amount - cogs + writeoffs  (== amount - restocked cost)
     """
     qs = Refund.objects.all()
+    if branch is not None:
+        qs = qs.filter(branch=branch)
     if start is not None:
         qs = qs.filter(created_at__gte=start)
     if end is not None:

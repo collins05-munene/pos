@@ -1,491 +1,540 @@
-{% extends 'users/base.html' %} 
-{% block title %} Sales & Cash Dashboard {% endblock %} 
+{% extends 'users/base.html' %}
+{% block title %} Sales Overview {% endblock %}
 
 {% block extra_head %}
 <style>
-  .dashboard-container {
-    margin: 2rem auto;
-    padding: 0 1.5rem;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  .sd {
+    --sd-ink: #1f2937;
+    --sd-muted: #6b7280;
+    --sd-line: #e5e7eb;
+    --sd-soft: #f3f4f6;
+    --sd-surface: #ffffff;
+    --sd-blue: #2563eb;
+    --sd-blue-soft: #eff6ff;
+    --sd-green: #15803d;
+    --sd-red: #b91c1c;
+    max-width: 1080px;
+    margin: 1.75rem auto 3rem;
+    padding: 0 1.25rem;
+    color: var(--sd-ink);
+    font-size: 1rem;
+    line-height: 1.5;
   }
-  .dashboard-header {
+  .sd *, .sd *::before, .sd *::after { box-sizing: border-box; }
+  .sd h1, .sd h2, .sd h3, .sd p { margin: 0; }
+
+  .sd a:focus-visible, .sd button:focus-visible, .sd select:focus-visible,
+  .sd input:focus-visible, .sd summary:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 2px;
+  }
+  .sd-head {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
+    align-items: flex-start;
     flex-wrap: wrap;
     gap: 1rem;
+    margin-bottom: 1.25rem;
   }
-  .dashboard-title {
-    margin: 0;
-    font-size: 1.75rem;
-    color: #111827;
-  }
-  .dashboard-subtitle {
-    margin: 0.25rem 0 0 0;
-    color: #6b7280;
-    font-size: 0.95rem;
-  }
-  .header-actions {
-    display: flex;
+  .sd-title { font-size: 1.75rem; font-weight: 400; letter-spacing: -0.01em; }
+  .sd-scope { margin-top: 0.15rem; color: var(--sd-muted); }
+  .sd-scope strong { color: var(--sd-ink); }
+  .sd-btn-out {
+    display: inline-flex;
     align-items: center;
-    gap: 0.75rem;
-  }
-  .data-badge {
-    background: #f3f4f5;
-    color: #374151;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-  .data-badge.badge-custom {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-  .btn-cashout {
-    background: #dc2626;
+    min-height: 44px;
+    padding: 0 1.1rem;
+    border-radius: 8px;
+    background: var(--sd-red);
     color: #fff;
-    text-decoration: none;
-    padding: 0.6rem 1.1rem;
-    border-radius: 6px;
     font-weight: 600;
-    font-size: 0.85rem;
+    text-decoration: none;
   }
-  .btn-cashout:hover {
-    background: #b91c1c;
-  }
+  .sd-btn-out:hover { background: #991b1b; }
 
-  .report-filter-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  .sd-filters {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-line);
+    border-radius: 12px;
   }
-  .report-filter-title {
-    margin: 0 0 0.9rem 0;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #111827;
+  .sd-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+  .sd-filter-label { min-width: 64px; font-weight: 600; }
+  .sd-select {
+    min-height: 44px;
+    min-width: 240px;
+    max-width: 100%;
+    padding: 0 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--sd-ink);
+    font: inherit;
   }
-  .report-filter-row {
+  .sd-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .sd-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 1rem;
+    border: 1px solid var(--sd-line);
+    border-radius: 999px;
+    background: var(--sd-soft);
+    color: var(--sd-ink);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .sd-pill:hover { background: #e5e7eb; }
+  .sd-pill.is-active {
+    background: var(--sd-blue);
+    border-color: var(--sd-blue);
+    color: #fff;
+    font-weight: 600;
+  }
+  .sd-custom summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 1rem;
+    border: 1px dashed #94a3b8;
+    border-radius: 999px;
+    color: var(--sd-ink);
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+  }
+  .sd-custom summary::-webkit-details-marker { display: none; }
+  .sd-custom[open] summary, .sd-custom.is-active summary {
+    border-style: solid;
+    border-color: var(--sd-blue);
+    background: var(--sd-blue-soft);
+    color: var(--sd-blue);
+    font-weight: 600;
+  }
+  .sd-custom-form {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 1rem;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
   }
-  .report-filter-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+  .sd-field { display: grid; gap: 0.25rem; font-size: 0.9rem; color: var(--sd-muted); }
+  .sd-field input {
+    min-height: 44px;
+    padding: 0 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: var(--sd-ink);
+    font: inherit;
   }
-  .report-filter-field label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #4b5563;
-    text-transform: uppercase;
-    letter-spacing: 0.03rem;
-  }
-  .report-filter-field input[type="datetime-local"] {
-    padding: 0.55rem 0.7rem;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    color: #111827;
-  }
-  .btn-generate {
-    background: #2563eb;
+  .sd-btn {
+    min-height: 44px;
+    padding: 0 1.25rem;
+    border: 0;
+    border-radius: 8px;
+    background: var(--sd-blue);
     color: #fff;
-    border: none;
-    padding: 0.65rem 1.25rem;
-    border-radius: 6px;
+    font: inherit;
     font-weight: 600;
-    font-size: 0.9rem;
     cursor: pointer;
   }
-  .btn-generate:hover { background: #1d4ed8; }
-  .btn-clear-period {
-    color: #6b7280;
-    font-size: 0.85rem;
-    text-decoration: none;
-    padding: 0.65rem 0.25rem;
-  }
-  .btn-clear-period:hover { color: #111827; text-decoration: underline; }
-  .quick-picks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.9rem;
-  }
-  .quick-pick-btn {
-    background: #f3f4f6;
-    border: 1px solid #e5e7eb;
-    border-radius: 20px;
-    padding: 0.3rem 0.85rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #4b5563;
-    cursor: pointer;
-  }
-  .quick-pick-btn:hover { background: #e5e7eb; color: #111827; }
+  .sd-btn:hover { background: #1d4ed8; }
 
-  .section-divider {
-    font-size: 1.25rem;
-    color: #1f2937;
-    margin: 2rem 0 0.25rem 0;
+  .sd-section { margin-top: 2.25rem; }
+  .sd-h2 { font-size: 1.3rem; font-weight: 400; }
+  .sd-hint { margin-top: 0.15rem; color: var(--sd-muted); font-size: 0.95rem; }
+
+  .sd-panel {
+    margin-top: 0.9rem;
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-line);
+    border-radius: 12px;
+  }
+  .sd-hero { display: grid; grid-template-columns: 1fr 1fr; }
+  .sd-hero > div { padding: 1.5rem 1.5rem 1.35rem; }
+  .sd-hero > div + div { border-left: 1px solid var(--sd-line); }
+  .sd-hero-label { font-weight: 600; color: var(--sd-muted); }
+  .sd-hero-value {
+    margin-top: 0.2rem;
+    font-size: clamp(1.9rem, 5vw, 2.75rem);
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sd-hero-value small { font-size: 0.45em; font-weight: 600; margin-right: 0.3em; color: var(--sd-muted); }
+  .sd-hero-note { margin-top: 0.35rem; color: var(--sd-muted); font-size: 0.95rem; }
+  .sd-hero .is-sales .sd-hero-value { color: var(--sd-blue); }
+  .sd-hero .is-profit .sd-hero-value { color: var(--sd-green); }
+  .sd-hero .is-loss .sd-hero-value { color: var(--sd-red); }
+
+  .sd-facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--sd-line);
+  }
+  .sd-fact { padding: 1rem 1.5rem; }
+  .sd-fact + .sd-fact { border-left: 1px solid var(--sd-line); }
+  .sd-fact-label { color: var(--sd-muted); font-size: 0.95rem; }
+  .sd-fact-value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sd-fact-note { color: var(--sd-muted); font-size: 0.85rem; }
+
+  .sd-more { margin-top: 0.75rem; }
+  .sd-more summary {
+    display: inline-block;
+    padding: 0.4rem 0;
+    color: var(--sd-blue);
     font-weight: 600;
+    cursor: pointer;
   }
-  .section-note {
-    margin: 0 0 1rem 0;
-    font-size: 0.85rem;
-    color: #9ca3af;
-  }
-  .metrics-grid {
+  .sd-more-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1.25rem;
-    margin-bottom: 2rem;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
   }
-  .card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  .sd-more-item {
+    padding: 0.9rem 1.1rem;
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-line);
+    border-radius: 8px;
   }
-  .metric-card h3 {
-    margin: 0;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05rem;
-    color: #6b7280;
-  }
-  .metric-card .value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0.75rem 0 0.5rem 0;
-  }
-  .card-footer {
-    margin: 0;
-    font-size: 0.8rem;
-    color: #9ca3af;
-  }
+  .sd-more-item .sd-fact-value { font-size: 1.15rem; }
 
-  .card-blue .value { 
-    color: #2563eb; 
-  }
-
-  .card-green .value {
-    color: #16a34a; 
-  } 
-
-  .card-red .value { 
-    color: #dc2626; 
-  }
-  
-  .card-purple .value { 
-    color: #9333ea; 
-  }
-
-  .card-highlight {
-    border: 1px solid #bbf7d0;
-    background: #f0fdf4;
-  }
-
-  .card-highlight .value { 
-    color: #16a34a; 
-  }
-
-  .data-split-container {
+  .sd-branches { padding: 0.35rem 0; }
+  .sd-branch-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);  
-    gap: 1.5rem;
-    align-items: start;
-    margin-bottom: 2rem;
+    grid-template-columns: minmax(130px, 1.1fr) minmax(160px, 2fr) 1fr 0.6fr;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    padding: 0.85rem 1.5rem;
+    color: inherit;
+    text-decoration: none;
+  }
+  .sd-branch-row + .sd-branch-row { border-top: 1px solid var(--sd-line); }
+  a.sd-branch-row:hover { background: var(--sd-blue-soft); }
+  .sd-branch-row.is-head {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+    color: var(--sd-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .sd-branch-name { font-weight: 600; }
+  a.sd-branch-row .sd-branch-name { color: var(--sd-blue); }
+  .sd-bar { height: 10px; border-radius: 999px; background: var(--sd-soft); overflow: hidden; }
+  .sd-bar span { display: block; height: 100%; border-radius: 999px; background: var(--sd-blue); }
+  .sd-num { font-variant-numeric: tabular-nums; }
+  .sd-branch-sales { display: grid; gap: 0.35rem; }
+  .sd-top {
+    margin-top: 0.9rem;
+    padding: 0.75rem 1.1rem;
+    background: var(--sd-blue-soft);
+    border-radius: 8px;
   }
 
-  .data-split-container > .card { 
-    min-width: 0; 
-  }
+  .sd-cash { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .sd-cash > div { padding: 1.1rem 1.5rem; }
+  .sd-cash > div + div { border-left: 1px solid var(--sd-line); }
+  .sd-cash .sd-fact-value { font-size: 1.5rem; }
+  .is-good { color: var(--sd-green); }
+  .is-bad { color: var(--sd-red); }
 
-  .table-card > div[id$="-table-container"] { 
-    min-width: 0; 
-    max-width: 100%; 
+  .sd-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.9rem;
+    border-bottom: 1px solid var(--sd-line);
   }
+  .sd-tab {
+    min-height: 44px;
+    padding: 0 1.1rem;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: var(--sd-muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .sd-tab:hover { color: var(--sd-ink); }
+  .sd-tab[aria-selected="true"] { color: var(--sd-blue); border-bottom-color: var(--sd-blue); }
+  .sd-tabpanel { padding-top: 0.75rem; }
+  .sd-tabpanel[hidden] { display: none; }
 
-  .section-title {
-    margin: 0 0 1.25rem 0;
-    font-size: 1.15rem;
-    color: #1f2937;
-  }
   .table-responsive {
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     transition: opacity 0.15s ease;
   }
-
-  .table-card .table-responsive table { 
-    min-width: 640px; 
-  }
-
-  .table-card th, .table-card td { 
-    white-space: nowrap; 
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-    font-size: 0.9rem;
-  }
-  th {
-    padding: 0.75rem 1rem;
-    border-bottom: 2px solid #f3f4f6;
-    color: #4b5563;
+  .sd table { width: 100%; min-width: 560px; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+  .sd th {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--sd-line);
+    background: var(--sd-soft);
+    color: var(--sd-muted);
     font-weight: 600;
-    background-color: #fafafa;
+    white-space: nowrap;
   }
-  td {
-    padding: 0.9rem 1rem;
-    border-bottom: 1px solid #f3f4f6;
-    color: #374151;
+  .sd td {
+    padding: 0.8rem 0.9rem;
+    border-bottom: 1px solid var(--sd-line);
+    white-space: nowrap;
+    color: var(--sd-ink);
   }
-  .text-green { color: #16a34a; font-weight: 600; }
-  .text-red { color: #dc2626; font-weight: 600; }
-  .empty-state {
-    text-align: center;
-    color: #9ca3af;
-    padding: 2rem 0;
-  }
-  .invoice-link {
-    color: #2563eb;
-    text-decoration: none;
-  }
+  .sd .text-green { color: var(--sd-green); font-weight: 600; }
+  .sd .text-red { color: var(--sd-red); font-weight: 600; }
+  .empty-state { text-align: center; color: var(--sd-muted); padding: 2rem 0 !important; white-space: normal !important; }
+  .invoice-link { color: var(--sd-blue); text-decoration: none; }
   .invoice-link:hover { text-decoration: underline; }
-
-  .badge-status {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-  .badge-open { 
-    background-color: #dcfce7; 
-    color: #15803d; 
-  }
-
-  .badge-closed { 
-    background-color: #f3f4f6; 
-    color: #4b5563; 
-  }
-
-  .badge-in { 
-    background-color: #dbeafe; 
-    color: #1e40af; 
-  }
-
-  .badge-out { 
-    background-color: #fee2e2; 
-    color: #991b1b; 
-  }
-
+  .badge-status { padding: 3px 9px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+  .badge-open { background: #dcfce7; color: #15803d; }
+  .badge-closed { background: #f3f4f6; color: #4b5563; }
+  .badge-in { background: #dbeafe; color: #1e40af; }
+  .badge-out { background: #fee2e2; color: #991b1b; }
   .table-pagination {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.9rem 0.25rem 0.25rem 0.25rem;
-    font-size: 0.85rem;
-    color: #6b7280;
-  }
-  .pagination-links {
-    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
+    padding: 0.9rem 0.25rem 0;
+    font-size: 0.9rem;
+    color: var(--sd-muted);
   }
+  .pagination-links { display: flex; gap: 0.5rem; }
   .pagination-links a, .pagination-links span {
-    padding: 0.35rem 0.85rem;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--sd-line);
+    border-radius: 8px;
     text-decoration: none;
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
   }
-  .pagination-links a {
-    color: #2563eb;
-    background: #fff;
-    cursor: pointer;
+  .pagination-links a { color: var(--sd-blue); background: #fff; cursor: pointer; }
+  .pagination-links a:hover { background: var(--sd-blue-soft); }
+  .pagination-links span.disabled { color: #cbd5e1; background: #f9fafb; }
+
+  @media (max-width: 760px) {
+    .sd { padding: 0 0.9rem; }
+    .sd-hero, .sd-facts, .sd-cash { grid-template-columns: 1fr; }
+    .sd-hero > div + div, .sd-fact + .sd-fact, .sd-cash > div + div {
+      border-left: 0;
+      border-top: 1px solid var(--sd-line);
+    }
+    .sd-select { width: 100%; min-width: 0; }
+    .sd-branch-row { grid-template-columns: 1fr 1fr; padding: 0.85rem 1.1rem; }
+    .sd-branch-name, .sd-branch-sales { grid-column: 1 / -1; }
+    .sd-branch-row.is-head { display: none; }
+    .sd-branch-row [data-label]::before { content: attr(data-label); color: var(--sd-muted); }
+    .sd-fact, .sd-cash > div { padding-left: 1.1rem; padding-right: 1.1rem; }
   }
-  .pagination-links a:hover { background: #eff6ff; }
-  .pagination-links span.disabled {
-    color: #d1d5db;
-    background: #f9fafb;
-  }
+  @media (prefers-reduced-motion: reduce) { .sd * { transition: none !important; } }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-container">
+<div class="sd">
 
-  <div class="dashboard-header">
+  <div class="sd-head">
     <div>
-      <h1 class="dashboard-title">Performance & Cash Analytics</h1>
-      <p class="dashboard-subtitle">Revenue tracking, P&L, and shared Cash Register Pool management</p>
+      <h1 class="sd-title">Sales overview</h1>
+      <p class="sd-scope"><strong>{{ scope_label }}</strong> &ndash; {{ period.label }}</p>
     </div>
-    <div class="header-actions">
-      {% if user.get_role_display == 'Admin' %}
-      <a href="{% url 'record-cash-out' %}" class="btn-cashout">Record Cash Out</a>
-      {% endif %}
-      <span class="data-badge {% if period.is_custom %}badge-custom{% endif %}">{{ period.label }}</span>
-    </div>
+    <a href="{% url 'record-cash-out' %}" class="sd-btn-out">Record cash taken out</a>
   </div>
 
-  {% if user.get_role_display == 'Admin' %}
-  <div class="report-filter-card">
-    <h3 class="report-filter-title">Financial Report Period</h3>
-    <form method="GET" action="{% url 'sales-dashboard' %}">
-      <div class="report-filter-row">
-        <div class="report-filter-field">
-          <label for="period_start">From</label>
-          <input type="datetime-local" name="period_start" id="period_start" value="{{ period.start_input }}" required>
-        </div>
-        <div class="report-filter-field">
-          <label for="period_end">To</label>
-          <input type="datetime-local" name="period_end" id="period_end" value="{{ period.end_input }}" required>
-        </div>
-        <button type="submit" class="btn-generate">Generate Report</button>
-        {% if period.is_custom %}
-          <a href="{% url 'sales-dashboard' %}" class="btn-clear-period">Clear (back to Month-to-Date)</a>
-        {% endif %}
-      </div>
+  <div class="sd-filters">
+    {% if branches|length > 1 %}
+    <form method="get" action="{% url 'sales-dashboard' %}" class="sd-filter-row">
+      {% for key, value in keep_params %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <label for="sd-branch" class="sd-filter-label">Branch</label>
+      <select name="branch" id="sd-branch" class="sd-select" onchange="this.form.submit()">
+        <option value="">All branches (whole business)</option>
+        {% for b in branches %}
+        <option value="{{ b.pk }}" {% if selected_branch and selected_branch.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="sd-btn">Show</button></noscript>
     </form>
-    <div class="quick-picks">
-      <button type="button" class="quick-pick-btn" data-range="today">Today</button>
-      <button type="button" class="quick-pick-btn" data-range="yesterday">Yesterday</button>
-      <button type="button" class="quick-pick-btn" data-range="this-week">This Week</button>
-      <button type="button" class="quick-pick-btn" data-range="last-7-days">Last 7 Days</button>
-      <button type="button" class="quick-pick-btn" data-range="this-month">This Month</button>
-    </div>
-  </div>
+    {% endif %}
 
-  
-  <h2 class="section-divider">Sales & Profitability</h2>
-  <p class="section-note">{{ period.label }} &middot; {{ period.order_count }} order{{ period.order_count|pluralize }}</p>
-  <div class="metrics-grid">
-    <div class="card metric-card card-blue">
-      <h3>Gross Revenue</h3>
-      <div class="value">KSH {{ metrics.revenue|floatformat:2 }}</div>
-      <p class="card-footer">Total value generated from sales in this period.</p>
-    </div>
-    <div class="card metric-card card-blue">
-      <h3>Cost of Goods Sold</h3>
-      <div class="value">KSH {{ metrics.cogs|floatformat:2 }}</div>
-      <p class="card-footer">Purchasing price of sold items.</p>
-    </div>
-    <div class="card metric-card card-blue">
-      <h3>Net Gross Profit</h3>
-      <div class="value">KSH {{ metrics.profit|floatformat:2 }}</div>
-      <p class="card-footer">Gross revenue minus asset cost.</p>
-    </div>
-    <div class="card metric-card card-blue">
-      <h3>Profit Margin</h3>
-      <div class="value">{{ metrics.margin }}%</div>
-      <p class="card-footer">Overall efficiency percentage.</p>
-    </div>
-    <div class="card metric-card card-red">
-      <h3>Refunds Paid Out</h3>
-      <div class="value">KSH {{ metrics.refunds|floatformat:2 }}</div>
-      <p class="card-footer">Already deducted from the revenue, cost and profit above.</p>
-    </div>
-    <div class="card metric-card card-red">
-      <h3>Write-offs (unsellable returns)</h3>
-      <div class="value">KSH {{ metrics.writeoffs|floatformat:2 }}</div>
-      <p class="card-footer">Cost of refunded goods that could not be resold. Already deducted from profit.</p>
-    </div>
-  </div>
-
-  <h2 class="section-divider">Cumulative Cash & Vault Overview</h2>
-  <p class="section-note">All-time — this section always reflects the whole pool, independent of the report period above.</p>
-  <div class="metrics-grid">
-    <div class="card metric-card card-highlight">
-      <h3>Live Branch Cash Pool</h3>
-      <div class="value">KSH {{ cumulative_cash.live_pool_balance|floatformat:2 }}</div>
-      <p class="card-footer">Carried-forward balance + all sales, cash-ins and cash-outs to date.</p>
-    </div>
-    <div class="card metric-card card-green">
-      <h3>Total Cash Verified</h3>
-      <div class="value">KSH {{ cumulative_cash.total_counted_cash|floatformat:2 }}</div>
-      <p class="card-footer">Most recent physical count per branch — not summed across every past close.</p>
-    </div>
-    <div class="card metric-card card-blue">
-      <h3>Cumulative Cash Sales</h3>
-      <div class="value">KSH {{ cumulative_cash.total_cash_revenue|floatformat:2 }}</div>
-      <p class="card-footer">Total revenue earned from cash transactions.</p>
-    </div>
-    <div class="card metric-card {% if cumulative_cash.total_discrepancy < 0 %}card-red{% else %}card-green{% endif %}">
-      <h3>Cumulative Discrepancy</h3>
-      <div class="value">KSH {{ cumulative_cash.total_discrepancy|floatformat:2 }}</div>
-      <p class="card-footer">Net shortage/overage across all closed shifts.</p>
-    </div>
-  </div>
-
-  <h2 class="section-divider">Cash Drawer Control</h2>
-  <p class="section-note">{{ period.label }}</p>
-  <div class="metrics-grid">
-    <div class="card metric-card card-purple">
-      <h3>Active Registers</h3>
-      <div class="value">{{ cash_metrics.active_sessions_count }}</div>
-      <p class="card-footer">Branches with an open shared pool right now.</p>
-    </div>
-    <div class="card metric-card card-green">
-      <h3>Total Cash In</h3>
-      <div class="value">KSH {{ cash_metrics.cash_in|floatformat:2 }}</div>
-      <p class="card-footer">Float additions in this period.</p>
-    </div>
-    <div class="card metric-card card-red">
-      <h3>Total Cash Out</h3>
-      <div class="value">KSH {{ cash_metrics.cash_out|floatformat:2 }}</div>
-      <p class="card-footer">Withdrawals (deposits, rent, petty cash, etc.) in this period.</p>
-    </div>
-    <div class="card metric-card card-red">
-      <h3>Customer Refunds</h3>
-      <div class="value">KSH {{ cash_metrics.refunds|floatformat:2 }}</div>
-      <p class="card-footer">Cash handed back to customers in this period.</p>
-    </div>
-    <div class="card metric-card {% if cash_metrics.discrepancies < 0 %}card-red{% else %}card-green{% endif %}">
-      <h3>Period Discrepancy</h3>
-      <div class="value">KSH {{ cash_metrics.discrepancies|floatformat:2 }}</div>
-      <p class="card-footer">Net shortages or overages from sessions closed in this period.</p>
-    </div>
-  </div>
-
-  <div class="data-split-container">
-    <div class="card table-card">
-      <h2 class="section-title">Cash Register Sessions &mdash; {{ period.label }}</h2>
-      <div id="sessions-table-container">
-        {% include 'sales/sessions_table.html' %}
+    <div class="sd-filter-row">
+      <span class="sd-filter-label">Dates</span>
+      <div class="sd-pills">
+        {% for link in preset_links %}
+        <a href="{{ link.url }}" class="sd-pill {% if link.active %}is-active{% endif %}"{% if link.active %} aria-current="true"{% endif %}>{{ link.label }}</a>
+        {% endfor %}
+        <details class="sd-custom {% if custom_active %}is-active{% endif %}" {% if custom_active %}open{% endif %}>
+          <summary>Pick dates</summary>
+          <form method="get" action="{% url 'sales-dashboard' %}" class="sd-custom-form" id="sd-date-form">
+            {% if selected_branch %}<input type="hidden" name="branch" value="{{ selected_branch.pk }}">{% endif %}
+            <input type="hidden" name="period_start" id="sd-period-start">
+            <input type="hidden" name="period_end" id="sd-period-end">
+            <label class="sd-field">From
+              <input type="date" id="sd-from" value="{{ period.start_date }}" required>
+            </label>
+            <label class="sd-field">To
+              <input type="date" id="sd-to" value="{{ period.end_date }}" required>
+            </label>
+            <button type="submit" class="sd-btn">Show</button>
+          </form>
+        </details>
       </div>
     </div>
   </div>
 
-  <div class="data-split-container">
-    <div class="card table-card">
-      <h2 class="section-title">Cash In / Cash Out Audit Log &mdash; {{ period.label }}</h2>
-      <div id="txns-table-container">
-        {% include 'sales/cash_txns_table.html' %}
+  <h2 class="sd-h2">How the business did</h2>
+  <p class="sd-hint">{{ period.order_count }} order{{ period.order_count|pluralize }} {% if selected_branch %}at {{ selected_branch.name }}{% else %}across all branches{% endif %}.</p>
+
+  <div class="sd-panel">
+    <div class="sd-hero">
+      <div class="is-sales">
+        <p class="sd-hero-label">Sales</p>
+        <p class="sd-hero-value"><small>KSH</small>{{ metrics.revenue|floatformat:"0g" }}</p>
+        <p class="sd-hero-note">Money received from customers, after refunds.</p>
       </div>
+      <div class="{% if metrics.profit < 0 %}is-loss{% else %}is-profit{% endif %}">
+        <p class="sd-hero-label">Profit</p>
+        <p class="sd-hero-value"><small>KSH</small>{{ metrics.profit|floatformat:"0g" }}</p>
+        <p class="sd-hero-note">What is left after paying for the goods you sold.</p>
+      </div>
+    </div>
+    <div class="sd-facts">
+      <div class="sd-fact">
+        <p class="sd-fact-label">Orders</p>
+        <p class="sd-fact-value">{{ period.order_count }}</p>
+      </div>
+      <div class="sd-fact">
+        <p class="sd-fact-label">Profit on every KSH 100 sold</p>
+        <p class="sd-fact-value">KSH {{ metrics.margin|floatformat:0 }}</p>
+      </div>
+      <div class="sd-fact">
+        <p class="sd-fact-label">Refunded to customers</p>
+        <p class="sd-fact-value {% if metrics.refunds > 0 %}is-bad{% endif %}">KSH {{ metrics.refunds|floatformat:"0g" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <details class="sd-more">
+    <summary>See how profit is worked out</summary>
+    <div class="sd-more-grid">
+      <div class="sd-more-item">
+        <p class="sd-fact-label">Cost of the goods sold</p>
+        <p class="sd-fact-value">KSH {{ metrics.cogs|floatformat:"2g" }}</p>
+        <p class="sd-fact-note">What you paid your suppliers for the items that were sold.</p>
+      </div>
+      <div class="sd-more-item">
+        <p class="sd-fact-label">Returned goods thrown away</p>
+        <p class="sd-fact-value">KSH {{ metrics.writeoffs|floatformat:"2g" }}</p>
+        <p class="sd-fact-note">Cost of refunded items that could not be sold again. Already taken off your profit.</p>
+      </div>
+    </div>
+  </details>
+
+  <!-- 2. Branch comparison, only when looking at the whole business -->
+  {% if branch_rows %}
+  <div class="sd-section">
+    <h2 class="sd-h2">How each branch did</h2>
+    <p class="sd-hint">Select a branch to see only its numbers.</p>
+    {% if top_branch %}
+    <p class="sd-top"><strong>{{ top_branch.name }}</strong> sold the most: KSH {{ top_branch.revenue|floatformat:"0g" }}.</p>
+    {% endif %}
+    <div class="sd-panel sd-branches">
+      <div class="sd-branch-row is-head">
+        <span>Branch</span><span>Sales</span><span>Profit</span><span>Orders</span>
+      </div>
+      {% for row in branch_rows %}
+      {% if row.url %}<a href="{{ row.url }}" class="sd-branch-row">{% else %}<div class="sd-branch-row">{% endif %}
+        <span class="sd-branch-name">{{ row.name }}</span>
+        <span class="sd-branch-sales">
+          <span class="sd-num">KSH {{ row.revenue|floatformat:"0g" }}</span>
+          <span class="sd-bar" aria-hidden="true"><span style="width: {{ row.bar }}%"></span></span>
+        </span>
+        <span class="sd-num {% if row.profit < 0 %}is-bad{% else %}is-good{% endif %}" data-label="Profit: ">KSH {{ row.profit|floatformat:"0g" }}</span>
+        <span class="sd-num" data-label="Orders: ">{{ row.orders }}</span>
+      {% if row.url %}</a>{% else %}</div>{% endif %}
+      {% endfor %}
     </div>
   </div>
   {% endif %}
 
-  <div class="data-split-container">
-    <div class="card table-card">
-      <h2 class="section-title">Sales Transactions &mdash; {{ period.label }}</h2>
-      <div id="orders-table-container">
-        {% include 'sales/orders_table.html' %}
+  <!-- 3. Cash -->
+  <div class="sd-section">
+    <h2 class="sd-h2">Cash</h2>
+    <p class="sd-hint">{{ scope_label }}. The first box is the cash you should have right now; the rest cover the dates chosen above.</p>
+
+    <div class="sd-panel">
+      <div class="sd-cash">
+        <div>
+          <p class="sd-fact-label">Cash that should be in the drawer</p>
+          <p class="sd-fact-value">KSH {{ cumulative_cash.live_pool_balance|floatformat:"0g" }}</p>
+          <p class="sd-fact-note">{{ cash_metrics.active_sessions_count }} register{{ cash_metrics.active_sessions_count|pluralize }} open now</p>
+        </div>
+        <div>
+          <p class="sd-fact-label">Cash added</p>
+          <p class="sd-fact-value">KSH {{ cash_metrics.cash_in|floatformat:"0g" }}</p>
+          <p class="sd-fact-note">Money put into the drawer</p>
+        </div>
+        <div>
+          <p class="sd-fact-label">Cash taken out</p>
+          <p class="sd-fact-value">KSH {{ cash_metrics.cash_out|floatformat:"0g" }}</p>
+          <p class="sd-fact-note">Bank deposits, rent, petty cash</p>
+        </div>
+        <div>
+          <p class="sd-fact-label">Cash difference at closing</p>
+          <p class="sd-fact-value {% if cash_metrics.discrepancies < 0 %}is-bad{% elif cash_metrics.discrepancies > 0 %}is-good{% endif %}">KSH {{ cash_metrics.discrepancies|floatformat:"0g" }}</p>
+          <p class="sd-fact-note">{% if cash_metrics.discrepancies < 0 %}Cash was short{% elif cash_metrics.discrepancies > 0 %}There was extra cash{% else %}Counted cash matched{% endif %}</p>
+        </div>
       </div>
+    </div>
+
+    <details class="sd-more">
+      <summary>See all-time cash figures</summary>
+      <div class="sd-more-grid">
+        <div class="sd-more-item">
+          <p class="sd-fact-label">Cash sales, all time</p>
+          <p class="sd-fact-value">KSH {{ cumulative_cash.total_cash_revenue|floatformat:"2g" }}</p>
+          <p class="sd-fact-note">All sales paid in cash, after refunds.</p>
+        </div>
+        <div class="sd-more-item">
+          <p class="sd-fact-label">Cash counted at last closing</p>
+          <p class="sd-fact-value">KSH {{ cumulative_cash.total_counted_cash|floatformat:"2g" }}</p>
+          <p class="sd-fact-note">The latest count at each branch, added together.</p>
+        </div>
+        <div class="sd-more-item">
+          <p class="sd-fact-label">Cash difference, all time</p>
+          <p class="sd-fact-value {% if cumulative_cash.total_discrepancy < 0 %}is-bad{% elif cumulative_cash.total_discrepancy > 0 %}is-good{% endif %}">KSH {{ cumulative_cash.total_discrepancy|floatformat:"2g" }}</p>
+          <p class="sd-fact-note">Below zero means cash has been short overall.</p>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- 4. The detailed records -->
+  <div class="sd-section">
+    <h2 class="sd-h2">Records</h2>
+    <p class="sd-hint">{{ scope_label }}, {{ period.label }}.</p>
+
+    <div class="sd-tabs" role="tablist" aria-label="Records">
+      <button type="button" class="sd-tab" role="tab" id="tab-orders" data-tab="orders" aria-controls="panel-orders" aria-selected="true">Sales</button>
+      <button type="button" class="sd-tab" role="tab" id="tab-sessions" data-tab="sessions" aria-controls="panel-sessions" aria-selected="false">Register shifts</button>
+      <button type="button" class="sd-tab" role="tab" id="tab-txns" data-tab="txns" aria-controls="panel-txns" aria-selected="false">Cash added and taken out</button>
+    </div>
+
+    <div class="sd-tabpanel" role="tabpanel" id="panel-orders" aria-labelledby="tab-orders">
+      <div id="orders-table-container">{% include 'sales/orders_table.html' %}</div>
+    </div>
+    <div class="sd-tabpanel" role="tabpanel" id="panel-sessions" aria-labelledby="tab-sessions" hidden>
+      <div id="sessions-table-container">{% include 'sales/sessions_table.html' %}</div>
+    </div>
+    <div class="sd-tabpanel" role="tabpanel" id="panel-txns" aria-labelledby="tab-txns" hidden>
+      <div id="txns-table-container">{% include 'sales/cash_txns_table.html' %}</div>
     </div>
   </div>
 
@@ -495,65 +544,57 @@
 (function () {
   'use strict';
 
-  function pad(n) { return n.toString().padStart(2, '0'); }
-
-  function toLocalInputValue(date) {
-    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-      'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
-  }
-
-  // Make sure every table inside a container sits in a horizontal scroller.
-  // Safe to call repeatedly: tables already inside one are left alone.
-  function makeScrollable(root) {
-    if (!root) return;
-    root.querySelectorAll('table').forEach(function (table) {
-      if (table.closest('.table-responsive')) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'table-responsive';
-      table.parentNode.insertBefore(wrap, table);
-      wrap.appendChild(table);
+  /* Date picker: the server reads full date-times, so send whole days. */
+  var dateForm = document.getElementById('sd-date-form');
+  if (dateForm) {
+    dateForm.addEventListener('submit', function () {
+      document.getElementById('sd-period-start').value = document.getElementById('sd-from').value + 'T00:00';
+      document.getElementById('sd-period-end').value = document.getElementById('sd-to').value + 'T00:00';
     });
   }
 
-  ['sessions-table-container', 'txns-table-container', 'orders-table-container']
-    .forEach(function (id) { makeScrollable(document.getElementById(id)); });
+  /* Tabs. Open on the table whose page you were last paging through. */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.sd-tab'));
 
-  function startOfDay(date) {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
+  function showTab(key) {
+    tabs.forEach(function (tab) {
+      var on = tab.dataset.tab === key;
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      document.getElementById('panel-' + tab.dataset.tab).hidden = !on;
+    });
   }
 
-
-  document.querySelectorAll('.quick-pick-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      const form = document.getElementById('period_start').closest('form');
-      const url = new URL(form.getAttribute('action'), window.location.href);
-      url.searchParams.set('period', btn.dataset.range);
-      window.location.href = url.toString();
+  tabs.forEach(function (tab, i) {
+    tab.addEventListener('click', function () { showTab(tab.dataset.tab); });
+    tab.addEventListener('keydown', function (e) {
+      var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
+      if (next === null) return;
+      next = (next + tabs.length) % tabs.length;
+      tabs[next].focus();
+      showTab(tabs[next].dataset.tab);
+      e.preventDefault();
     });
   });
 
+  var search = window.location.search;
+  showTab(/[?&]txns_page=/.test(search) ? 'txns' : /[?&]sessions_page=/.test(search) ? 'sessions' : 'orders');
+
+  /* Paging a table swaps just that table, so the page does not jump. */
   function bindAjaxPagination(containerId, tableKey) {
-    const container = document.getElementById(containerId);
+    var container = document.getElementById(containerId);
     if (!container) return;
 
     container.addEventListener('click', function (e) {
-      const link = e.target.closest('a[data-ajax-page="' + tableKey + '"]');
+      var link = e.target.closest('a[data-ajax-page="' + tableKey + '"]');
       if (!link) return;
-
       e.preventDefault();
 
-      const relativeHref = link.getAttribute('href'); 
-      
-      const fetchUrl = new URL(relativeHref, window.location.href);
+      var relativeHref = link.getAttribute('href');
+      var fetchUrl = new URL(relativeHref, window.location.href);
       fetchUrl.searchParams.set('table', tableKey);
 
       container.style.opacity = '0.5';
-
-      fetch(fetchUrl.toString(), {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      })
+      fetch(fetchUrl.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (response) {
           if (!response.ok) throw new Error('bad response');
           return response.json();
@@ -561,20 +602,13 @@
         .then(function (data) {
           if (data && data.ok) {
             container.innerHTML = data.html;
-            makeScrollable(container);   // re-apply after the AJAX swap
-            
             window.history.replaceState(null, '', relativeHref);
           } else {
             window.location.href = relativeHref;
           }
         })
-        .catch(function () {
-          
-          window.location.href = relativeHref;
-        })
-        .finally(function () {
-          container.style.opacity = '1';
-        });
+        .catch(function () { window.location.href = relativeHref; })
+        .finally(function () { container.style.opacity = '1'; });
     });
   }
 

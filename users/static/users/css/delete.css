@@ -40,14 +40,13 @@
     color: #dc2626;
 }
 
-/* Text block containers styles layout typography */
 .delete-text-content {
     flex: 1;
 }
 
 .delete-title {
     font-size: 1.15rem;
-    font-weight: 700;
+    font-weight: 400;
     color: #111827;
     margin: 0 0 0.5rem 0;
 }
