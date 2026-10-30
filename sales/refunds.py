@@ -33,7 +33,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from django.utils import timezone
 
 from inventory.stock import change_stock
@@ -188,13 +188,23 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
         return refund, True
 
 
-def refund_totals(start=None, end=None):
-    """Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures."""
+def refund_totals(start=None, end=None, branch=None):
+    """
+    Refund money/cost/profit for a period (by refund date), for reports: subtract from sales figures.
+    Pass branch to limit it to one branch. 'writeoffs' is the cost of returned goods that were
+    thrown away rather than restocked (already reflected in profit_reversed).
+    """
     qs = Refund.objects.all()
+    if branch is not None:
+        qs = qs.filter(branch=branch)
     if start is not None:
         qs = qs.filter(created_at__gte=start)
     if end is not None:
         qs = qs.filter(created_at__lt=end)
     agg = qs.aggregate(amount=Sum('total_amount'), cogs=Sum('cogs_reversed'), profit=Sum('profit_reversed'))
+
+    items = RefundItem.objects.filter(refund__in=qs, restocked=False)
+    cost = ExpressionWrapper(F('unit_cost') * F('quantity'), output_field=DecimalField(max_digits=14, decimal_places=2))
+    agg['writeoffs'] = items.aggregate(v=Sum(cost))['v']
     zero = Decimal('0.00')
     return {k: (v or zero) for k, v in agg.items()}
