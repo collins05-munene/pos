@@ -8,26 +8,28 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, CreateView, DetailView
-from django.db.models import Sum, F, OuterRef, Subquery, Value, DecimalField, ExpressionWrapper
+from django.db.models import Q, Sum, F, OuterRef, Subquery, Value, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from django.utils.dateparse import parse_date
 from django.urls import reverse, reverse_lazy
 from django.template.defaultfilters import floatformat, date as date_filter
 from users.mixins import (AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin,
                           LiveSearchMixin, action_link)
-                          
-from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin, LiveSearchMixin
+from users.utils import log_action, AuditAction
 from sales.models import CashRegisterSession, CashTransaction
 from products.models import ProductVariant
 
 from .models import (
-    PurchaseOrder, PurchaseOrderItem, PurchasePayment, StockLevel, StockAdjustment,
+    Branch, InventoryTransfer, PurchaseOrder, PurchaseOrderItem, PurchasePayment, StockLevel, StockAdjustment,
 )
 from .forms import (
     PurchaseOrderForm, PurchaseOrderItemFormSet, make_purchase_item_formset,
     StockAdjustmentForm, PurchasePaymentForm, OpeningStockForm, OpeningStockFormSet,
+    InventoryTransferForm, InventoryTransferItemFormSet,
 )
-from .stock import change_stock, InsufficientStock
+from .stock import change_stock, InsufficientStock, available_units
+from .transfers import (TransferError, create_transfer, dispatch_transfer, receive_transfer,
+                        cancel_transfer)
 
 
 def _cash_pool_check(branch, amount):
@@ -498,3 +500,191 @@ class OpeningStockCreateView(AdminRequiredMixin, View):
             messages.success(request, "Opening stock saved.")
             return redirect('stock-level-list')
         return render(request, self.template_name, {'form': form, 'items': items})
+
+
+# --------------------------------------------------------------------------------------
+# Branch-to-branch stock transfers. All stock movement lives in inventory/transfers.py.
+# --------------------------------------------------------------------------------------
+
+class TransferListView(LiveSearchMixin, AdminRequiredMixin, ListView):
+    model = InventoryTransfer
+    template_name = 'inventory/transfer_list.html'
+    context_object_name = 'transfers'
+    paginate_by = 20
+    queryset = InventoryTransfer.objects.select_related('from_branch', 'to_branch').prefetch_related('items')
+    search_fields = ('transfer_number', 'from_branch__name', 'to_branch__name')
+    empty_noun = 'stock transfers'
+    create_url_name = 'transfer-create'
+    create_label = 'Start a transfer'
+
+    STATUS_COLOURS = {'PENDING': '#b45309', 'IN_TRANSIT': '#1e40af', 'COMPLETED': '#166534', 'CANCELLED': '#6b7280'}
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        g = self.request.GET
+        if g.get('status') in dict(InventoryTransfer.STATUS_CHOICES):
+            qs = qs.filter(status=g['status'])
+        if g.get('branch', '').isdigit():       # either end of the transfer
+            qs = qs.filter(Q(from_branch_id=g['branch']) | Q(to_branch_id=g['branch']))
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['status_choices'] = InventoryTransfer.STATUS_CHOICES
+        ctx['branches'] = Branch.objects.all()
+        return ctx
+
+    def serialize_row(self, t):
+        actions = [action_link('View', reverse('transfer-detail', args=[t.pk]))]
+        if t.status == 'IN_TRANSIT':
+            actions.append(action_link('Receive', reverse('transfer-receive', args=[t.pk])))
+        status = {'t': t.get_status_display(), 'b': True, 'c': self.STATUS_COLOURS.get(t.status, '#1e40af')}
+        if t.status == 'COMPLETED' and t.has_shortfall:
+            status['s'] = 'Arrived short'
+        return {'cells': [{'t': t.transfer_number, 'b': True}, t.from_branch.name, t.to_branch.name,
+                          str(len(t.items.all())), status, date_filter(t.created_at, 'd M Y')],
+                'actions': actions}
+
+
+class TransferCreateView(AdminRequiredMixin, View):
+    """Start a transfer: pick the two branches and what to send; optionally send it right away."""
+    template_name = 'inventory/transfer_form.html'
+
+    def _render(self, request, form, items):
+        return render(request, self.template_name, {'form': form, 'items': items})
+
+    def get(self, request):
+        initial = {}
+        if getattr(request, 'branch', None):
+            initial['from_branch'] = request.branch.pk
+        return self._render(request, InventoryTransferForm(initial=initial), InventoryTransferItemFormSet())
+
+    def post(self, request):
+        form = InventoryTransferForm(request.POST)
+        items = InventoryTransferItemFormSet(request.POST)
+        if not (form.is_valid() and items.is_valid()):
+            return self._render(request, form, items)
+
+        lines = [(f.cleaned_data['variant'], f.cleaned_data['quantity'])
+                 for f in items.forms
+                 if f.cleaned_data and not f.cleaned_data.get('DELETE')]
+        dispatch_now = form.cleaned_data['dispatch_now']
+        try:
+            transfer = create_transfer(
+                request.user, form.cleaned_data['from_branch'], form.cleaned_data['to_branch'],
+                lines, remarks=form.cleaned_data['remarks'], dispatch_now=dispatch_now)
+        except TransferError as e:
+            form.add_error(None, str(e))
+            return self._render(request, form, items)
+
+        log_action(request.user, AuditAction.RECORD_CREATE,
+                   f"Stock transfer {transfer.transfer_number} created"
+                   f"{' and dispatched' if dispatch_now else ''}: "
+                   f"{transfer.from_branch} -> {transfer.to_branch} ({len(lines)} item(s))", request)
+        messages.success(
+            request,
+            f"Transfer {transfer.transfer_number} "
+            + (f"sent - waiting for {transfer.to_branch.name} to receive it." if dispatch_now
+               else "saved. Send it when the stock is ready to leave."))
+        return redirect('transfer-detail', pk=transfer.pk)
+
+
+class TransferDetailView(AdminRequiredMixin, DetailView):
+    model = InventoryTransfer
+    template_name = 'inventory/transfer_detail.html'
+    context_object_name = 'transfer'
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related('from_branch', 'to_branch', 'created_by', 'dispatched_by',
+                                'received_by', 'cancelled_by')
+                .prefetch_related('items__variant__product__unit_of_measure'))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        t = self.object
+        rows = []
+        for item in t.items.all():
+            row = {'item': item}
+            if t.status == 'PENDING':
+                # Lets the sender spot a shortage before pressing Send.
+                row['available'] = available_units(t.from_branch, item.variant)
+                row['short'] = row['available'] < item.quantity
+            rows.append(row)
+        ctx['rows'] = rows
+        ctx['blocked'] = any(r.get('short') for r in rows)
+        return ctx
+
+
+class _TransferPostAction(AdminRequiredMixin, View):
+    """POST-only workflow step: run the service, report the result, go back to the transfer."""
+    service = None
+    done = ''           # past tense for messages / audit, e.g. "dispatched"
+
+    def post(self, request, pk):
+        transfer = get_object_or_404(InventoryTransfer, pk=pk)
+        try:
+            self.service(transfer, request.user)
+        except TransferError as e:
+            messages.error(request, str(e))
+        else:
+            log_action(request.user, AuditAction.RECORD_UPDATE,
+                       f"Stock transfer {transfer.transfer_number} {self.done}: "
+                       f"{transfer.from_branch} -> {transfer.to_branch}", request)
+            messages.success(request, f"Transfer {transfer.transfer_number} {self.done}.")
+        return redirect('transfer-detail', pk=transfer.pk)
+
+
+class TransferDispatchView(_TransferPostAction):
+    service = staticmethod(dispatch_transfer)
+    done = 'dispatched'
+
+
+class TransferCancelView(_TransferPostAction):
+    service = staticmethod(cancel_transfer)
+    done = 'cancelled'
+
+
+class TransferReceiveView(AdminRequiredMixin, View):
+    """Confirm what arrived. Pre-filled with the full quantity; lower a line if it arrived short."""
+    template_name = 'inventory/transfer_receive.html'
+
+    def _get_transfer(self, pk):
+        return get_object_or_404(
+            InventoryTransfer.objects.select_related('from_branch', 'to_branch')
+            .prefetch_related('items__variant__product__unit_of_measure'), pk=pk)
+
+    def get(self, request, pk):
+        transfer = self._get_transfer(pk)
+        if transfer.status != 'IN_TRANSIT':
+            messages.warning(request, f"{transfer.transfer_number} is {transfer.get_status_display().lower()}, "
+                                      "so it can't be received.")
+            return redirect('transfer-detail', pk=transfer.pk)
+        return render(request, self.template_name, {'transfer': transfer})
+
+    def post(self, request, pk):
+        transfer = self._get_transfer(pk)
+        received = {}
+        for item in transfer.items.all():
+            raw = request.POST.get(f'Receive_{item.pk}', '').strip()
+            try:
+                received[item.pk] = Decimal(raw) if raw else item.quantity
+            except InvalidOperation:
+                messages.error(request, f"'{raw}' is not a valid quantity for {item.variant.product.name}.")
+                return redirect('transfer-receive', pk=transfer.pk)
+        try:
+            receive_transfer(transfer, request.user, received)
+        except TransferError as e:
+            messages.error(request, str(e))
+            return redirect('transfer-receive', pk=transfer.pk)
+
+        short = [i for i in transfer.items.all() if received[i.pk] < i.quantity]
+        log_action(request.user, AuditAction.RECORD_UPDATE,
+                   f"Stock transfer {transfer.transfer_number} received at {transfer.to_branch}"
+                   f"{f' ({len(short)} line(s) short)' if short else ''}", request)
+        if short:
+            messages.warning(request, f"Transfer {transfer.transfer_number} received, but "
+                                      f"{len(short)} item(s) arrived short - check the shortfall.")
+        else:
+            messages.success(request, f"Transfer {transfer.transfer_number} received into {transfer.to_branch.name}.")
+        return redirect('transfer-detail', pk=transfer.pk)

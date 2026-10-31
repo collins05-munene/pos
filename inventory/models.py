@@ -261,6 +261,17 @@ class PurchasePayment(TenantOwnedModel):
 
 
 class InventoryTransfer(TenantOwnedModel):
+    """
+    Stock moving from one branch to another of the same shop.
+
+        PENDING     drafted; no stock has moved yet (can be edited-by-recreate or cancelled)
+        IN_TRANSIT  dispatched: stock has LEFT the source branch but has not reached the
+                    destination, so it is counted at neither (see inventory/transfers.py)
+        COMPLETED   received: stock has been added to the destination branch
+        CANCELLED   cancelled; anything already dispatched was returned to the source branch
+
+    Stock only ever changes through inventory/transfers.py, never by editing these rows.
+    """
     STATUS_CHOICES = (
         ('PENDING', 'Pending Dispatch'),
         ('IN_TRANSIT', 'In Transit'),
@@ -276,7 +287,18 @@ class InventoryTransfer(TenantOwnedModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    dispatched_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name='dispatched_transfers')
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name='received_transfers')
+    received_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name='cancelled_transfers')
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
+        ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "transfer_number"],
@@ -287,11 +309,28 @@ class InventoryTransfer(TenantOwnedModel):
     def __str__(self):
         return f"Transfer {self.transfer_number}: {self.from_branch} -> {self.to_branch}"
 
+    @property
+    def has_shortfall(self):
+        """True once received with less than was sent (read from prefetched items)."""
+        return self.status == 'COMPLETED' and any(i.shortfall > 0 for i in self.items.all())
+
 
 class InventoryTransferItem(TenantOwnedModel):
+    """
+    `quantity` and `quantity_received` are in the unit of `variant` (3 boxes, 40 tablets,
+    2.5 kg ...), the same convention as purchases; stock.change_stock converts to base units.
+    """
     transfer = models.ForeignKey(InventoryTransfer, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="Quantity sent")
+    quantity_received = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal('0'),
+        help_text="Quantity that actually arrived; set when the transfer is received.")
+
+    @property
+    def shortfall(self):
+        """Sent but never arrived (only meaningful once the transfer is completed)."""
+        return max(self.quantity - self.quantity_received, Decimal('0'))
 
     def __str__(self):
         return f"{self.variant.sku} * {self.quantity}"

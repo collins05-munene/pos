@@ -1,0 +1,56 @@
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block title %} Stock Transfers {% endblock %}
+
+{% block content %}
+<div class="directory-container">
+
+    <div class="page-header">
+        <div class="header-text">
+            <h2>Stock Transfers</h2>
+            <p>Stock moving between your branches. It leaves the sending branch when sent and joins the receiving branch when received.</p>
+        </div>
+        <a href="{% url 'transfer-create' %}" class="btn btn-primary">New Transfer</a>
+    </div>
+
+    <form method="get" role="search" data-live-form onsubmit="return false;"
+          style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px;">
+        <label style="font-size: 12px; color: #6b7280;">Search<br><input type="search" name="q" placeholder="Transfer no. or branch" autocomplete="off" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;"></label>
+        <label style="font-size: 12px; color: #6b7280;">Status<br>
+            <select name="status" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                {% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select></label>
+        <label style="font-size: 12px; color: #6b7280;">Branch (sending or receiving)<br>
+            <select name="branch" style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">All</option>
+                {% for b in branches %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}
+            </select></label>
+        <a href="{% url 'transfer-list' %}" class="action-link" style="padding: 8px 4px;">Clear</a>
+    </form>
+
+    <div id="live-csrf" hidden>{% csrf_token %}</div>
+
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col">Transfer Number</th>
+                    <th scope="col">From</th>
+                    <th scope="col">To</th>
+                    <th scope="col">Items</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="live-body">
+                <tr><td colspan="7" class="empty-state-row"><div class="empty-state"><p>Loading…</p></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="live-pager"></div>
+</div>
+<script src="{% static 'js/live-search.js' %}" defer></script>
+{% endblock %}
