@@ -3,7 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.forms import formset_factory, BaseFormSet
 
-from .models import Branch, PurchaseOrder, PurchaseOrderItem, StockAdjustment, PurchasePayment
+from .models import (Branch, InventoryTransfer, InventoryTransferItem, PurchaseOrder, PurchaseOrderItem,
+                     StockAdjustment, PurchasePayment)
 from products.models import ProductVariant
 
 
@@ -195,4 +196,78 @@ class BaseOpeningStockFormSet(BaseFormSet):
 
 OpeningStockFormSet = formset_factory(
     OpeningStockItemForm, formset=BaseOpeningStockFormSet, extra=3, can_delete=True,
+)
+
+
+class InventoryTransferForm(forms.ModelForm):
+    """Header of a branch-to-branch transfer; the items are the formset below."""
+    dispatch_now = forms.BooleanField(
+        required=False, initial=True,
+        label="Send it now",
+        help_text="Takes the stock out of the sending branch straight away. "
+                  "Untick to save a draft and send it later.",
+    )
+
+    class Meta:
+        model = InventoryTransfer
+        fields = ['from_branch', 'to_branch', 'remarks']
+        labels = {'from_branch': 'Send from', 'to_branch': 'Send to', 'remarks': 'Notes'}
+        widgets = {
+            'from_branch': forms.Select(attrs={'class': 'form-select'}),
+            'to_branch': forms.Select(attrs={'class': 'form-select'}),
+            'remarks': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2,
+                                             'placeholder': 'Optional - e.g. who is carrying it'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        active = Branch.objects.filter(is_active=True)      # no archived / unpaid branches
+        self.fields['from_branch'].queryset = active
+        self.fields['to_branch'].queryset = active
+
+    def clean(self):
+        cleaned = super().clean()
+        src, dst = cleaned.get('from_branch'), cleaned.get('to_branch')
+        if src and dst and src.pk == dst.pk:
+            self.add_error('to_branch', "Choose a different branch - stock can't be transferred to the same branch.")
+        return cleaned
+
+
+class InventoryTransferItemForm(forms.ModelForm):
+    quantity = forms.DecimalField(
+        max_digits=12, decimal_places=3, min_value=Decimal('0.001'), label="Quantity",
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'step': '0.001', 'min': '0.001', 'placeholder': 'Qty'}),
+    )
+
+    class Meta:
+        model = InventoryTransferItem
+        fields = ['variant', 'quantity']
+        labels = {'variant': 'Product / unit sent'}
+        widgets = {'variant': forms.Select(attrs=SEARCHABLE_VARIANT)}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['variant'].queryset = _variant_queryset()
+
+
+class BaseTransferItemFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        seen = set()
+        for form in self.forms:
+            cd = form.cleaned_data
+            if not cd or cd.get('DELETE'):
+                continue
+            variant = cd['variant']
+            if variant.pk in seen:
+                raise forms.ValidationError(f"{variant} appears more than once - combine the quantities.")
+            seen.add(variant.pk)
+
+
+InventoryTransferItemFormSet = forms.inlineformset_factory(
+    InventoryTransfer, InventoryTransferItem,
+    form=InventoryTransferItemForm, formset=BaseTransferItemFormSet,
+    extra=1, can_delete=True, min_num=1, validate_min=True,
 )
