@@ -7,7 +7,7 @@ from django.db import transaction
 from django.views import View
 from django.utils.text import slugify
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 
 from users.mixins import AdminRequiredMixin, AuditLogMixin, CashierRequiredMixin
 from users.utils import log_action, AuditAction
@@ -20,6 +20,7 @@ from .forms import (
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
 from .mixins import ArchiveFilterMixin, SafeDeleteMixin
+from tenants.models import get_settings
 from users.mixins import LiveSearchMixin, action_link, action_post
 
 _PRICE_FIELDS = (("retail_price", "retail"), ("cost_price", "cost"))
@@ -445,10 +446,12 @@ class ProductCreateView(ProductEditorMixin, CashierRequiredMixin, CreateView):
             variants.instance = self.object
             saved_variants = self.save_variants(variants)
             pack_count = self.save_packs(variants, packs)
+            image = form.apply_image(self.object)
 
             log_action(self.request.user, AuditAction.RECORD_CREATE,
                        f"Product created: {self.object.name} "
-                       f"({len(saved_variants)} variant(s), {pack_count} selling unit(s))",
+                       f"({len(saved_variants)} variant(s), {pack_count} selling unit(s))"
+                       f"{' with image' if image == 'added' else ''}",
                        self.request)
 
         base_ids = [str(f.instance.pk) for f in self.live_variant_forms(variants).values()]
@@ -477,9 +480,11 @@ class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
             variants.instance = self.object
             self.save_variants(variants)
             pack_count = self.save_packs(variants, packs)
+            image = form.apply_image(self.object)
 
             log_action(self.request.user, AuditAction.RECORD_UPDATE,
-                       f"Product updated: {self.object.name}", self.request)
+                       f"Product updated: {self.object.name}"
+                       f"{' (image ' + image + ')' if image else ''}", self.request)
             
         if price_lines:
             extra = f" (+{len(price_lines) - 5} more)" if len(price_lines) > 5 else ""
@@ -510,6 +515,41 @@ class ProductDetailView(CashierRequiredMixin, DetailView):
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related('variants__packagings')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['images_enabled'] = get_settings(self.request.tenant).product_images_enabled
+        return ctx
+
+
+class ProductImageView(CashierRequiredMixin, View):
+    """
+    Serves a product's image (size = 'thumb' | 'full') for the signed-in shop only. Going through a
+    view (not /media/) keeps one shop's photos away from another and works in production, where
+    Django does not serve /media/. The URL carries ?v=<content hash>, so the browser may keep the
+    file for a year and re-fetch only when the photo actually changes.
+    """
+    CACHE = 'private, max-age=31536000, immutable'
+
+    def get(self, request, pk, size):
+        if size not in ('thumb', 'full'):
+            raise Http404
+        product = get_object_or_404(Product.objects.only('id', 'tenant', 'image', 'thumb', 'image_token'),
+                                    pk=pk, tenant=request.tenant)
+        field = product.thumb if size == 'thumb' else product.image
+        if not field:
+            raise Http404
+        etag = f'"{product.image_token}-{size}"'
+        if request.headers.get('If-None-Match') == etag:
+            response = HttpResponse(status=304)
+        else:
+            try:
+                response = FileResponse(field.open('rb'), content_type='image/webp')
+            except (FileNotFoundError, OSError):
+                raise Http404
+        response['ETag'] = etag
+        response['Cache-Control'] = self.CACHE
+        return response
 
 
 class ProductRestoreView(View):

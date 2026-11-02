@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.urls import reverse
 
 from tenants.models import TenantOwnedModel
 
@@ -59,6 +60,11 @@ class UnitOfMeasure(TenantOwnedModel):
         return f"{self.name} ({self.short_name})"
 
 
+def product_image_path(instance, filename):
+    """One folder per shop, so a shop's images can be listed/removed/exported on their own."""
+    return f"product_images/{instance.tenant_id}/{filename}"
+
+
 class Product(TenantOwnedModel):
     name = models.CharField(max_length=255)
     sku_prefix = models.CharField(max_length=50, help_text="Base SKU prefix for this product line")
@@ -72,12 +78,36 @@ class Product(TenantOwnedModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Product image (optional, only offered when the shop turns it on in Settings). The database
+    # holds file *paths* only; the compressed WebP files live in storage -- see products/images.py.
+    image = models.FileField(upload_to=product_image_path, max_length=255, blank=True)
+    thumb = models.FileField(upload_to=product_image_path, max_length=255, blank=True)
+    image_token = models.CharField(max_length=16, blank=True,
+                                   help_text="Content hash of the current image; busts browser caches.")
+
     class Meta:
         ordering = ['name']
         constraints = _unique_per_tenant("product", "sku_prefix")
 
     def __str__(self):
         return self.name
+
+    @property
+    def has_image(self):
+        return bool(self.image and self.thumb)
+
+    def _image_url(self, size):
+        if not self.has_image:
+            return ""
+        return f"{reverse('product-image', args=[self.pk, size])}?v={self.image_token}"
+
+    @property
+    def thumb_url(self):
+        return self._image_url("thumb")
+
+    @property
+    def full_url(self):
+        return self._image_url("full")
 
 
 class ProductVariant(TenantOwnedModel):

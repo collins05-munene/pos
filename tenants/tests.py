@@ -1,9 +1,11 @@
 import json
+import re
 from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -12,7 +14,7 @@ from billing.models import Invoice, MpesaPayment, Subscription
 from billing.pricing import quote
 from inventory.models import Branch
 from tenants.context import tenant_context
-from tenants.models import CrossTenantWrite, TenantNotSet
+from tenants.models import CrossTenantWrite, PendingSignup, Tenant, TenantNotSet
 from tenants.services import compose_username, create_staff_user, register_business
 
 User = get_user_model()
@@ -149,7 +151,10 @@ class HttpTests(TestCase):
     def test_signup_gate_callback_and_platform(self):
         resp = self.client.post("/signup/", data=json.dumps({**SIGNUP, "phone": "0712345678"}),
                                 content_type="application/json")
-        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.status_code, 202, resp.content)
+        self.assertFalse(User.objects.filter(username="njeri@example.com").exists())  # not until the link is opened
+        link = re.search(r"https?://\S+/signup/verify/\S+/", mail.outbox[0].body).group(0)
+        self.assertEqual(self.client.get(link).status_code, 302)                       # verified + signed in -> /billing/
         tenant = User.objects.get(username="njeri@example.com").tenant
         # unpaid owner: billing reachable, everything else locked
         self.assertEqual(self.client.get("/billing/").status_code, 200)
@@ -186,3 +191,118 @@ class HttpTests(TestCase):
         self.assertTrue(r.json()["has_access"])
         r = self.client.post(f"/platform/tenants/{t.pk}/support-start/")
         self.assertEqual(self.client.get("/platform/tenants/").status_code, 200)
+
+
+
+@override_settings(TENANCY_ALLOW_NULL_TENANT=False, SIGNUP_RESEND_SECONDS=60,
+                   SITE_URL="https://shop.example.com")
+class SignupVerificationTests(TestCase):
+    """Public sign-up: form -> emailed link -> account. Nothing exists before the link is opened."""
+    form = {**SIGNUP, "phone": "0712 345 678", "term_months": 1, "branch_count": 1, "branch_names": []}
+
+    def post(self, **over):
+        return self.client.post("/signup/", data=json.dumps({**self.form, **over}),
+                                content_type="application/json")
+
+    def link(self, n=-1):
+        return re.search(r"https://shop\.example\.com(/signup/verify/\S+/)", mail.outbox[n].body).group(1)
+
+    def test_signup_sends_link_and_creates_nothing_yet(self):
+        r = self.post()
+        self.assertEqual(r.status_code, 202, r.content)
+        self.assertEqual(r.json()["next"], "/signup/check-email/")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["njeri@example.com"])
+        self.assertFalse(User.objects.filter(email="njeri@example.com").exists())
+        self.assertEqual(Tenant.objects.count(), 0)
+        self.assertEqual(self.client.get("/signup/check-email/").status_code, 200)
+
+    def test_link_creates_verified_owner_signs_in_and_works_once(self):
+        self.post()
+        url = self.link()
+        r = self.client.get(url)
+        self.assertRedirects(r, "/billing/", fetch_redirect_response=False)
+        owner = User.objects.get(username="njeri@example.com")
+        self.assertTrue(owner.is_owner)
+        self.assertIsNotNone(owner.email_verified_at)
+        self.assertEqual(owner.phone, "254712345678")                  # owner's own number, normalised
+        self.assertEqual(owner.tenant.phone, "254712345678")
+        self.assertTrue(owner.check_password("S3cure-pass-99"))        # password survived as a hash
+        self.assertEqual(self.client.get("/billing/").status_code, 200)  # already signed in
+        self.assertEqual(Invoice.objects.filter(tenant=owner.tenant).count(), 1)
+        self.assertEqual(Branch.all_objects.filter(tenant=owner.tenant).count(), 1)
+        # second click: link is spent
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(Tenant.objects.count(), 1)
+
+    def test_garbage_and_expired_links(self):
+        self.assertEqual(self.client.get("/signup/verify/not-a-real-token/").status_code, 404)
+        self.post()
+        PendingSignup.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(self.client.get(self.link()).status_code, 410)
+        self.assertEqual(Tenant.objects.count(), 0)
+
+    def test_any_kenyan_number_accepted_and_junk_rejected(self):
+        self.assertEqual(self.post(phone="0733123456").status_code, 202)         # Airtel-range, not just Safaricom
+        r = self.post(phone="12345", email="x@example.com")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Kenyan phone number", r.json()["errors"]["phone"][0]["message"])
+
+    def test_taken_email_is_rejected_before_any_email_goes_out(self):
+        signup()
+        r = self.post()
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("email", r.json()["errors"])
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_resend_cooldown_then_new_link_replaces_old(self):
+        self.post()
+        old = self.link()
+        self.assertEqual(self.post().status_code, 429)                  # form can't be used to flood an inbox
+        self.assertEqual(len(mail.outbox), 1)
+        r = self.client.post("/signup/resend/")                         # session remembers the address
+        self.assertIn("wait=", r["Location"])
+        self.assertEqual(len(mail.outbox), 1)
+        PendingSignup.objects.update(last_sent_at=timezone.now() - timedelta(minutes=5))
+        r = self.client.post("/signup/resend/")
+        self.assertIn("sent=1", r["Location"])
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(self.client.get(old).status_code, 404)         # old link dead
+        self.assertEqual(self.client.get(self.link()).status_code, 302)
+
+    def test_resending_signup_replaces_earlier_attempt(self):
+        self.post(business_name="Typo Mart")
+        PendingSignup.objects.update(last_sent_at=timezone.now() - timedelta(minutes=5))
+        self.post(business_name="Right Mart")
+        self.assertEqual(PendingSignup.objects.count(), 1)
+        self.assertEqual(self.client.get(self.link(0)).status_code, 404)
+        self.client.get(self.link(1))
+        self.assertEqual(Tenant.objects.get().name, "Right Mart")
+
+    def test_email_failure_is_reported_not_swallowed(self):
+        with mock.patch("django.core.mail.EmailMultiAlternatives.send", side_effect=OSError("smtp down")):
+            r = self.post()
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(Tenant.objects.count(), 0)
+
+    def test_new_business_types_from_the_form_are_accepted(self):
+        for i, kind in enumerate(("HARDWARE", "AGROVET")):
+            self.assertEqual(self.post(business_type=kind, email=f"k{i}@example.com").status_code, 202, kind)
+
+    def test_register_business_needs_a_credential(self):
+        with self.assertRaises(ValueError):
+            register_business(**{k: v for k, v in SIGNUP.items() if k != "password"})
+
+    def test_pages_render_with_the_new_wording(self):
+        page = self.client.get("/signup/")
+        self.assertContains(page, "Phone number")
+        self.assertNotContains(page, "M-Pesa number")
+        self.assertContains(page, "confirm it")
+        self.assertContains(self.client.get("/users/login/"), "/signup/")
+        self.assertRedirects(self.client.get("/signup/check-email/"), "/signup/", fetch_redirect_response=False)
+        self.post()
+        self.assertContains(self.client.get("/signup/check-email/"), "njeri@example.com")
+        self.assertContains(self.client.get("/signup/verify/bogus/"), "isn", status_code=404)
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn(self.link(), html)

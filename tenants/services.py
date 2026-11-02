@@ -1,11 +1,23 @@
+import hashlib
+import logging
 import re
+import secrets
+from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
 
 from .context import tenant_context
-from .models import Tenant, generate_unique_slug
+from .models import PendingSignup, Tenant, generate_unique_slug
+
+log = logging.getLogger(__name__)
 
 HANDLE_RE = re.compile(r"^[a-z0-9._-]{2,30}$")
 PIN_RE = re.compile(r"^\d{4,6}$")
@@ -19,13 +31,150 @@ def compose_username(business_code, handle):
     """
     return f"{business_code.strip().lower()}__{handle.strip().lower()}"
 
+class SignupLinkInvalid(Exception):
+    """Unknown, already-used or tampered verification link."""
+
+
+class SignupLinkExpired(Exception):
+    """The link was real but is older than SIGNUP_VERIFY_HOURS."""
+
+
+class VerificationEmailFailed(Exception):
+    """The mail server refused or timed out; nothing reached the person."""
+
+
+class ResendTooSoon(Exception):
+    def __init__(self, seconds):
+        super().__init__(f"Wait {seconds}s before asking for another email.")
+        self.seconds = seconds
+
+
+def _hash_token(raw):
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _verify_url(raw_token):
+    return settings.SITE_URL.rstrip("/") + reverse("tenants:verify-email", args=[raw_token])
+
+
+def _send_verification_email(pending, raw_token):
+    hours = settings.SIGNUP_VERIFY_HOURS
+    ctx = {
+        "owner_name": (pending.data.get("owner_name") or "").split(" ")[0] or "there",
+        "business_name": pending.data.get("business_name", ""),
+        "url": _verify_url(raw_token),
+        "hours": hours,
+    }
+    msg = EmailMultiAlternatives(
+        subject="Confirm your email to open your UniSale shop",
+        body=render_to_string("tenants/emails/verify_email.txt", ctx),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[pending.email],
+    )
+    msg.attach_alternative(render_to_string("tenants/emails/verify_email.html", ctx), "text/html")
+    try:
+        msg.send(fail_silently=False)
+    except Exception as exc:             
+        log.exception("Could not send sign-up verification email to %s", pending.email)
+        raise VerificationEmailFailed(str(exc)) from exc
+
+
+def purge_expired_signups():
+    """Abandoned sign-ups are just rows; clear the ones whose link is long dead."""
+    PendingSignup.objects.filter(expires_at__lt=timezone.now() - timedelta(days=7)).delete()
+
+
+def start_signup(*, business_name, business_type, owner_name, email, phone, password,
+                 term_months, branch_count=1, branch_names=None):
+    """
+    Step 1 of public sign-up. Stores the answers (password hashed) and emails a link.
+    Nothing real is created yet. Signing up again with the same email replaces the earlier
+    attempt and invalidates its link. Raises ResendTooSoon if that address was emailed seconds ago,
+    VerificationEmailFailed if the email can't go out.
+    """
+    email = email.lower().strip()
+    purge_expired_signups()
+    now = timezone.now()
+    earlier = PendingSignup.objects.filter(email=email).first()
+    if earlier is not None:    
+        wait = settings.SIGNUP_RESEND_SECONDS - (now - earlier.last_sent_at).total_seconds()
+        if wait > 0:
+            raise ResendTooSoon(int(wait) + 1)
+    raw = secrets.token_urlsafe(32)
+    pending, _ = PendingSignup.objects.update_or_create(
+        email=email,
+        defaults=dict(
+            token_hash=_hash_token(raw),
+            password_hash=make_password(password),
+            data=dict(
+                business_name=business_name.strip(), business_type=business_type,
+                owner_name=owner_name.strip(), phone=phone, term_months=int(term_months),
+                branch_count=int(branch_count or 1), branch_names=list(branch_names or []),
+            ),
+            expires_at=now + timedelta(hours=settings.SIGNUP_VERIFY_HOURS),
+            last_sent_at=now,
+        ),
+    )
+    _send_verification_email(pending, raw)
+    return pending
+
+
+def resend_verification(email):
+    """
+    Send a fresh link (the previous one stops working). Returns True if an email went out,
+    False if there is nothing pending for that address. Raises ResendTooSoon inside the cooldown.
+    """
+    pending = PendingSignup.objects.filter(email=(email or "").lower().strip()).first()
+    if pending is None:
+        return False
+    now = timezone.now()
+    wait = settings.SIGNUP_RESEND_SECONDS - (now - pending.last_sent_at).total_seconds()
+    if wait > 0:
+        raise ResendTooSoon(int(wait) + 1)
+    raw = secrets.token_urlsafe(32)
+    pending.token_hash = _hash_token(raw)
+    pending.expires_at = now + timedelta(hours=settings.SIGNUP_VERIFY_HOURS)
+    pending.last_sent_at = now
+    pending.save(update_fields=["token_hash", "expires_at", "last_sent_at"])
+    _send_verification_email(pending, raw)
+    return True
+
+
+@transaction.atomic
+def complete_signup(raw_token):
+    """
+    Step 2: the owner clicked the link. Creates tenant + verified owner + branches + subscription +
+    first invoice, then discards the pending row (so the link works exactly once).
+    Returns (tenant, owner, invoice). Raises SignupLinkInvalid / SignupLinkExpired.
+    """
+    pending = (PendingSignup.objects.select_for_update()
+               .filter(token_hash=_hash_token(raw_token or "")).first())
+    if pending is None:
+        raise SignupLinkInvalid()
+    if pending.expires_at < timezone.now():
+        raise SignupLinkExpired()
+    try:
+        tenant, owner, invoice = register_business(
+            email=pending.email, password_hash=pending.password_hash, email_verified=True,
+            **pending.data)
+    except ValidationError:         
+        pending.delete()
+        raise SignupLinkInvalid()
+    pending.delete()
+    return tenant, owner, invoice
+
 
 @transaction.atomic
 def register_business(*, business_name, business_type, owner_name, email, phone,
-                      password, term_months, branch_count=1, branch_names=None):
-    """Public sign-up: tenant + owner + branches + subscription + first invoice."""
-    from billing.services import start_subscription  # local import: avoids app-load cycle
-
+                      password=None, password_hash=None, email_verified=False,
+                      term_months, branch_count=1, branch_names=None):
+    """
+    Tenant + owner + branches + subscription + first invoice. The public flow reaches this only
+    through complete_signup() (after the email link); pass either `password` or a ready `password_hash`.
+    """
+    from billing.services import start_subscription 
+    if not (password or password_hash):
+        raise ValueError("register_business needs a password or a password_hash.")
     User = get_user_model()
     email = email.lower().strip()
     first, _, last = owner_name.strip().partition(" ")
@@ -41,10 +190,14 @@ def register_business(*, business_name, business_type, owner_name, email, phone,
         with transaction.atomic():
             owner = User.objects.create_user(
                 username=email, email=email, password=password,
-                first_name=first, last_name=last,
+                first_name=first, last_name=last, phone=phone,
                 role=User.Roles.ADMIN, is_owner=True, tenant=tenant,
-                is_staff=False, is_superuser=False,   # never Django-admin capable
+                is_staff=False, is_superuser=False,   
+                email_verified_at=timezone.now() if email_verified else None,
             )
+            if password_hash:
+                owner.password = password_hash
+                owner.save(update_fields=["password"])
     except IntegrityError:
         raise ValidationError("An account with this email already exists.")
 
@@ -56,7 +209,6 @@ def register_business(*, business_name, business_type, owner_name, email, phone,
     with tenant_context(tenant):
         provision_workspace(tenant, owner, branch_names=names)
 
-    # The shop pays for every branch it registers up front; the first is included in the base price.
     _subscription, invoice = start_subscription(tenant, term_months, branch_slots=branch_count)
     return tenant, owner, invoice
 
@@ -71,8 +223,6 @@ def provision_workspace(tenant, owner, branch_names=None):
     from .branches import create_branch
     names = branch_names or ["Main Branch"]
     for i, name in enumerate(names):
-        # Signup branches are active straight away: the shop is locked until the first invoice
-        # (which already includes them) is paid, so nothing is used for free.
         branch = create_branch(tenant, name=name, is_main=(i == 0), active=True)
         if i == 0:
             owner.branch = branch

@@ -15,7 +15,7 @@ class SignupForm(forms.Form):
     business_type = forms.ChoiceField(choices=Tenant.BusinessType.choices)
     owner_name = forms.CharField(max_length=150)
     email = forms.EmailField()
-    phone = forms.CharField(max_length=20, help_text="M-Pesa number, e.g. 0712345678")
+    phone = forms.CharField(label="Phone number", max_length=20, help_text="Your phone number, e.g. 0712345678")
     password = forms.CharField(widget=forms.PasswordInput)
     term_months = forms.TypedChoiceField(coerce=int, choices=(), initial=1)
     # How many branches, and their names (one per line / JSON list). Branch 1 is included in the base price.
@@ -62,10 +62,12 @@ class SignupForm(forms.Form):
         return email
 
     def clean_phone(self):
+        # Any Kenyan mobile number (Safaricom, Airtel, Telkom) -- it is the owner's contact number,
+        # not a payment number. Stored as 2547XXXXXXXX / 2541XXXXXXXX.
         try:
             return normalize_phone(self.cleaned_data["phone"])
-        except ValueError as exc:
-            raise forms.ValidationError(str(exc))
+        except ValueError:
+            raise forms.ValidationError("Enter a valid Kenyan phone number, e.g. 0712345678.")
 
     def clean_password(self):
         validate_password(self.cleaned_data["password"])
@@ -126,7 +128,7 @@ class TenantSettingsForm(forms.ModelForm):
         model = _TenantSettings
         fields = ["discounts_enabled", "managers_can_manage_discounts", "max_discount_percent",
                   "manager_max_discount_percent", "below_cost_policy", "refund_window_days",
-                  "receipt_footer", "offline_max_hours"]
+                  "receipt_footer", "offline_max_hours", "product_images_enabled"]
         widgets = {
             "max_discount_percent": forms.NumberInput(attrs={"step": "0.5", "min": "0", "max": "100"}),
             "manager_max_discount_percent": forms.NumberInput(attrs={"step": "0.5", "min": "0", "max": "100"}),

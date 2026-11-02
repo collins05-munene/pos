@@ -16,8 +16,8 @@
 
 <main>
   <div class="wrap">
-    <h1>Open user shop's account</h1>
-    <p class="lede">One shop, one login. Add cashiers once you're set up.</p>
+    <h1>Open your shop's account</h1>
+    <p class="lede">One shop, one login. Add cashiers once you're set up. Takes about two minutes &mdash; no need to contact us.</p>
 
     <div id="alert" class="alert bad" role="alert"></div>
 
@@ -51,10 +51,11 @@
         <div class="field" data-field="email">
           <label for="email">Email</label>
           <input id="email" name="email" type="email" autocomplete="email" required>
+          <div class="plan-note" style="margin:4px 0 0;">We'll email you a link to confirm it.</div>
           <div class="err"></div>
         </div>
         <div class="field" data-field="phone">
-          <label for="phone">M-Pesa number</label>
+          <label for="phone">Phone number</label>
           <input id="phone" name="phone" type="tel" placeholder="0712 345 678" autocomplete="tel" required>
           <div class="err"></div>
         </div>
@@ -84,7 +85,8 @@
       <div class="plans" id="plans" role="group" aria-label="Subscription term"></div>
       <p class="plan-note" id="plan-note">Loading pricing&hellip;</p>
 
-      <button type="submit" class="primary" id="submit-btn">Create shop's account &rarr;</button>
+      <button type="submit" class="primary" id="submit-btn">Create my shop's account &rarr;</button>
+      <p class="plan-note">Already have an account? <a href="{% url 'login' %}">Sign in</a>. By signing up you agree to our <a href="{% url 'terms' %}">Terms</a> and <a href="{% url 'privacy' %}">Privacy Policy</a>.</p>
     </form>
   </div>
 </main>

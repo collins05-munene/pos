@@ -1,0 +1,35 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% if state == "expired" %}Link expired{% else %}Link not valid{% endif %} -- UniSale Systems</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="wordmark">UniSale<span> Systems</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    {% if state == "expired" %}
+      <h1>This link has expired</h1>
+      <p class="lede">Confirmation links only work for a limited time. Start again and we'll send you a fresh one &mdash; it takes a minute.</p>
+      <p><a href="{% url 'tenants:signup' %}"><button type="button" class="primary">Create my shop's account &rarr;</button></a></p>
+    {% else %}
+      <h1>This link isn't valid</h1>
+      <p class="lede">It may have been used already, or a newer email replaced it. If you already confirmed your email, just sign in.</p>
+      <p>
+        <a href="{% url 'login' %}"><button type="button" class="primary">Sign in</button></a>
+        <a href="{% url 'tenants:signup' %}" style="margin-left:12px;">Create a new account</a>
+      </p>
+    {% endif %}
+  </div>
+</main>
+
+</body>
+</html>

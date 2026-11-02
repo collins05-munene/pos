@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -16,7 +17,10 @@ from .branches import active_branches, assign_user_branch
 from .forms import SignupForm, StaffDetailsForm
 from .mixins import OwnerRequiredMixin
 from .rendering import html_or_json
-from .services import (create_staff_user, list_staff, register_business, set_staff_active, set_staff_credential, staff_handle, update_staff_details)
+from .services import (ResendTooSoon, SignupLinkExpired, SignupLinkInvalid, VerificationEmailFailed,
+                       complete_signup, create_staff_user, list_staff, resend_verification,
+                       set_staff_active, set_staff_credential, staff_handle, start_signup,
+                       update_staff_details)
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
 
@@ -25,7 +29,12 @@ def _form_errors(form):
     return {f: list(errs) for f, errs in form.errors.items()}
 
 
-@method_decorator(ratelimit(key="ip", rate="5/h", method="POST", block=True), name="post")
+SIGNUP_EMAIL_KEY = "signup_pending_email"
+
+
+# Generous on purpose: every POST counts, including ones bounced for a typo, and a shop's wifi is often
+# shared. What actually protects inboxes from abuse is the per-address cooldown in start_signup().
+@method_decorator(ratelimit(key="ip", rate="20/h", method="POST", block=True), name="post")
 class SignupView(View):
     def get(self, request):
         """The sign-up page for a browser; pricing JSON for that page's own fetch()."""
@@ -53,11 +62,63 @@ class SignupView(View):
             return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
 
         try:
-            tenant, owner, invoice = register_business(**form.cleaned_data)
-        except ValidationError as exc:
-            return JsonResponse({"errors": {"__all__": exc.messages}}, status=400)
+            start_signup(**form.cleaned_data)
+        except ResendTooSoon as exc:
+            return JsonResponse({"errors": {"__all__": [
+                f"We just emailed that address. Check your inbox (and spam), or try again in {exc.seconds} seconds."]}},
+                status=429)
+        except VerificationEmailFailed:
+            return JsonResponse({"errors": {"__all__": [
+                "We couldn't send your confirmation email just now. Please try again in a few minutes."]}},
+                status=503)
+
+        request.session[SIGNUP_EMAIL_KEY] = form.cleaned_data["email"]
+        return JsonResponse({"email": form.cleaned_data["email"],
+                             "next": reverse("tenants:check-email")}, status=202)
+
+
+class CheckEmailView(View):
+    """'We emailed you a link' page, with a resend button."""
+
+    def get(self, request):
+        email = request.session.get(SIGNUP_EMAIL_KEY)
+        if not email:
+            return redirect("tenants:signup")
+        return render(request, "tenants/check_email.html", {
+            "email": email, "hours": settings.SIGNUP_VERIFY_HOURS, "sent": request.GET.get("sent") == "1",
+            "wait": request.GET.get("wait"), "failed": request.GET.get("failed") == "1",
+        })
+
+
+@method_decorator(ratelimit(key="ip", rate="10/h", method="POST", block=True), name="post")
+class ResendVerificationView(View):
+    def post(self, request):
+        email = request.session.get(SIGNUP_EMAIL_KEY)
+        if not email:
+            return redirect("tenants:signup")
+        url = reverse("tenants:check-email")
+        try:
+            resend_verification(email)
+        except ResendTooSoon as exc:
+            return redirect(f"{url}?wait={exc.seconds}")
+        except VerificationEmailFailed:
+            return redirect(f"{url}?failed=1")
+        return redirect(f"{url}?sent=1")
+
+
+class VerifyEmailView(View):
+    """The emailed link: creates the shop, signs the owner in, sends them to pay."""
+
+    def get(self, request, token):
+        try:
+            tenant, owner, invoice = complete_signup(token)
+        except SignupLinkExpired:
+            return render(request, "tenants/verify_result.html", {"state": "expired"}, status=410)
+        except SignupLinkInvalid:
+            return render(request, "tenants/verify_result.html", {"state": "invalid"}, status=404)
 
         login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
+        request.session.pop(SIGNUP_EMAIL_KEY, None)
 
         notify(tenant, f"Welcome to {tenant.name}",
                "Next steps: add your products, record a purchase to bring stock in, "
@@ -65,13 +126,7 @@ class SignupView(View):
         notify(tenant, "Invoice awaiting payment",
                f"Invoice {invoice.number} for KSH {invoice.total} is ready. Pay from Billing to activate your subscription.",
                level=Notification.Level.WARNING, user=owner)
-        
-        return JsonResponse({
-            "tenant": {"name": tenant.name, "business_code": tenant.slug},
-            "invoice": {"number": invoice.number, "total": str(invoice.total),
-                        "term_months": invoice.term_months},
-            "next": "/billing/",   
-        }, status=201)
+        return redirect("/billing/")
 
 
 ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER")  

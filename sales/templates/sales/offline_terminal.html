@@ -35,6 +35,8 @@ a.btn { text-decoration: none; display: inline-block; }
 .grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; align-content: start; min-height: 0; }
 .tile { border: 1px solid var(--line); border-radius: 6px; padding: .8rem; display: flex; flex-direction: column; gap: .15rem; background: #fff; }
 .tile.out { opacity: .55; }
+.tile-img { aspect-ratio: 4 / 3; background: #f3f4f6; border-radius: 4px; margin-bottom: .4rem; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 1.5rem; font-weight: 700; }
+.tile-img img { width: 100%; height: 100%; object-fit: contain; background: #fff; display: block; }
 .tile b { font-size: .95rem; } .tile small { color: var(--mute); }
 .tile .sku { font-family: monospace; font-size: .78rem; } .tile .price { color: var(--blue); font-weight: 700; font-size: 1.05rem; }
 .tile .pack { align-self: flex-start; background: #eff6ff; color: #1d4ed8; font-size: .75rem; font-weight: 600; padding: .05rem .5rem; border-radius: 10px; }

@@ -34,6 +34,7 @@ from django.utils.dateparse import parse_datetime
 
 from inventory.models import StockLevel
 from products.models import Category, ProductVariant, fmt_qty
+from tenants.models import get_settings
 from promotions.pricing import PriceBook
 from tenants.models import get_settings
 from users.mixins import MANAGEMENT_ROLES
@@ -78,6 +79,7 @@ def build_snapshot(user, tenant):
     # offline till needs no discount logic of its own. When the sale syncs, the server checks the
     # price against its own rules (see sales.utils.price_sale_line).
     book = PriceBook(tenant=tenant, branch=branch)
+    show_images = get_settings(tenant).product_images_enabled
     rows = (ProductVariant.objects
             .filter(is_active=True, product__is_active=True)
             .select_related("product", "product__category")
@@ -100,6 +102,8 @@ def build_snapshot(user, tenant):
         if line.has_discount:
             entry["was"] = str(line.list_price)
             entry["promo"] = line.discount_name
+        if show_images and v.product.has_image:
+            entry["img"] = v.product.thumb_url      # versioned URL: changes only when the photo does
         variants.append(entry)
 
     stock = {}

@@ -5,6 +5,9 @@ from django.core.exceptions import ValidationError
 from django.forms import BaseFormSet, formset_factory
 from django.urls import reverse
 
+from tenants.models import get_settings
+
+from .images import ImageRejected, clear_product_image, compress, set_product_image
 from .models import Category, Brand, Product, UnitOfMeasure, ProductVariant
 
 
@@ -39,6 +42,13 @@ class UnitOfMeasureForm(forms.ModelForm):
 
 
 class ProductForm(forms.ModelForm):
+    # Only present when the shop has switched product images on in Settings (see __init__).
+    image_upload = forms.FileField(
+        required=False, label="Product image",
+        widget=forms.FileInput(attrs={'accept': 'image/jpeg,image/png,image/webp', 'class': 'form-input',
+                                      'id': 'id_image_upload'}))
+    remove_image = forms.BooleanField(required=False, label="Remove the current image")
+
     class Meta:
         model = Product
         fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure',
@@ -66,6 +76,33 @@ class ProductForm(forms.ModelForm):
         brand.widget.attrs['data-create-url'] = reverse('brand-quick-create')
 
         self.fields['unit_of_measure'].queryset = UnitOfMeasure.objects.order_by('name')
+
+        self.images_enabled = get_settings().product_images_enabled
+        self._processed = None
+        if not self.images_enabled:
+            del self.fields['image_upload']
+            del self.fields['remove_image']
+
+    def clean_image_upload(self):
+        upload = self.cleaned_data.get('image_upload')
+        if upload:
+            try:
+                self._processed = compress(upload)      # validates + resizes + re-encodes
+            except ImageRejected as exc:
+                raise ValidationError(str(exc))
+        return upload
+
+    def apply_image(self, product):
+        """Call after the product row exists. Returns 'added', 'removed' or None."""
+        if not self.images_enabled:
+            return None
+        if self._processed is not None:
+            set_product_image(product, self._processed)
+            return 'added'
+        if self.cleaned_data.get('remove_image') and product.has_image:
+            clear_product_image(product)
+            return 'removed'
+        return None
 
 
 

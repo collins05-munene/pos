@@ -23,6 +23,8 @@ class Tenant(models.Model):
     class BusinessType(models.TextChoices):
         MINI_MART = "MINI_MART", "Mini Mart"
         PHARMACY = "PHARMACY", "Pharmacy"
+        HARDWARE = "HARDWARE", "Hardware"
+        AGROVET = "AGROVET", "Agrovet"
         OTHER = "OTHER", "Other"
 
     name = models.CharField(max_length=150)
@@ -54,6 +56,26 @@ class Tenant(models.Model):
             return False
         sub = getattr(self, "subscription", None)  # missing row -> AttributeError subclass
         return bool(sub and sub.grants_access())
+
+
+class PendingSignup(models.Model):
+    """
+    A public sign-up that is waiting for its owner to click the emailed link.
+
+    No Tenant, User or invoice exists until then, so nobody can claim someone else's email
+    address and nothing is left behind by typos, bots or abandoned sign-ups.
+    The emailed token is stored only as a SHA-256 hash.
+    """
+    email = models.EmailField(unique=True)
+    token_hash = models.CharField(max_length=64, unique=True)
+    password_hash = models.CharField(max_length=128)
+    data = models.JSONField(help_text="Business name/type, owner name, phone, term, branches.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_sent_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"Pending sign-up: {self.email}"
 
 
 def generate_unique_slug(name):
@@ -224,6 +246,12 @@ class TenantSettings(TenantOwnedModel):
     # ---- offline selling
     offline_max_hours = models.PositiveIntegerField(
         default=72, help_text="How long a till may keep selling without internet before it must reconnect.")
+
+    # ---- product images
+    product_images_enabled = models.BooleanField(
+        default=False,
+        help_text="Lets staff add a photo to each product and shows it on the POS terminal. "
+                  "Off = no image fields or pictures anywhere; photos already added are kept.")
 
     updated_at = models.DateTimeField(auto_now=True)
 
