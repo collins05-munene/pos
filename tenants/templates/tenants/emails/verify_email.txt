@@ -1,0 +1,11 @@
+Hi {{ owner_name }},
+
+Welcome to UniSale Systems! Confirm your email to finish opening {{ business_name }}:
+
+{{ url }}
+
+This link works once and expires in {{ hours }} hours. After you confirm, you'll be signed in and taken to your invoice.
+
+If you didn't sign up, ignore this email - no account is created until the link is opened.
+
+UniSale Systems

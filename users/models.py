@@ -32,6 +32,7 @@ class User(AbstractUser):
     is_owner = models.BooleanField(default=False,help_text="The business owner: the only user who sees billing.")
     national_id = models.CharField(max_length=20, blank=True, null=True)  
     phone = models.CharField(max_length=20, blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True, help_text="When the owner confirmed their email address from the sign-up link.")
     branch = models.ForeignKey("inventory.Branch", null=True, blank=True, on_delete=models.SET_NULL,related_name="staff",help_text="Cashiers work at exactly this branch. Managers/admins start here but can switch.",
     )
 

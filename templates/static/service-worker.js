@@ -62,8 +62,11 @@ function isNeverCachePath(pathname) {
   return NEVER_CACHE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+// Product thumbnails are addressed by content hash (?v=...), so a cached copy is never stale.
+const PRODUCT_THUMB_RE = /^\/products\/product\/\d+\/image\/thumb\/$/;
+
 function isStaticAsset(pathname) {
-  return pathname.startsWith("/static/") || pathname.startsWith("/media/");
+  return pathname.startsWith("/static/") || pathname.startsWith("/media/") || PRODUCT_THUMB_RE.test(pathname);
 }
 
 function fetchWithTimeout(request, ms) {
@@ -120,7 +123,11 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
         try {
           const response = await fetch(request);
-          if (response && response.ok) {
+          // A thumbnail request that bounces to the login page returns 200 HTML: never cache that.
+          const isThumb = PRODUCT_THUMB_RE.test(url.pathname);
+          const looksRight = !isThumb ||
+            (!response.redirected && (response.headers.get("content-type") || "").startsWith("image/"));
+          if (response && response.ok && looksRight) {
             cache.put(request, response.clone());
           }
           return response;

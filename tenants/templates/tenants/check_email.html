@@ -1,0 +1,38 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Check your email -- UniSale Systems</title>
+<link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="wordmark">UniSale<span> Systems</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1>Check your email</h1>
+    <p class="lede">We sent a confirmation link to <strong>{{ email }}</strong>. Open it to finish creating your shop's account &mdash; you'll be signed in automatically.</p>
+
+    {% if sent %}<div class="alert good show" role="status">A new email is on its way. Only the newest link works.</div>{% endif %}
+    {% if wait %}<div class="alert info show" role="status">We emailed you a moment ago. You can ask for another in {{ wait }} seconds.</div>{% endif %}
+    {% if failed %}<div class="alert bad show" role="alert">We couldn't send the email just now. Please try again in a few minutes.</div>{% endif %}
+
+    <p class="plan-note">Nothing yet? Check your spam or promotions folder. The link works for {{ hours }} hours.</p>
+
+    <form method="post" action="{% url 'tenants:resend-verification' %}">
+      {% csrf_token %}
+      <button type="submit" class="secondary">Send the email again</button>
+    </form>
+
+    <p class="plan-note" style="margin-top:24px;">Wrong address? <a href="{% url 'tenants:signup' %}">Start again</a>.</p>
+  </div>
+</main>
+
+</body>
+</html>

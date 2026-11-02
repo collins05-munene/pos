@@ -117,7 +117,7 @@
     clearAlert();
     clearFieldErrors();
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating your account\u2026';
+    submitBtn.textContent = 'Sending your confirmation email\u2026';
 
     const payload = {
       business_name: form.business_name.value.trim(),
@@ -133,7 +133,7 @@
 
     try {
       const data = await Duka.api('.', { method: 'POST', body: payload });
-      window.location.href = data.next || '/billing/';
+      window.location.href = data.next || '/signup/check-email/';
     } catch (e) {
       if (e.data && e.data.errors) {
         applyFieldErrors(e.data.errors);

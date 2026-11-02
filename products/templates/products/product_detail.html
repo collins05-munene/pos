@@ -33,6 +33,10 @@
             </div>
         {% endif %}
         <div class="product-header">
+            {% if images_enabled and product.has_image %}
+            <img src="{{ product.full_url }}" alt="{{ product.name }}" width="800" height="800" loading="lazy" decoding="async"
+                 style="display:block;max-width:240px;width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;background:#fff;margin-bottom:0.75rem;">
+            {% endif %}
             <h1>{{ product.name }}</h1>
             <p>{{ product.description|default:"<i>No description provided.</i>" }}</p>
         </div>

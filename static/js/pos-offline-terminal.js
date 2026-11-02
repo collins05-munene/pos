@@ -90,11 +90,15 @@
 
   function renderGrid() {
     var list = P.search(cat, query, category, (query || category) ? 60 : 24);
+    var withImages = cat.list.some(function (x) { return x.img; });   // shop has product images switched on
     $('grid').innerHTML = list.length ? list.map(function (v) {
       var free = P.freeUnits(cat, v, cart, v.id);
       var inCart = (cart.filter(function (l) { return l.variantId === v.id; })[0] || { qty: 0 }).qty;
       var left = free - inCart;
-      return '<div class="tile' + (left <= 0 ? ' out' : '') + '"><b>' + esc(v.name) + '</b>' +
+      var pic = !withImages ? '' : '<div class="tile-img">' + (v.img
+        ? '<img src="' + esc(v.img) + '" alt="" width="160" height="160" loading="lazy" decoding="async">'
+        : '<span aria-hidden="true">' + esc((v.name || '?').charAt(0).toUpperCase()) + '</span>') + '</div>';
+      return '<div class="tile' + (left <= 0 ? ' out' : '') + '">' + pic + '<b>' + esc(v.name) + '</b>' +
         (v.pack ? '<span class="pack">' + esc(v.pack) + '</span>' : '') +
         (v.detail ? '<small>' + esc(v.detail) + '</small>' : '') +
         '<span class="sku">' + esc(v.sku) + '</span><span class="price">KSH ' + esc(v.price) + '</span>' +

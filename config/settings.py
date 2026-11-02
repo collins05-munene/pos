@@ -212,18 +212,7 @@ MPESA_PASSKEY=env('MPESA_PASSKEY')
 MPESA_CALLBACK_URL=env('MPESA_CALLBACK_URL')
 
 
-# --- PWA / production HTTPS hardening ---------------------------------
-# ADDED FOR PWA. A service worker (required for installability, the
-# manifest to be honoured, and offline support) only registers on
-# "secure contexts": https://, or http://localhost / http://127.0.0.1.
-# This block only takes effect when DEBUG is False, so local dev
-# (DEBUG=True, plain http://127.0.0.1) and existing ngrok flow
-# (already https://) are unaffected either way.
 if not DEBUG:
-    # Render (and most PaaS hosts) terminate TLS at a proxy and forward
-    # plain HTTP internally, so Django needs this header to know the
-    # original request was HTTPS — without it, SECURE_SSL_REDIRECT
-    # below would redirect-loop forever.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
     SECURE_SSL_REDIRECT = True
@@ -249,10 +238,10 @@ BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]
 BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
 
 
-APP_VERSION = "2026.10.1"                    # shown on every issue report
-SITE_URL = "https://pos-wctc.onrender.com"       # links inside emails
-SUPPORT_EMAIL = "collinsgitonga.dev@gmail.com"      # team inbox for new tickets and customer replies
-SUPPORT_WHATSAPP_NUMBER = "254790342156"     # digits only, international format
+APP_VERSION = "2026.10.1"                 
+SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")   
+SUPPORT_EMAIL = "collinsgitonga.dev@gmail.com"    
+SUPPORT_WHATSAPP_NUMBER = "254790342156"     
 SUPPORT_UPLOAD_ROOT = "/var/app/private_uploads" 
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -267,3 +256,17 @@ BILLING = {
     "MANUAL_PAY_NUMBER": "1764388",
     "MANUAL_PAY_NAME": "COLLINS GITONGA MUNENE",
 }
+
+
+EMAIL_BACKEND = env("EMAIL_BACKEND", default=(
+    "django.core.mail.backends.console.EmailBackend" if DEBUG
+    else "django.core.mail.backends.smtp.EmailBackend"))
+EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=f"UniSale Systems <{EMAIL_HOST_USER or 'no-reply@localhost'}>")
+SIGNUP_VERIFY_HOURS = env.int("SIGNUP_VERIFY_HOURS", default=48) 
+SIGNUP_RESEND_SECONDS = 60   

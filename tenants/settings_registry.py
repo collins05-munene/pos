@@ -29,6 +29,14 @@ SECTIONS = [
         "fields": ["receipt_footer"],
     },
     {
+        "key": "product_images",
+        "title": "Product images",
+        "desc": "Show a photo on each product so items are quicker to spot on the POS terminal. "
+                "Photos are resized and compressed automatically when added.",
+        "link": ("product-list", "Manage products"),
+        "fields": ["product_images_enabled"],
+    },
+    {
         "key": "offline",
         "title": "Offline selling",
         "desc": "How long a till may keep selling without internet.",

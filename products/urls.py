@@ -22,6 +22,7 @@ urlpatterns = [
     path('product/<int:pk>/edit/', views.ProductUpdateView.as_view(), name='product-update'),
     path('product/<int:pk>/delete/', views.ProductDeleteView.as_view(), name='product-delete'),
     path('product/<int:pk>/detail/', views.ProductDetailView.as_view(), name='product-detail'),
+    path('product/<int:pk>/image/<str:size>/', views.ProductImageView.as_view(), name='product-image'),
 
     path('categories/quick-create/', views.CategoryQuickCreateView.as_view(), name='category-quick-create'),
     path('brands/quick-create/', views.BrandQuickCreateView.as_view(), name='brand-quick-create'),

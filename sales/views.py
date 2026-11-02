@@ -19,6 +19,7 @@ from django.views import View
 import logging
 
 from products.models import ProductVariant, Category
+from tenants.models import get_settings
 from promotions.pricing import PriceBook
 from .cart import POSCart
 from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund
@@ -320,14 +321,17 @@ class PosTerminalView(CashierRequiredMixin, View):
         # Always capped: an unfiltered or broad search must not render the whole catalogue.
         products = _attach_availability(products[:60 if (q or category_id) else 24], branch)
         products = PriceBook(tenant=request.tenant, branch=branch).attach(products)
+        show_images = get_settings(request.tenant).product_images_enabled
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            html = render_to_string('sales/product_list.html', {'products': products}, request=request)
+            html = render_to_string('sales/product_list.html',
+                                    {'products': products, 'show_images': show_images}, request=request)
             return JsonResponse({'ok': True, 'products_html': html})
 
         context = {
             'categories': categories,
             'products': products,
+            'show_images': show_images,
             'cart': POSCart(request),
             'search_query': q,
             'active_category': active_category,
