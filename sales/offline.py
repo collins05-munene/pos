@@ -82,7 +82,7 @@ def build_snapshot(user, tenant):
     show_images = get_settings(tenant).product_images_enabled
     rows = (ProductVariant.objects
             .filter(is_active=True, product__is_active=True)
-            .select_related("product", "product__category")
+            .select_related("product", "product__category", "base_variant")
             .order_by("product__name", "sku"))
     for v in rows:
         detail = " / ".join(x for x in (v.size, v.color) if x)
@@ -102,8 +102,12 @@ def build_snapshot(user, tenant):
         if line.has_discount:
             entry["was"] = str(line.list_price)
             entry["promo"] = line.discount_name
-        if show_images and v.product.has_image:
-            entry["img"] = v.product.thumb_url      # versioned URL: changes only when the photo does
+        if show_images:
+            # The variant's own photo, else its base variant's, else the product's. Versioned URL:
+            # it changes only when the photo does.
+            img = v.display_thumb_url
+            if img:
+                entry["img"] = img
         variants.append(entry)
 
     stock = {}

@@ -2,9 +2,11 @@
 <div class="variant-tile" {% if variant.available <= 0 %}style="opacity:0.6;"{% endif %}>
     {% if show_images %}
     <div class="tile-img">
-        {% if variant.product.has_image %}
-            <img src="{{ variant.product.thumb_url }}" alt="" width="160" height="160" loading="lazy" decoding="async">
+        {% with pic=variant.display_thumb_url %}
+        {% if pic %}
+            <img src="{{ pic }}" alt="" width="160" height="160" loading="lazy" decoding="async">
         {% else %}<span aria-hidden="true">{{ variant.product.name|slice:":1"|upper }}</span>{% endif %}
+        {% endwith %}
     </div>
     {% endif %}
     <span class="tile-title">{{ variant.product.name }}</span>

@@ -1,0 +1,20 @@
+
+<div class="img-field{% if compact %} img-field--compact{% endif %}" data-img-field>
+    <div class="img-preview" data-img-preview data-original-url="{{ url }}">
+        {% if url %}<img src="{{ url }}" alt="">{% else %}<span>{{ placeholder|default:"No image" }}</span>{% endif %}
+    </div>
+    <div class="img-actions">
+        {{ file }}
+        <div class="img-buttons">
+            {% if compact %}<button type="button" class="img-btn" data-img-pick>Choose</button>{% endif %}
+            <button type="button" class="img-btn" data-img-camera hidden>&#128247; Take photo</button>
+            <button type="button" class="img-btn img-btn--quiet" data-img-clear hidden>Undo</button>
+        </div>
+        {# Phones: opens the native camera app. Unnamed on purpose, so it is never submitted; the file is copied into the field above. #}
+        <input type="file" accept="image/*" capture="environment" data-img-capture hidden tabindex="-1" aria-hidden="true">
+        {{ file.errors }}
+        {% if remove and url %}
+        <label class="img-remove">{{ remove }} Remove</label>
+        {% endif %}
+    </div>
+</div>

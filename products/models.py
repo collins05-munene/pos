@@ -142,11 +142,56 @@ class ProductVariant(TenantOwnedModel):
         max_digits=12, decimal_places=3, default=Decimal('1'),
         help_text="How many base units one of this makes up.")
 
+    # Optional photo of this variant alone (e.g. the red one). Same storage scheme as Product.image:
+    # paths only in the database, compressed WebP files in storage -- see products/images.py.
+    # Only base variants are given photos in the form; selling units borrow their base variant's.
+    image = models.FileField(upload_to=product_image_path, max_length=255, blank=True)
+    thumb = models.FileField(upload_to=product_image_path, max_length=255, blank=True)
+    image_token = models.CharField(max_length=16, blank=True,
+                                   help_text="Content hash of the current image; busts browser caches.")
+
     class Meta:
         constraints = _unique_per_tenant("variant", "sku") + [
             models.CheckConstraint(condition=models.Q(units_per_pack__gt=0),
                                    name="variant_units_per_pack_gt_0"),
         ]
+
+    # -- images ------------------------------------------------------------------------------
+    @property
+    def has_image(self):
+        """True only when THIS variant has its own photo (see display_* for what a tile shows)."""
+        return bool(self.image and self.thumb)
+
+    def _own_image_url(self, size):
+        if not self.has_image:
+            return ""
+        return f"{reverse('variant-image', args=[self.pk, size])}?v={self.image_token}"
+
+    @property
+    def thumb_url(self):
+        return self._own_image_url("thumb")
+
+    @property
+    def full_url(self):
+        return self._own_image_url("full")
+
+    def _display_url(self, size):
+        """Own photo, else the base variant's (selling units), else the product's, else ''."""
+        owner = self
+        if not owner.has_image and self.base_variant_id:
+            owner = self.base_variant
+        if owner.has_image:
+            return owner._own_image_url(size)
+        return self.product._image_url(size)
+
+    @property
+    def display_thumb_url(self):
+        """The thumbnail the POS tile should show. Select base_variant/product to avoid extra queries."""
+        return self._display_url("thumb")
+
+    @property
+    def display_full_url(self):
+        return self._display_url("full")
 
     @property
     def is_packaging(self):

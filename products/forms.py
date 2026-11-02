@@ -2,12 +2,12 @@ from decimal import Decimal
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.forms import BaseFormSet, formset_factory
+from django.forms import BaseFormSet, BaseInlineFormSet, formset_factory
 from django.urls import reverse
 
 from tenants.models import get_settings
 
-from .images import ImageRejected, clear_product_image, compress, set_product_image
+from .images import ImageRejected, clear_image, compress, set_image
 from .models import Category, Brand, Product, UnitOfMeasure, ProductVariant
 
 
@@ -41,14 +41,55 @@ class UnitOfMeasureForm(forms.ModelForm):
         }
 
 
-class ProductForm(forms.ModelForm):
-    # Only present when the shop has switched product images on in Settings (see __init__).
-    image_upload = forms.FileField(
-        required=False, label="Product image",
-        widget=forms.FileInput(attrs={'accept': 'image/jpeg,image/png,image/webp', 'class': 'form-input',
-                                      'id': 'id_image_upload'}))
-    remove_image = forms.BooleanField(required=False, label="Remove the current image")
+IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp'
 
+
+class ImageUploadMixin:
+    """
+    Optional photo on a ModelForm whose model has image / thumb / image_token (Product, ProductVariant).
+
+    The fields are only present when the shop has switched product images on in Settings. The browser
+    may fill `image_upload` from the file picker or from the camera (static/js/image-field.js) -- the
+    server sees an ordinary upload either way, and validates and re-encodes it the same way.
+    """
+    def setup_image_fields(self, enabled, upload_id=None, label="Product image"):
+        """Call at the end of __init__. (Fields are added here, not declared on the mixin, because Django
+        only collects declared fields from classes that use its form metaclass.)"""
+        self.images_enabled = enabled
+        self._processed = None
+        if not enabled:
+            return
+        attrs = {'accept': IMAGE_ACCEPT, 'class': 'form-input', 'data-img-input': ''}
+        if upload_id:
+            attrs['id'] = upload_id
+        self.fields['image_upload'] = forms.FileField(
+            required=False, label=label, widget=forms.FileInput(attrs=attrs))
+        self.fields['remove_image'] = forms.BooleanField(
+            required=False, label="Remove the current image")
+
+    def clean_image_upload(self):
+        upload = self.cleaned_data.get('image_upload')
+        if upload:
+            try:
+                self._processed = compress(upload)      # validates + resizes + re-encodes
+            except ImageRejected as exc:
+                raise ValidationError(str(exc))
+        return upload
+
+    def apply_image(self, obj):
+        """Call after the row exists. Returns 'added', 'removed' or None."""
+        if not self.images_enabled:
+            return None
+        if self._processed is not None:
+            set_image(obj, self._processed)
+            return 'added'
+        if self.cleaned_data.get('remove_image') and obj.has_image:
+            clear_image(obj)
+            return 'removed'
+        return None
+
+
+class ProductForm(ImageUploadMixin, forms.ModelForm):
     class Meta:
         model = Product
         fields = ['name', 'sku_prefix', 'category', 'brand', 'unit_of_measure',
@@ -77,36 +118,14 @@ class ProductForm(forms.ModelForm):
 
         self.fields['unit_of_measure'].queryset = UnitOfMeasure.objects.order_by('name')
 
-        self.images_enabled = get_settings().product_images_enabled
-        self._processed = None
-        if not self.images_enabled:
-            del self.fields['image_upload']
-            del self.fields['remove_image']
-
-    def clean_image_upload(self):
-        upload = self.cleaned_data.get('image_upload')
-        if upload:
-            try:
-                self._processed = compress(upload)      # validates + resizes + re-encodes
-            except ImageRejected as exc:
-                raise ValidationError(str(exc))
-        return upload
-
-    def apply_image(self, product):
-        """Call after the product row exists. Returns 'added', 'removed' or None."""
-        if not self.images_enabled:
-            return None
-        if self._processed is not None:
-            set_product_image(product, self._processed)
-            return 'added'
-        if self.cleaned_data.get('remove_image') and product.has_image:
-            clear_product_image(product)
-            return 'removed'
-        return None
+        self.setup_image_fields(get_settings().product_images_enabled, upload_id='id_image_upload')
 
 
-
-class ProductVariantForm(forms.ModelForm):
+class ProductVariantForm(ImageUploadMixin, forms.ModelForm):
+    """
+    One base variant row. With product images on, each row can carry its own photo; a variant without
+    one shows the product's photo on the POS.
+    """
     class Meta:
         model = ProductVariant
         fields = ['sku', 'size', 'color', 'cost_price', 'retail_price', 'low_stock_threshold']
@@ -119,10 +138,28 @@ class ProductVariantForm(forms.ModelForm):
             'low_stock_threshold': forms.NumberInput(attrs={'class': 'form-input', 'step': '1.000'}),
         }
 
+    def __init__(self, *args, images_enabled=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setup_image_fields(images_enabled, label="Variant photo")
+
+
+class BaseProductVariantFormSet(BaseInlineFormSet):
+    """Reads the 'images on' setting once for the whole formset instead of once per row."""
+
+    def __init__(self, *args, images_enabled=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forms are built lazily (cached_property), so setting this after super().__init__ is in time.
+        self.images_enabled = (get_settings().product_images_enabled
+                               if images_enabled is None else images_enabled)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs['images_enabled'] = self.images_enabled
+        return kwargs
 
 
 ProductVariantFormSet = forms.inlineformset_factory(
-    Product, ProductVariant, form=ProductVariantForm,
+    Product, ProductVariant, form=ProductVariantForm, formset=BaseProductVariantFormSet,
     extra=0, min_num=1, validate_min=True, can_delete=True,
 )
 

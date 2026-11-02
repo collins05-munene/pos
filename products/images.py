@@ -83,7 +83,7 @@ def compress(uploaded) -> ProcessedImage:
 
 
 # ---------------------------------------------------------------------------
-# Attach / detach on a Product
+# Attach / detach on a Product or a ProductVariant
 # ---------------------------------------------------------------------------
 def _delete_files(names):
     from django.core.files.storage import default_storage
@@ -94,24 +94,40 @@ def _delete_files(names):
             pass
 
 
-def set_product_image(product, processed: ProcessedImage):
-    """Store the new files, point the product at them, and remove the old ones once the save commits."""
-    old = [n for n in (product.image.name, product.thumb.name) if n]
+def _update_fields(obj):
+    """The image columns, plus updated_at when the model has one (Product does, ProductVariant does not)."""
+    fields = ["image", "thumb", "image_token"]
+    if any(f.name == "updated_at" for f in obj._meta.fields):
+        fields.append("updated_at")
+    return fields
+
+
+def set_image(obj, processed: ProcessedImage):
+    """
+    Store the new files, point `obj` (a Product or a ProductVariant) at them, and remove the old
+    ones once the save commits.
+    """
+    old = [n for n in (obj.image.name, obj.thumb.name) if n]
     stem = f"{uuid.uuid4().hex[:10]}-{processed.token}"
-    product.image.save(f"{stem}.webp", ContentFile(processed.full), save=False)
-    product.thumb.save(f"{stem}-t.webp", ContentFile(processed.thumb), save=False)
-    product.image_token = processed.token
-    product.save(update_fields=["image", "thumb", "image_token", "updated_at"])
+    obj.image.save(f"{stem}.webp", ContentFile(processed.full), save=False)
+    obj.thumb.save(f"{stem}-t.webp", ContentFile(processed.thumb), save=False)
+    obj.image_token = processed.token
+    obj.save(update_fields=_update_fields(obj))
     if old:
         transaction.on_commit(lambda: _delete_files(old))
 
 
-def clear_product_image(product):
-    old = [n for n in (product.image.name, product.thumb.name) if n]
+def clear_image(obj):
+    old = [n for n in (obj.image.name, obj.thumb.name) if n]
     if not old:
         return
-    product.image = ""
-    product.thumb = ""
-    product.image_token = ""
-    product.save(update_fields=["image", "thumb", "image_token", "updated_at"])
+    obj.image = ""
+    obj.thumb = ""
+    obj.image_token = ""
+    obj.save(update_fields=_update_fields(obj))
     transaction.on_commit(lambda: _delete_files(old))
+
+
+# Original names, still used by the product form and the tests.
+set_product_image = set_image
+clear_product_image = clear_image

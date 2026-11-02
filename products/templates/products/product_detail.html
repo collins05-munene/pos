@@ -8,6 +8,7 @@
     th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
     th { background-color: #f2f2f2; color: #333; }
     tr.pack-line { background-color: #f8fafc; }
+    .variant-thumb { width: 44px; height: 44px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 4px; background: #fff; display: block; }
     .detail-actions { display: flex; gap: 0.75rem; margin: 1rem 0; }
     .detail-btn { padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.875rem; font-weight: 500; }
     .detail-btn.primary { background: #2563eb; color: #fff; }
@@ -59,6 +60,7 @@
         <table>
             <thead>
                 <tr>
+                    {% if images_enabled %}<th>Photo</th>{% endif %}
                     <th>SKU</th>
                     <th>Sold as</th>
                     <th>Size / Color</th>
@@ -73,6 +75,7 @@
                 {% for variant in product.variants.all %}
                     {% if not variant.base_variant_id %}
                         <tr>
+                            {% if images_enabled %}<td>{% with pic=variant.display_thumb_url %}{% if pic %}<img class="variant-thumb" src="{{ pic }}" alt="" width="44" height="44" loading="lazy" decoding="async">{% else %}&mdash;{% endif %}{% endwith %}</td>{% endif %}
                             <td><strong>{{ variant.sku }}</strong></td>
                             <td>{{ product.unit_of_measure.name }} <small>(base unit)</small></td>
                             <td>{{ variant.size|default:"-" }}{% if variant.color %} / {{ variant.color }}{% endif %}</td>
@@ -85,6 +88,7 @@
                         {% for pack in variant.packagings.all %}
                             {% if pack.is_active %}
                                 <tr class="pack-line">
+                                    {% if images_enabled %}<td></td>{% endif %}
                                     <td style="padding-left: 2rem;">&#8627; <strong>{{ pack.sku }}</strong></td>
                                     <td>{{ pack.unit_name }} <small>(&times;{{ pack.units_per_pack|floatformat:"-3" }} {{ product.unit_of_measure.name }})</small></td>
                                     <td>&mdash;</td>
@@ -99,7 +103,7 @@
                     {% endif %}
                 {% empty %}
                     <tr>
-                        <td colspan="8" style="text-align: center; color: #666;">This product has no variations setup.</td>
+                        <td colspan="{% if images_enabled %}9{% else %}8{% endif %}" style="text-align: center; color: #666;">This product has no variations setup.</td>
                     </tr>
                 {% endfor %}
             </tbody>

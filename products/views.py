@@ -284,8 +284,9 @@ class ProductEditorMixin:
                 .filter(product=self.object, is_active=True, base_variant__isnull=True)
                 .order_by('pk'))
 
-    def build_variants(self, data=None):
-        return ProductVariantFormSet(data, instance=self.object, prefix='variants',
+    def build_variants(self, data=None, files=None):
+        # files is needed so each row's photo (variants-N-image_upload) reaches its form.
+        return ProductVariantFormSet(data, files, instance=self.object, prefix='variants',
                                      queryset=self.base_variants_qs())
 
     def pack_initial(self):
@@ -311,20 +312,27 @@ class ProductEditorMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        data = self.request.POST if self.request.method == 'POST' else None
+        posting = self.request.method == 'POST'
+        data = self.request.POST if posting else None
+        files = self.request.FILES if posting else None
         if ctx.get('variants') is None:
-            ctx['variants'] = self.build_variants(data)
+            ctx['variants'] = self.build_variants(data, files)
         if ctx.get('packs') is None:
             ctx['packs'] = self.build_packs(data)
+        ctx['images_enabled'] = ctx['variants'].images_enabled
         return ctx
 
     def get_editing_object(self):
         raise NotImplementedError
 
+    def _variant_image_note(self):
+        n = getattr(self, 'variant_images_changed', 0)
+        return f" ({n} variant image{'s' if n != 1 else ''} changed)" if n else ""
+
     def post(self, request, *args, **kwargs):
         self.object = self.get_editing_object()
         form = self.get_form()
-        variants = self.build_variants(request.POST)
+        variants = self.build_variants(request.POST, request.FILES)
         packs = self.build_packs(request.POST)
 
         form_ok = form.is_valid()
@@ -392,6 +400,14 @@ class ProductEditorMixin:
             v.is_active = False
             v.save(update_fields=['is_active'])
             v.packagings.update(is_active=False)
+
+        # Variant photos: after the rows exist (a new variant has no pk before this point). Rows that
+        # didn't change -- or have no photo input at all (feature off) -- are a no-op.
+        self.variant_images_changed = 0
+        for f in variants.forms:
+            cd = getattr(f, 'cleaned_data', None)
+            if cd and not cd.get('DELETE') and f.instance.pk and f.apply_image(f.instance):
+                self.variant_images_changed += 1
         return saved
 
     def save_packs(self, variants, packs):
@@ -451,7 +467,8 @@ class ProductCreateView(ProductEditorMixin, CashierRequiredMixin, CreateView):
             log_action(self.request.user, AuditAction.RECORD_CREATE,
                        f"Product created: {self.object.name} "
                        f"({len(saved_variants)} variant(s), {pack_count} selling unit(s))"
-                       f"{' with image' if image == 'added' else ''}",
+                       f"{' with image' if image == 'added' else ''}"
+                       f"{self._variant_image_note()}",
                        self.request)
 
         base_ids = [str(f.instance.pk) for f in self.live_variant_forms(variants).values()]
@@ -484,7 +501,8 @@ class ProductUpdateView(ProductEditorMixin, CashierRequiredMixin, UpdateView):
 
             log_action(self.request.user, AuditAction.RECORD_UPDATE,
                        f"Product updated: {self.object.name}"
-                       f"{' (image ' + image + ')' if image else ''}", self.request)
+                       f"{' (image ' + image + ')' if image else ''}"
+                       f"{self._variant_image_note()}", self.request)
             
         if price_lines:
             extra = f" (+{len(price_lines) - 5} more)" if len(price_lines) > 5 else ""
@@ -529,17 +547,18 @@ class ProductImageView(CashierRequiredMixin, View):
     Django does not serve /media/. The URL carries ?v=<content hash>, so the browser may keep the
     file for a year and re-fetch only when the photo actually changes.
     """
+    model = Product
     CACHE = 'private, max-age=31536000, immutable'
 
     def get(self, request, pk, size):
         if size not in ('thumb', 'full'):
             raise Http404
-        product = get_object_or_404(Product.objects.only('id', 'tenant', 'image', 'thumb', 'image_token'),
-                                    pk=pk, tenant=request.tenant)
-        field = product.thumb if size == 'thumb' else product.image
+        obj = get_object_or_404(self.model.objects.only('id', 'tenant', 'image', 'thumb', 'image_token'),
+                                pk=pk, tenant=request.tenant)
+        field = obj.thumb if size == 'thumb' else obj.image
         if not field:
             raise Http404
-        etag = f'"{product.image_token}-{size}"'
+        etag = f'"{obj.image_token}-{size}"'
         if request.headers.get('If-None-Match') == etag:
             response = HttpResponse(status=304)
         else:
@@ -550,6 +569,12 @@ class ProductImageView(CashierRequiredMixin, View):
         response['ETag'] = etag
         response['Cache-Control'] = self.CACHE
         return response
+
+
+class ProductVariantImageView(ProductImageView):
+    """Same as above for a variant's own photo (variants without one fall back to the product's in the
+    page that links here, so a 404 only happens for a stale link)."""
+    model = ProductVariant
 
 
 class ProductRestoreView(View):

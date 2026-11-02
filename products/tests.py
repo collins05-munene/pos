@@ -352,3 +352,239 @@ class ViewFlowTests(ProductImageTestBase):
         self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
         with tenant_context(self.shop["tenant"]):
             self.assertTrue(Product.objects.get(sku_prefix="BRU").has_image)
+
+
+# ---------------------------------------------------------------------------------------------
+# Variant photos + camera capture
+# ---------------------------------------------------------------------------------------------
+class VariantImageBase(ProductImageTestBase):
+    def attach_variant(self, variant=None, data=None):
+        """Put a photo on a variant the same way the form does."""
+        variant = variant or self.shop["variant"]
+        with tenant_context(self.shop["tenant"]):
+            v = ProductVariant.objects.get(pk=variant.pk)
+            imgs.set_image(v, imgs.compress(upload(data or photo((1200, 900)))))
+            return ProductVariant.objects.get(pk=v.pk)
+
+    def make_pack(self):
+        with tenant_context(self.shop["tenant"]):
+            return ProductVariant.objects.create(
+                product=self.product, sku="PAN-BOX", cost_price=Decimal("60"), retail_price=Decimal("140"),
+                base_variant=ProductVariant.objects.get(pk=self.shop["variant"].pk),
+                unit_name="Box", units_per_pack=Decimal("30"))
+
+    def second_variant(self):
+        with tenant_context(self.shop["tenant"]):
+            return ProductVariant.objects.create(product=self.product, sku="PAN-2", color="Red",
+                                                 cost_price=Decimal("2"), retail_price=Decimal("5"))
+
+
+class VariantImageModelTests(VariantImageBase):
+    def test_variant_without_photo_shows_the_product_photo(self):
+        p = self.attach()
+        with tenant_context(self.shop["tenant"]):
+            v = ProductVariant.objects.get(pk=self.shop["variant"].pk)
+            self.assertFalse(v.has_image)
+            self.assertEqual(v.display_thumb_url, p.thumb_url)
+
+    def test_variant_photo_wins_over_the_product_photo(self):
+        self.attach()
+        v = self.attach_variant()
+        with tenant_context(self.shop["tenant"]):
+            v = ProductVariant.objects.get(pk=v.pk)
+            self.assertTrue(v.has_image)
+            self.assertIn(f"/products/variant/{v.pk}/image/thumb/?v={v.image_token}", v.display_thumb_url)
+
+    def test_selling_unit_borrows_its_base_variants_photo(self):
+        self.attach()
+        base = self.attach_variant()
+        pack = self.make_pack()
+        with tenant_context(self.shop["tenant"]):
+            pack = ProductVariant.objects.select_related("product", "base_variant").get(pk=pack.pk)
+            self.assertFalse(pack.has_image)
+            self.assertEqual(pack.display_thumb_url, ProductVariant.objects.get(pk=base.pk).thumb_url)
+
+    def test_no_photo_anywhere_gives_empty_url(self):
+        with tenant_context(self.shop["tenant"]):
+            self.assertEqual(ProductVariant.objects.get(pk=self.shop["variant"].pk).display_thumb_url, "")
+
+    def test_replacing_a_variant_photo_removes_the_old_files_after_commit(self):
+        self.attach_variant()
+        self.assertEqual(len(self.files_on_disk()), 2)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.attach_variant(data=photo((900, 900), "PNG"))
+        self.assertEqual(len(self.files_on_disk()), 2)
+
+    def test_clear_image_works_on_a_variant(self):
+        v = self.attach_variant()
+        with tenant_context(self.shop["tenant"]), self.captureOnCommitCallbacks(execute=True):
+            v = ProductVariant.objects.get(pk=v.pk)
+            imgs.clear_image(v)
+            self.assertFalse(ProductVariant.objects.get(pk=v.pk).has_image)
+        self.assertEqual(self.files_on_disk(), [])
+
+
+class VariantImageServingTests(VariantImageBase):
+    def setUp(self):
+        super().setUp()
+        self.enable()
+        self.v = self.attach_variant()
+
+    def url(self, size="thumb", pk=None):
+        return reverse("variant-image", args=[pk or self.v.pk, size])
+
+    def test_serves_webp_with_cache_headers(self):
+        r = self.client.get(self.url())
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "image/webp")
+        self.assertIn("immutable", r["Cache-Control"])
+        self.assertEqual(self.client.get(self.url(), HTTP_IF_NONE_MATCH=r["ETag"]).status_code, 304)
+
+    def test_unknown_size_and_variant_without_photo_are_404(self):
+        self.assertEqual(self.client.get(self.url("huge")).status_code, 404)
+        other = self.second_variant()
+        self.assertEqual(self.client.get(self.url(pk=other.pk)).status_code, 404)
+
+    def test_another_shop_cannot_see_the_variant_image(self):
+        other = make_shop(business_name="Kamau Pharmacy", email="kamau@example.com", phone="254700111222")
+        self.client.force_login(other["owner"])
+        self.assertEqual(self.client.get(self.url()).status_code, 404)
+
+
+class VariantImageFormFlowTests(VariantImageBase):
+    """Create/update through the real views with multipart uploads, variant rows included."""
+
+    def formset(self, prefix, rows, initial):
+        data = {f"{prefix}-TOTAL_FORMS": len(rows), f"{prefix}-INITIAL_FORMS": initial,
+                f"{prefix}-MIN_NUM_FORMS": 0, f"{prefix}-MAX_NUM_FORMS": 1000}
+        for i, row in enumerate(rows):
+            data.update({f"{prefix}-{i}-{k}": v for k, v in row.items()})
+        return data
+
+    def row(self, variant, **extra):
+        return dict(id=variant.pk, product=self.product.pk, sku=variant.sku, size="", color=variant.color,
+                    cost_price="2.00", retail_price="5.00", low_stock_threshold="10.000", **extra)
+
+    def payload(self, rows, initial, **extra):
+        return {**self.form_data(description="", has_variations="on", **extra),
+                **self.formset("variants", rows, initial), **self.formset("packs", [], 0)}
+
+    def test_form_shows_photo_and_camera_controls_only_when_enabled(self):
+        url = reverse("product-update", args=[self.product.pk])
+        off = self.client.get(url)
+        self.assertNotContains(off, "data-img-camera")
+        self.assertNotContains(off, "variants-0-image_upload")
+        self.enable()
+        on = self.client.get(url)
+        self.assertContains(on, "variants-0-image_upload")
+        self.assertContains(on, "data-img-camera")
+        self.assertContains(on, 'capture="environment"')
+        self.assertContains(on, "js/image-field.js")
+
+    def test_update_saves_a_photo_on_one_variant_only(self):
+        self.enable()
+        second = self.second_variant()
+        v1 = self.shop["variant"]
+        rows = [self.row(v1), self.row(second)]
+        rows[1]["image_upload"] = upload(photo((1600, 1200)))   # only the 2nd row gets a photo
+        data = self.payload([{k: val for k, val in r.items()} for r in rows], 2)
+        r = self.client.post(reverse("product-update", args=[self.product.pk]), data)
+        self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
+        with tenant_context(self.shop["tenant"]):
+            self.assertFalse(ProductVariant.objects.get(pk=v1.pk).has_image)
+            self.assertTrue(ProductVariant.objects.get(pk=second.pk).has_image)
+            self.assertFalse(Product.objects.get(pk=self.product.pk).has_image)
+        self.assertEqual(len(self.files_on_disk()), 2)
+
+    def test_update_remove_flag_clears_a_variant_photo(self):
+        self.enable()
+        v = self.attach_variant()
+        data = self.payload([self.row(v, remove_image="on")], 1)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(reverse("product-update", args=[self.product.pk]), data)
+        self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
+        with tenant_context(self.shop["tenant"]):
+            self.assertFalse(ProductVariant.objects.get(pk=v.pk).has_image)
+        self.assertEqual(self.files_on_disk(), [])
+
+    def test_bad_variant_file_redisplays_the_form_with_an_error(self):
+        self.enable()
+        v = self.shop["variant"]
+        row = self.row(v)
+        row["image_upload"] = upload(b"junk")
+        r = self.client.post(reverse("product-update", args=[self.product.pk]), self.payload([row], 1))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "could not be read as an image")
+        self.assertEqual(self.files_on_disk(), [])
+
+    def test_unchanged_rows_keep_their_photo(self):
+        self.enable()
+        v = self.attach_variant()
+        before = v.image_token
+        r = self.client.post(reverse("product-update", args=[self.product.pk]), self.payload([self.row(v)], 1))
+        self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
+        with tenant_context(self.shop["tenant"]):
+            self.assertEqual(ProductVariant.objects.get(pk=v.pk).image_token, before)
+
+    def test_create_with_a_photo_on_a_new_variant(self):
+        self.enable()
+        rows = [dict(sku="NEW-1", size="S", color="", cost_price="1.00", retail_price="3.00",
+                     low_stock_threshold="10.000", image_upload=upload(photo((1600, 1200)))),
+                dict(sku="NEW-2", size="L", color="", cost_price="1.00", retail_price="3.00",
+                     low_stock_threshold="10.000")]
+        data = {**self.form_data(description="", has_variations="on"), "name": "Brufen", "sku_prefix": "BRU",
+                **self.formset("variants", rows, 0), **self.formset("packs", [], 0)}
+        r = self.client.post(reverse("product-create"), data)
+        self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
+        with tenant_context(self.shop["tenant"]):
+            self.assertTrue(ProductVariant.objects.get(sku="NEW-1").has_image)
+            self.assertFalse(ProductVariant.objects.get(sku="NEW-2").has_image)
+
+    def test_variant_upload_is_ignored_when_images_are_off(self):
+        v = self.shop["variant"]
+        row = self.row(v)
+        row["image_upload"] = upload(photo())
+        r = self.client.post(reverse("product-update", args=[self.product.pk]), self.payload([row], 1))
+        self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:800])
+        self.assertEqual(self.files_on_disk(), [])
+
+
+class VariantImagePosTests(VariantImageBase):
+    def setUp(self):
+        super().setUp()
+        self.enable()
+
+    def terminal(self, **extra):
+        return self.client.get(reverse("pos_terminal"), **extra)
+
+    def test_tile_shows_the_variant_photo_not_the_products(self):
+        p = self.attach()
+        v = self.attach_variant()
+        html = self.terminal().content.decode()
+        self.assertIn(f"/products/variant/{v.pk}/image/thumb/?v={v.image_token}", html)
+        self.assertNotIn(f"/products/product/{p.pk}/image/thumb/", html)
+
+    def test_tile_falls_back_to_the_product_photo(self):
+        p = self.attach()
+        self.assertContains(self.terminal(), f"/products/product/{p.pk}/image/thumb/?v={p.image_token}")
+
+    def test_ajax_results_use_the_variant_photo(self):
+        v = self.attach_variant()
+        html = self.terminal(HTTP_X_REQUESTED_WITH="XMLHttpRequest").json()["products_html"]
+        self.assertIn(f"/products/variant/{v.pk}/image/thumb/", html)
+
+    def test_offline_snapshot_carries_each_variants_own_photo(self):
+        p = self.attach()
+        base = self.attach_variant()
+        pack = self.make_pack()
+        second = self.second_variant()
+        snap = self.client.get("/pos/offline/snapshot/", HTTP_ACCEPT="application/json").json()
+        by_id = {x["id"]: x for x in snap["variants"]}
+        self.assertIn(f"/variant/{base.pk}/image/thumb/", by_id[base.pk]["img"])
+        self.assertEqual(by_id[pack.pk]["img"], by_id[base.pk]["img"])          # selling unit borrows
+        self.assertEqual(by_id[second.pk]["img"], p.thumb_url)                  # no own photo: product's
+
+    def test_product_detail_lists_variant_photos(self):
+        v = self.attach_variant()
+        page = self.client.get(reverse("product-detail", args=[self.product.pk]))
+        self.assertContains(page, f"/products/variant/{v.pk}/image/thumb/")
