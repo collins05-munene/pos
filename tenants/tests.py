@@ -60,9 +60,9 @@ class IsolationTests(TestCase):
                 b.save()
 
     def test_staff_usernames_are_namespaced(self):
-        u = create_staff_user(tenant=self.t1, handle="john", role="CASHIER", pin="1234")
+        u = create_staff_user(tenant=self.t1, handle="john", role="CASHIER", password="Pw-12345-xx")
         self.assertEqual(u.username, compose_username(self.t1.slug, "john"))
-        create_staff_user(tenant=self.t2, handle="john", role="CASHIER", pin="4321")  # no clash
+        create_staff_user(tenant=self.t2, handle="john", role="CASHIER", password="Pw-54321-xx")  # no clash
 
 
 class PricingTests(TestCase):
@@ -306,3 +306,51 @@ class SignupVerificationTests(TestCase):
         self.assertContains(self.client.get("/signup/verify/bogus/"), "isn", status_code=404)
         html = mail.outbox[0].alternatives[0][0]
         self.assertIn(self.link(), html)
+
+
+@override_settings(TENANCY_ALLOW_NULL_TENANT=False, SIGNUP_RESEND_SECONDS=60,
+                   SITE_URL="https://shop.example.com")
+class CheckEmailRedirectTests(TestCase):
+    """The check-email page must move on by itself once the link is clicked."""
+    form = {**SIGNUP, "phone": "0712 345 678", "term_months": 1, "branch_count": 1, "branch_names": []}
+
+    def start(self):
+        self.client.post("/signup/", data=json.dumps(self.form), content_type="application/json")
+        return re.search(r"https://shop\.example\.com(/signup/verify/\S+/)", mail.outbox[-1].body).group(1)
+
+    def status(self, client=None):
+        return (client or self.client).get("/signup/check-email/status/").json()
+
+    def test_pending_then_verified_on_another_device(self):
+        link = self.start()
+        self.assertEqual(self.status(), {"state": "pending", "next": ""})
+        from django.test import Client
+        Client().get(link)                                     # the phone clicks the link
+        self.assertEqual(self.status(), {"state": "verified", "next": "/users/login/?verified=1"})
+        self.assertRedirects(self.client.get("/signup/check-email/"), "/users/login/?verified=1",
+                             fetch_redirect_response=False)
+        page = self.client.get("/users/login/?verified=1")      # email is pre-filled
+        self.assertContains(page, 'value="njeri@example.com"')
+        self.assertContains(page, "Email confirmed")
+
+    def test_verified_in_same_browser_goes_to_billing(self):
+        link = self.start()
+        self.client.get(link)
+        self.assertEqual(self.status(), {"state": "verified", "next": "/billing/"})
+
+    def test_expired_link_is_reported(self):
+        self.start()
+        PendingSignup.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(self.status()["state"], "expired")
+        self.assertContains(self.client.get("/signup/check-email/"), "expired")
+
+    def test_nothing_started_here_means_nothing_to_wait_for(self):
+        self.assertEqual(self.status(), {"state": "none", "next": "/signup/"})
+
+    def test_cannot_learn_that_someone_elses_email_has_an_account(self):
+        register_business(**{**SIGNUP, "email_verified": True})            # existing, confirmed earlier
+        s = self.client.session
+        s["signup_pending_email"] = "njeri@example.com"
+        s["signup_started_at"] = timezone.now().isoformat()
+        s.save()
+        self.assertEqual(self.status()["state"], "none")

@@ -28,7 +28,8 @@ class OverviewView(SuperuserRequiredMixin, View):
         if "application/json" in accept_header or request.GET.get("format") == "json":
             return JsonResponse(platform_overview())
 
-        return render(request, "platform_admin/overview.html")
+        from .reset_views import pending_reset_count
+        return render(request, "platform_admin/overview.html", {"pending_resets": pending_reset_count()})
 
 class TenantListView(SuperuserRequiredMixin, View):
     def get(self, request):

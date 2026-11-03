@@ -33,7 +33,7 @@
     var waiting = s.pending;
     if (s.authRequired && (waiting || s.failed)) {
       text = 'Sign in to sync ' + plural(waiting + s.failed); cls = 'warn';
-      action = function () { location.href = '/users/pos-login/'; };
+      action = function () { location.href = '/users/login/'; };
     } else if (s.paymentRequired && waiting) {
       text = plural(waiting) + ' waiting: subscription needs attention'; cls = 'warn';
       action = function () { location.href = '/billing/'; };

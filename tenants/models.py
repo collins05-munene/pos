@@ -235,9 +235,8 @@ class TenantSettings(TenantOwnedModel):
         help_text="The most a manager (not an admin) may give on one product.")
     below_cost_policy = models.CharField(max_length=10, choices=BelowCost.choices, default=BelowCost.LIMIT)
 
-    # ---- refunds
     refund_window_days = models.PositiveIntegerField(
-        default=30, help_text="Managers can refund a sale up to this many days after it. Admins can go past it.")
+        default=30, )
 
     # ---- receipts
     receipt_footer = models.CharField(

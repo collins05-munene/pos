@@ -1,141 +1,231 @@
-from django.shortcuts import render
-from django.views import View
-from django.views.generic import FormView, ListView, TemplateView, DetailView
-from django.urls import reverse_lazy
-from django.contrib.auth import login, logout, authenticate
-from django.shortcuts import redirect, render, get_object_or_404
-from django.contrib.auth.mixins import UserPassesTestMixin
-from django.utils.decorators import method_decorator
-from django_ratelimit.decorators import ratelimit
-from django.core.exceptions import PermissionDenied
-from django.http import JsonResponse
-from django.views.decorators.cache import never_cache
-from .dashboard_live import get_version
+from django.conf import settings
+from django.contrib.auth import login, logout
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views import View
+from django.views.decorators.cache import never_cache
+from django.views.generic import DetailView, FormView, ListView, RedirectView, TemplateView
+from django_ratelimit.decorators import ratelimit
 
-from .models import ActivityLog, User
-from .forms import StandardLoginForm, CashierPinLoginForm
-from .utils import log_action, AuditAction
+from . import password_reset
 from .dashboard import build_dashboard_context
-from tenants.services import compose_username
-from tenants.models import Tenant
-from users.mixins import AdminRequiredMixin, CashierRequiredMixin, TenantScopedQuerysetMixin
+from .dashboard_live import get_version
+from .forms import LoginForm, PasswordResetRequestForm, SetNewPasswordForm
+from .models import ActivityLog, User
+from .utils import AuditAction, log_action
 from notifications.models import Notification
-from notifications.utils import notify, MANAGEMENT
+from notifications.utils import MANAGEMENT, notify, who
+from tenants.services import SIGNUP_EMAIL_KEY
+from users.mixins import AdminRequiredMixin, CashierRequiredMixin, TenantScopedQuerysetMixin
 
 # Create your views here.
-def get_post_username(group, request):
-    return request.POST.get('username', '').lower().strip()
-
 def get_login_identifier(group, request):
-    return request.POST.get('username', '').lower().strip()
+    """Rate-limit key: one counter per shop+username, so one cashier can't lock out the whole shop."""
+    code = request.POST.get('shop_code', '').lower().strip()
+    return f"{code}__{request.POST.get('username', '').lower().strip()}"
+
+
+def home_for(user):
+    """Where a freshly signed-in user lands, by who they are."""
+    if user.is_superuser:
+        return reverse('platform_admin:overview')
+    if user.role == User.Roles.CASHIER:
+        return reverse('pos_terminal')
+    return reverse('admin-dashboard')
+
+
+def _client_ip(request):
+    return (request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR'))
 
 
 @method_decorator(
-    ratelimit(key='ip', rate='10/m', method='POST', block=False), 
+    ratelimit(key='ip', rate='10/m', method='POST', block=False),
     name='post'
 )
 @method_decorator(
-    ratelimit(key=get_login_identifier, rate='5/m', method='POST', block=False), 
+    ratelimit(key=get_login_identifier, rate='5/m', method='POST', block=False),
     name='post'
 )
-class StandardLoginView(FormView):
+class LoginView(FormView):
+    """One login for everyone: owner, admin, manager, cashier (and the platform admin)."""
     template_name = 'users/login.html'
-    form_class = StandardLoginForm
-    success_url = reverse_lazy('admin-dashboard')
+    form_class = LoginForm
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and request.method == 'GET':
+            return redirect(home_for(request.user))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        # Arriving from the "email confirmed" page: save them typing their own email.
+        if self.request.GET.get('verified') == '1':
+            email = self.request.session.pop(SIGNUP_EMAIL_KEY, None)
+            if email:
+                initial['username'] = email
+        return initial
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['next'] = self.request.POST.get('next') or self.request.GET.get('next', '')
+        ctx['verified'] = self.request.GET.get('verified') == '1'
+        ctx['password_reset_done'] = self.request.GET.get('reset') == '1'
+        return ctx
 
     def post(self, request, *args, **kwargs):
         if getattr(request, 'limited', False):
             form = self.get_form()
             form.add_error(
-                None, 
+                None,
                 "Too many login attempts. Please wait a minute before trying again."
             )
             return self.form_invalid(form)
-            
+
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         user = form.get_user()
-        if user.role in ['ADMIN', 'MANAGER']:
-            login(self.request, user)
-            log_action(user, "Standard Login", "Logged into management dashboard", self.request)
-            return super().form_valid(form)
-        else:
-            form.add_error(None, "Cashiers must use the POS Login terminal.")
-            return self.form_invalid(form)
+        login(self.request, user)
+        log_action(user, AuditAction.LOGIN, "Signed in with username and password.", self.request)
+
+        target = self.request.POST.get('next', '')
+        if not (target and url_has_allowed_host_and_scheme(
+                target, allowed_hosts={self.request.get_host()},
+                require_https=self.request.is_secure())):
+            target = home_for(user)
+        return redirect(target)
+
+    def form_invalid(self, form):
+        username = form.cleaned_data.get('username') if hasattr(form, 'cleaned_data') else None
+        failed_user = User.objects.select_related('tenant').filter(username=username).first() if username else None
+        if failed_user is not None and failed_user.tenant_id:
+            tenant = failed_user.tenant
+            log_action(None, AuditAction.LOGIN_FAILED,
+                       f"Failed sign-in for username: {username}",
+                       request=self.request, tenant=tenant)
+            # Tell the shop's admins when someone seems to be guessing one account's password.
+            key = f"loginfail:{tenant.pk}:{username}"
+            cache.add(key, 0, timeout=15 * 60)
+            try:
+                fails = cache.incr(key)
+            except ValueError:
+                fails = 1
+            if fails == 5:   # fire once when the threshold is crossed
+                notify(tenant, "Repeated failed sign-ins",
+                       f"5 failed sign-in attempts for '{who(failed_user)}' in the last 15 minutes. "
+                       "Someone may be guessing a password.",
+                       level=Notification.Level.WARNING, roles=MANAGEMENT)
+        return super().form_invalid(form)
+
+
+class LegacyPosLoginRedirect(RedirectView):
+    """/users/pos-login/ was the cashier PIN screen. Old bookmarks, installed PWAs and the offline
+    pages still point at it; everyone now signs in at /users/login/."""
+    pattern_name = 'login'
+    query_string = True
+    permanent = False
+
+
+class HomepageView(View):
+    """'/' sends signed-in people to their home and everyone else to the login page."""
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect(home_for(request.user))
+        return redirect('login')
 
 
 @method_decorator(
-    ratelimit(key='ip', rate='10/m', method='POST', block=False), 
+    ratelimit(key='ip', rate='10/h', method='POST', block=False),
     name='post'
 )
 @method_decorator(
-    ratelimit(key=get_post_username, rate='5/m', method='POST', block=False), 
+    ratelimit(key=get_login_identifier, rate='3/h', method='POST', block=False),
     name='post'
 )
-class CashierPINLoginView(FormView):
-    template_name = 'users/pin_login.html'
-    form_class = CashierPinLoginForm
-    success_url = reverse_lazy('pos_terminal')
+class PasswordResetRequestView(FormView):
+    """'Forgot password?' -- files a request that the platform team must approve."""
+    template_name = 'users/password_reset_request.html'
+    form_class = PasswordResetRequestForm
 
     def post(self, request, *args, **kwargs):
         if getattr(request, 'limited', False):
             form = self.get_form()
-            form.add_error(
-                None, 
-                "Too many login attempts. Please wait a minute before trying again."
-            )
+            form.add_error(None, "Too many requests. Please try again later.")
             return self.form_invalid(form)
-            
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        shop_code = self.request.POST.get('shop_code', '').strip().lower()
-        handle = form.cleaned_data.get('username', '').strip().lower()
-        pin = form.cleaned_data.get('pin')
+        password_reset.request_reset(
+            username=form.cleaned_data['username'], ip=_client_ip(self.request), request=self.request)
+        # Same answer whether or not the account exists, so this page can't be used to find usernames.
+        return redirect('password-reset-sent')
 
-        # Automatically prepend shop_code if handle doesn't already contain '__'
-        if "__" in handle:
-            composed_username = handle
-        else:
-            composed_username = compose_username(shop_code, handle)
 
-        user = authenticate(self.request, username=composed_username, pin=pin)
+class PasswordResetSentView(TemplateView):
+    template_name = 'users/password_reset_sent.html'
 
-        if user is not None:
-            login(self.request, user)
-            log_action(user, AuditAction.LOGIN_PIN, f"Logged in to POS terminal via pin.", self.request)
-            return super().form_valid(form)
-        else:
-            tenant = Tenant.objects.filter(slug=shop_code).first()
-            log_action(
-                None, "PIN_LOGIN_FAILED",
-                f"Failed PIN login attempt for username: {composed_username}",
-                request=self.request, tenant=tenant,
-            )
-            if tenant:
-                key = f"pinfail:{tenant.pk}:{composed_username}"
-                cache.add(key, 0, timeout=15 * 60)
-                try:
-                    fails = cache.incr(key)
-                except ValueError:
-                    fails = 1
-                if fails == 5:   # fire once when the threshold is crossed
-                    notify(tenant, "Repeated failed PIN logins",
-                           f"5 failed PIN attempts for '{handle}' in the last 15 minutes. "
-                           "Someone may be guessing a PIN.",
-                           level=Notification.Level.WARNING, roles=MANAGEMENT)
-            form.add_error(None, "Invalid Shop Code, Username, or PIN")
-            return self.form_invalid(form)
-        
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['hours'] = getattr(settings, 'PASSWORD_RESET_LINK_HOURS', 24)
+        return ctx
+
+
+@method_decorator(
+    ratelimit(key='ip', rate='20/h', method='POST', block=True),
+    name='post'
+)
+class PasswordResetConfirmView(View):
+    """The emailed link: choose a new password. Works once."""
+    template_name = 'users/password_reset_confirm.html'
+
+    def _lookup(self, token):
+        try:
+            return password_reset.get_request_for_token(token), None
+        except password_reset.ResetLinkExpired:
+            return None, 'expired'
+        except password_reset.ResetLinkInvalid:
+            return None, 'invalid'
+
+    def get(self, request, token):
+        req, problem = self._lookup(token)
+        if problem:
+            return render(request, self.template_name, {'problem': problem},
+                          status=410 if problem == 'expired' else 404)
+        return render(request, self.template_name, {'form': SetNewPasswordForm(user=req.user)})
+
+    def post(self, request, token):
+        req, problem = self._lookup(token)
+        if problem:
+            return render(request, self.template_name, {'problem': problem},
+                          status=410 if problem == 'expired' else 404)
+        form = SetNewPasswordForm(request.POST, user=req.user)
+        if not form.is_valid():
+            return render(request, self.template_name, {'form': form}, status=400)
+        try:
+            password_reset.complete_reset(token, form.cleaned_data['password1'], request=request)
+        except password_reset.ResetLinkExpired:
+            return render(request, self.template_name, {'problem': 'expired'}, status=410)
+        except password_reset.ResetLinkInvalid:
+            return render(request, self.template_name, {'problem': 'invalid'}, status=404)
+        except ValidationError as exc:
+            form.add_error('password1', exc)
+            return render(request, self.template_name, {'form': form}, status=400)
+        return redirect(f"{reverse('login')}?reset=1")
+
+
 class LogoutView(View):
     def get(self, request):
         if request.user.is_authenticated:
             User.objects.filter(pk=request.user.pk).update(last_seen=None)
             log_action(request.user, 'Logout', 'Logged out of session', request)
             logout(request)
-        return redirect('pin_login')
+        return redirect('login')
     
 
 class ActivityLogListView(AdminRequiredMixin, TenantScopedQuerysetMixin, ListView):
@@ -198,5 +288,3 @@ class CashierDashboardView(CashierRequiredMixin, ListView):
     def get_queryset(self):
         return User.tenant_objects.filter(role=User.Roles.CASHIER, is_active=True)
 
-class HomepageView(TemplateView):
-    template_name = 'users/pin_login.html'

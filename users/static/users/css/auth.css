@@ -245,3 +245,32 @@ input:focus{
         font-size:14px;
     }
 }
+
+/* ---- success / info banners and small hints (login + password reset pages) ---- */
+.alert-success{
+    background:rgba(34, 197, 94, 0.25);
+    color:black;
+}
+
+.alert-info{
+    background:rgba(37, 99, 235, 0.14);
+    color:black;
+}
+
+.field-hint{
+    font-size:13px;
+    color:var(--muted);
+}
+
+.field-error{
+    color:#b3261e;
+    font-size:13px;
+    margin-top:4px;
+}
+
+.auth-text{
+    font-size:15px;
+    line-height:1.5;
+    color:var(--muted);
+    margin-bottom:16px;
+}

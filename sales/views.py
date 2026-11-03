@@ -780,7 +780,6 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             if request.GET.get(key)
         ]
 
-        # --- branch-by-branch comparison (only when looking at the whole business) --------
         branch_rows = []
         if branch is None and len(branches) > 1:
             sales_by_branch = {
@@ -824,12 +823,9 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         context['all_branches_url'] = _dashboard_url(request, branch=None)
         context['pdf_url'] = reverse('sales-report-pdf') + _dashboard_url(request)
 
-        # --- the three record tables ------------------------------------------------------
         sessions_qs = period_sessions.select_related('opened_by', 'branch').order_by('-opened_at')
         txns_qs = period_cash_txns.select_related('user').order_by('-created_at')
-        orders_qs = (period_orders.select_related('branch')
-                     .annotate(refunded=Coalesce(Sum('refunds__total_amount'), Decimal('0.00'), output_field=DecimalField(max_digits=12, decimal_places=2)))
-                     .order_by('-created_at'))
+        orders_qs = (period_orders.select_related('branch').annotate(refunded=Coalesce(Sum('refunds__total_amount'), Decimal('0.00'), output_field=DecimalField(max_digits=12, decimal_places=2))).order_by('-created_at'))
 
         sessions_page = _paginate(request, sessions_qs, 'sessions_page', page_size=15)
         txns_page = _paginate(request, txns_qs, 'txns_page', page_size=15)
@@ -839,28 +835,22 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
         context['recent_cash_txns'] = txns_page
         context['recent_orders'] = orders_page
 
-        context['sessions_prev_qs'] = (
-            _page_link_qs(request, 'sessions_page', sessions_page.previous_page_number())
+        context['sessions_prev_qs'] = (_page_link_qs(request, 'sessions_page', sessions_page.previous_page_number())
             if sessions_page.has_previous() else None
         )
-        context['sessions_next_qs'] = (
-            _page_link_qs(request, 'sessions_page', sessions_page.next_page_number())
+        context['sessions_next_qs'] = (_page_link_qs(request, 'sessions_page', sessions_page.next_page_number())
             if sessions_page.has_next() else None
         )
-        context['txns_prev_qs'] = (
-            _page_link_qs(request, 'txns_page', txns_page.previous_page_number())
+        context['txns_prev_qs'] = (_page_link_qs(request, 'txns_page', txns_page.previous_page_number())
             if txns_page.has_previous() else None
         )
-        context['txns_next_qs'] = (
-            _page_link_qs(request, 'txns_page', txns_page.next_page_number())
+        context['txns_next_qs'] = (_page_link_qs(request, 'txns_page', txns_page.next_page_number())
             if txns_page.has_next() else None
         )
-        context['orders_prev_qs'] = (
-            _page_link_qs(request, 'orders_page', orders_page.previous_page_number())
+        context['orders_prev_qs'] = (_page_link_qs(request, 'orders_page', orders_page.previous_page_number())
             if orders_page.has_previous() else None
         )
-        context['orders_next_qs'] = (
-            _page_link_qs(request, 'orders_page', orders_page.next_page_number())
+        context['orders_next_qs'] = (_page_link_qs(request, 'orders_page', orders_page.next_page_number())
             if orders_page.has_next() else None
         )
 

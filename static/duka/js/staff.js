@@ -5,14 +5,13 @@
   const rowsEl = document.getElementById('staff-rows');
   const roleSelect = document.getElementById('role');
   const credentialInput = document.getElementById('credential');
-  const credentialLabel = document.getElementById('credential-label');
   const addBtn = document.getElementById('add-btn');
   const drawer = document.getElementById('drawer');
   const drawerBackdrop = document.getElementById('drawer-backdrop');
   const drawerContent = document.getElementById('drawer-content');
   const drawerClose = document.getElementById('drawer-close');
 
-  const COLS = 10;  // keep in sync with the <th> count in staff.html
+  const COLS = 9;  // keep in sync with the <th> count in staff.html
 
   function showAlert(msg, kind = 'bad') { alertBox.className = `alert show ${kind}`; alertBox.textContent = msg; }
   function clearAlert() { alertBox.className = 'alert'; alertBox.textContent = ''; }
@@ -48,15 +47,6 @@
     });
   }
 
-  function syncCredentialField() {
-    const isCashier = roleSelect.value === 'CASHIER';
-    credentialLabel.textContent = isCashier ? 'PIN (4-6 digits)' : 'Password';
-    credentialInput.setAttribute('maxlength', isCashier ? '6' : '128');
-    credentialInput.setAttribute('inputmode', isCashier ? 'numeric' : 'text');
-  }
-  roleSelect.addEventListener('change', syncCredentialField);
-  syncCredentialField();
-
   function renderRow(s) {
     const actionsCell = Duka.el('td');
     const manage = Duka.el('button', { class: 'row-action', text: 'Manage', onclick: () => openDrawer(s) });
@@ -69,7 +59,6 @@
       Duka.el('td', { text: s.phone || '\u2014' }),
       Duka.el('td', { text: s.national_id || '\u2014' }),
       Duka.el('td', { text: s.email || '\u2014' }),
-      Duka.el('td', { text: s.login_method === 'PIN' ? 'PIN' : 'Password' }),
       Duka.el('td', {}, Duka.statusBadge(s.is_active ? 'ACTIVE' : 'SUSPENDED')),
       actionsCell,
     ]);
@@ -78,7 +67,7 @@
   async function load() {
     try {
       const data = await Duka.api('/staff/');
-      shopLine.textContent = `${data.shop.name} \u00b7 code: ${data.shop.slug}`;
+      shopLine.textContent = `${data.shop.name} \u00b7 shop code: ${data.shop.slug} \u2014 staff sign in with this code, their username and password.`;
       branches = data.branches || [];
       fillBranchSelect(branchSelect, branchSelect.value, false);
       rowsEl.innerHTML = '';
@@ -112,7 +101,6 @@
         }),
       });
       addForm.reset();
-      syncCredentialField();
       showAlert('Added.', 'good');
       load();
     } catch (e) {
@@ -192,11 +180,10 @@
 
     // ---- Credential
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
-    const isCashier = s.role === 'CASHIER';
-    drawerContent.appendChild(Duka.el('h2', { text: isCashier ? 'Reset PIN' : 'Reset password', style: 'font-size:15px;' }));
+    drawerContent.appendChild(Duka.el('h2', { text: 'Set a new password', style: 'font-size:15px;' }));
     const valueInput = Duka.el('input', {
-      type: 'password', placeholder: isCashier ? 'New 4-6 digit PIN' : 'New password',
-      maxlength: isCashier ? '6' : '128',
+      type: 'password', placeholder: 'New password (8+ characters)', maxlength: '128',
+      autocomplete: 'new-password',
     });
     drawerContent.appendChild(Duka.el('div', { class: 'override-form' }, [
       valueInput,
