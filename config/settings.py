@@ -188,15 +188,14 @@ STORAGES = {
 
 AUTH_USER_MODEL = 'users.User'
 
-LOGIN_URL = '/users/pos-login/'
+LOGIN_URL = '/users/login/'
 
 LOGIN_REDIRECT_URL = '/'
 
-LOGOUT_REDIRECT_URL = '/users/pos-login/'
+LOGOUT_REDIRECT_URL = '/users/login/'
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'users.backends.PINAuthenticationBackend',
 ]
 
 
@@ -233,7 +232,7 @@ BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL")
 
 MPESA_BILLING_CALLBACK_SECRET = env("MPESA_BILLING_CALLBACK_SECRET")  
 
-BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/"]  
+BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/", "/users/password-reset/"]  
 
 BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
 
@@ -270,3 +269,6 @@ EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=f"UniSale Systems <{EMAIL_HOST_USER or 'no-reply@localhost'}>")
 SIGNUP_VERIFY_HOURS = env.int("SIGNUP_VERIFY_HOURS", default=48) 
 SIGNUP_RESEND_SECONDS = 60   
+
+# Password resets are approved by the platform team; the emailed link then works for this long.
+PASSWORD_RESET_LINK_HOURS = env.int("PASSWORD_RESET_LINK_HOURS", default=24)

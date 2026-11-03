@@ -50,7 +50,7 @@
   function renderBlocked(reason) {
     var b = BLOCKED[reason] || ['Offline selling is unavailable', reason];
     view.innerHTML = '<div class="blocked"><h2>' + esc(b[0]) + '</h2><p>' + esc(b[1]) + '</p>' +
-      '<a class="btn primary" href="/users/pos-login/">Sign in</a></div>';
+      '<a class="btn primary" href="/users/login/">Sign in</a></div>';
     $('who').textContent = '';
   }
 

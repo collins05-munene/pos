@@ -1,11 +1,14 @@
 import json
 
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model, login
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -16,11 +19,12 @@ from billing.pricing import quote_table
 from .branches import active_branches, assign_user_branch
 from .forms import SignupForm, StaffDetailsForm
 from .mixins import OwnerRequiredMixin
+from .models import PendingSignup
 from .rendering import html_or_json
-from .services import (ResendTooSoon, SignupLinkExpired, SignupLinkInvalid, VerificationEmailFailed,
-                       complete_signup, create_staff_user, list_staff, resend_verification,
-                       set_staff_active, set_staff_credential, staff_handle, start_signup,
-                       update_staff_details)
+from .services import (SIGNUP_EMAIL_KEY, SIGNUP_STARTED_KEY, ResendTooSoon, SignupLinkExpired,
+                       SignupLinkInvalid, VerificationEmailFailed, complete_signup, create_staff_user,
+                       list_staff, resend_verification, set_staff_active, set_staff_credential,
+                       staff_handle, start_signup, update_staff_details)
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
 
@@ -28,8 +32,6 @@ from notifications.utils import notify, MANAGEMENT
 def _form_errors(form):
     return {f: list(errs) for f, errs in form.errors.items()}
 
-
-SIGNUP_EMAIL_KEY = "signup_pending_email"
 
 
 # Generous on purpose: every POST counts, including ones bounced for a typo, and a shop's wifi is often
@@ -73,21 +75,72 @@ class SignupView(View):
                 status=503)
 
         request.session[SIGNUP_EMAIL_KEY] = form.cleaned_data["email"]
+        request.session[SIGNUP_STARTED_KEY] = timezone.now().isoformat()
         return JsonResponse({"email": form.cleaned_data["email"],
                              "next": reverse("tenants:check-email")}, status=202)
 
 
+def signup_status(request):
+    """
+    Where is the sign-up that was started in THIS browser?  Returns (state, next_url):
+
+      "verified" -- the emailed link was clicked (on this device or any other); go on to `next_url`
+      "pending"  -- still waiting for the click
+      "expired"  -- the link timed out; ask for a new one
+      "none"     -- nothing to wait for (no sign-up in this browser, or it was replaced/discarded)
+
+    Privacy: "verified" is only ever reported for an account whose email was confirmed AFTER this
+    browser started its sign-up. Typing somebody else's email into the form therefore can't be used to
+    find out whether that address already has an account.
+    """
+    user = request.user
+    if user.is_authenticated and getattr(user, "is_owner", False) and user.email_verified_at:
+        return "verified", "/billing/"          # they clicked the link in this browser: already signed in
+
+    email = request.session.get(SIGNUP_EMAIL_KEY)
+    if not email:
+        return "none", reverse("tenants:signup")
+
+    pending = PendingSignup.objects.filter(email=email).first()
+    if pending is not None:
+        if pending.expires_at < timezone.now():
+            return "expired", reverse("tenants:signup")
+        return "pending", ""
+
+    # The pending row is gone: either the link was used (an owner now exists) or it was discarded.
+    started = parse_datetime(request.session.get(SIGNUP_STARTED_KEY) or "")
+    if started is not None:
+        confirmed = (get_user_model().objects
+                     .filter(email__iexact=email, is_owner=True, email_verified_at__gte=started).exists())
+        if confirmed:
+            return "verified", f"{reverse('login')}?verified=1"      # confirmed on another device: sign in
+    return "none", reverse("tenants:signup")
+
+
 class CheckEmailView(View):
-    """'We emailed you a link' page, with a resend button."""
+    """'We emailed you a link' page, with a resend button. Leaves by itself once the link is clicked."""
 
     def get(self, request):
+        state, next_url = signup_status(request)
+        if state == "verified":
+            return redirect(next_url)
+        if state == "none":
+            return redirect(next_url)
         email = request.session.get(SIGNUP_EMAIL_KEY)
-        if not email:
-            return redirect("tenants:signup")
         return render(request, "tenants/check_email.html", {
             "email": email, "hours": settings.SIGNUP_VERIFY_HOURS, "sent": request.GET.get("sent") == "1",
             "wait": request.GET.get("wait"), "failed": request.GET.get("failed") == "1",
+            "expired": state == "expired",
         })
+
+
+@method_decorator(never_cache, name="dispatch")
+class CheckEmailStatusView(View):
+    """Polled by the check-email page so it can move on the moment the link is clicked."""
+
+    def get(self, request):
+        state, next_url = signup_status(request)
+        return JsonResponse({"state": state, "next": next_url})
 
 
 @method_decorator(ratelimit(key="ip", rate="10/h", method="POST", block=True), name="post")
@@ -119,6 +172,7 @@ class VerifyEmailView(View):
 
         login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
         request.session.pop(SIGNUP_EMAIL_KEY, None)
+        request.session.pop(SIGNUP_STARTED_KEY, None)
 
         notify(tenant, f"Welcome to {tenant.name}",
                "Next steps: add your products, record a purchase to bring stock in, "
@@ -139,7 +193,6 @@ def _staff_payload(user):
         "national_id": user.national_id or "",
         "role": user.role, "is_active": user.is_active, "date_joined": user.date_joined,
         "branch_id": user.branch_id, "branch_name": user.branch.name if user.branch_id else "",
-        "login_method": "PIN" if user.role == "CASHIER" else "password",
     }
 
 
@@ -170,12 +223,12 @@ class StaffListView(OwnerRequiredMixin, View):
         if branch is None and role == "CASHIER":
             return JsonResponse({"errors": {"branch_id": ["Choose which branch this cashier works at."]}}, status=400)
 
-        kwargs = dict(tenant=request.tenant, handle=handle, role=role, branch=branch, **form.cleaned_data)
-        kwargs["pin" if role == "CASHIER" else "password"] = credential
         try:
-            user = create_staff_user(**kwargs)
+            user = create_staff_user(tenant=request.tenant, handle=handle, role=role, branch=branch,
+                                     password=credential, **form.cleaned_data)
         except ValidationError as exc:
-            field = "credential" if "PIN" in "".join(exc.messages) or "password" in "".join(exc.messages) else "handle"
+            msg = " ".join(exc.messages).lower()
+            field = "handle" if ("username" in msg or "taken" in msg) else "credential"
             return JsonResponse({"errors": {field: exc.messages}}, status=400)
         return JsonResponse({"staff": _staff_payload(user)}, status=201)
 

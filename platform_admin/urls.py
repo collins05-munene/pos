@@ -1,5 +1,5 @@
 from django.urls import path
-from . import payment_views, receipt_views, views
+from . import payment_views, receipt_views, reset_views, views
 
 app_name = "platform_admin"
 urlpatterns = [
@@ -15,6 +15,10 @@ urlpatterns = [
     path("payments/api/codes/<int:pk>/void/", payment_views.PaymentVoidView.as_view(), name="payments-void"),
     path("payments/api/requests/<int:pk>/<slug:action>/", payment_views.RequestActionView.as_view(),
          name="payments-request-action"),
+
+    path("resets/", reset_views.ResetsPageView.as_view(), name="resets"),
+    path("resets/api/", reset_views.ResetsListView.as_view(), name="resets-api"),
+    path("resets/api/<int:pk>/<slug:action>/", reset_views.ResetActionView.as_view(), name="resets-action"),
 
     path("receipts/", receipt_views.ReceiptsPageView.as_view(), name="receipts"),
     path("receipts/api/", receipt_views.ReceiptsListView.as_view(), name="receipts-api"),

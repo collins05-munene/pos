@@ -20,7 +20,10 @@ from .models import PendingSignup, Tenant, generate_unique_slug
 log = logging.getLogger(__name__)
 
 HANDLE_RE = re.compile(r"^[a-z0-9._-]{2,30}$")
-PIN_RE = re.compile(r"^\d{4,6}$")
+
+# Session keys that tie the "check your email" page to the sign-up that started in this browser.
+SIGNUP_EMAIL_KEY = "signup_pending_email"
+SIGNUP_STARTED_KEY = "signup_started_at"
 
 
 def compose_username(business_code, handle):
@@ -254,19 +257,10 @@ def list_staff(tenant):
 
 
 def set_staff_credential(user, *, value):
-    """
-    CASHIER -> PIN (4-6 digits, hashed same as at creation).
-    MANAGER (or any non-cashier role) -> password, run through Django's validators.
-    Raises ValidationError on a bad value.
-    """
-    if user.role == user.Roles.CASHIER:
-        if not PIN_RE.match(value or ""):
-            raise ValidationError("PIN must be 4 to 6 digits.")
-        user.pin = value  # hashed by User.save()
-    else:
-        from django.contrib.auth.password_validation import validate_password
-        validate_password(value, user=user)
-        user.set_password(value)
+    """Owner sets a new password for a staff member (cashier or manager), run through Django's validators."""
+    from django.contrib.auth.password_validation import validate_password
+    validate_password(value or "", user=user)
+    user.set_password(value)
     user.save()
     return user
 
@@ -277,32 +271,27 @@ def set_staff_active(user, *, is_active):
     return user
 
 
-def create_staff_user(*, tenant, handle, role, first_name="", last_name="", email="", phone="", national_id=None, password=None, pin=None, branch=None):
-    """Owner/admin creates a cashier or manager inside their own tenant."""
+def create_staff_user(*, tenant, handle, role, password, first_name="", last_name="", email="", phone="",
+                      national_id=None, branch=None):
+    """Owner/admin creates a cashier or manager inside their own tenant. Everyone signs in with a password."""
+    from django.contrib.auth.password_validation import validate_password
     User = get_user_model()
     handle = handle.strip().lower()
     if not HANDLE_RE.match(handle):
         raise ValidationError("Username: 2-30 chars of a-z, 0-9, dot, dash, underscore.")
-    if pin is not None and not PIN_RE.match(pin):
-        raise ValidationError("PIN must be 4 to 6 digits.")
     if role not in User.Roles.values:
         raise ValidationError("Unknown role.")
 
-    user = User(username=compose_username(tenant.slug, handle), first_name=first_name, last_name=last_name, email=email, phone=phone,national_id=national_id or None, role=role, tenant=tenant, branch=branch)
-
-    if password:
-        from django.contrib.auth.password_validation import validate_password
-        validate_password(password, user=user)  # raises ValidationError -- caller handles it
-        user.set_password(password)
-    else:
-        user.set_unusable_password()
-    if pin:
-        user.pin = pin  # hashed by User.save()
+    user = User(username=compose_username(tenant.slug, handle), first_name=first_name, last_name=last_name,
+                email=email, phone=phone, national_id=national_id or None, role=role, tenant=tenant, branch=branch)
+    validate_password(password or "", user=user)  # raises ValidationError -- caller handles it
+    user.set_password(password)
     try:
         user.save()
     except IntegrityError:
         raise ValidationError("That username is already taken in your business.")
     return user
+
 
 def update_staff_details(user, *, first_name, last_name, email, phone, national_id=None):
     user.first_name, user.last_name = first_name, last_name

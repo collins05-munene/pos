@@ -15,15 +15,21 @@
 </header>
 
 <main>
-  <div class="wrap">
+  <div class="wrap" id="check-email" data-status="{% url 'tenants:check-email-status' %}">
     <h1>Check your email</h1>
     <p class="lede">We sent a confirmation link to <strong>{{ email }}</strong>. Open it to finish creating your shop's account &mdash; you'll be signed in automatically.</p>
 
+    <div id="confirmed" class="alert good" role="status">Email confirmed &mdash; taking you to your account&hellip;</div>
+    {% if expired %}<div class="alert bad show" role="alert">That link has expired. Send a new one below.</div>{% endif %}
     {% if sent %}<div class="alert good show" role="status">A new email is on its way. Only the newest link works.</div>{% endif %}
     {% if wait %}<div class="alert info show" role="status">We emailed you a moment ago. You can ask for another in {{ wait }} seconds.</div>{% endif %}
     {% if failed %}<div class="alert bad show" role="alert">We couldn't send the email just now. Please try again in a few minutes.</div>{% endif %}
 
     <p class="plan-note">Nothing yet? Check your spam or promotions folder. The link works for {{ hours }} hours.</p>
+
+    <p class="plan-note" id="waiting">This page updates by itself as soon as you click the link &mdash; you don't need to refresh it.</p>
+    <p id="not-yet" class="plan-note" hidden>Not confirmed yet. Open the email and tap the link, then come back here.</p>
+    <p><button type="button" class="primary" id="confirmed-btn" style="width:auto;">I've confirmed my email</button></p>
 
     <form method="post" action="{% url 'tenants:resend-verification' %}">
       {% csrf_token %}
@@ -34,5 +40,6 @@
   </div>
 </main>
 
+<script src="{% static 'duka/js/check-email.js' %}"></script>
 </body>
 </html>

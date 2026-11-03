@@ -362,21 +362,14 @@ class Refund(TenantOwnedModel):
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='refunds', null=True)
     cash_session = models.ForeignKey(CashRegisterSession, on_delete=models.PROTECT, related_name='refunds')
     processed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='refunds_processed')
-
     reason = models.CharField(max_length=20, choices=REASONS)
     notes = models.TextField(blank=True, default='')
-
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Cash paid back to the customer")
-    cogs_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                        help_text="Cost of the goods that went back on the shelf")
-    profit_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                          help_text="Profit given up: refund minus cost recovered")
-
-    # Snapshot for the printed credit note.
+    cogs_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Cost of the goods that went back on the shelf")
+    profit_reversed = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Profit given up: refund minus cost recovered")
     shop_name = models.CharField(max_length=150)
     branch_name = models.CharField(max_length=150, blank=True, default='')
     processed_by_name = models.CharField(max_length=150)
-
     client_uuid = models.UUIDField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -385,7 +378,7 @@ class Refund(TenantOwnedModel):
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'refund_number'], name='uniq_tenant_refund_number'),
             models.UniqueConstraint(fields=['tenant', 'client_uuid'],
-                                    condition=models.Q(client_uuid__isnull=False),
+             condition=models.Q(client_uuid__isnull=False),
                                     name='uniq_tenant_refund_client_uuid'),
         ]
         indexes = [models.Index(fields=['tenant', '-created_at'])]

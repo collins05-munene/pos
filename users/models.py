@@ -1,7 +1,5 @@
 from django.conf import settings
-from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, UserManager
-from django.core.validators import RegexValidator
 from django.db import models
 
 from tenants.context import get_current_tenant
@@ -26,7 +24,6 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=15, choices=Roles.choices, default=Roles.CASHIER)
     last_seen = models.DateTimeField(null=True, blank=True)
-    pin = models.CharField(max_length=128, blank=True, null=True,validators=[RegexValidator(r'^\d{4,6}$', 'Pin must be 4  to 6 digits')], help_text="Hashed 4-6 digit PIN for cashier login.")
     tenant = models.ForeignKey("tenants.Tenant", null=True, blank=True,
     on_delete=models.PROTECT, related_name="users")
     is_owner = models.BooleanField(default=False,help_text="The business owner: the only user who sees billing.")
@@ -64,11 +61,6 @@ class User(AbstractUser):
                 name="one_owner_per_tenant"),
         ]
 
-    def save(self, *args, **kwargs):
-        if self.pin and not self.pin.startswith('pbkdf2_'):
-            self.pin = make_password(self.pin)
-        super().save(*args, **kwargs)
-
     @property
     def is_admin(self):
         return self.role == self.Roles.ADMIN or self.is_superuser
@@ -99,3 +91,49 @@ class ActivityLog(TenantOwnedModel):
 
     def __str__(self):
         return f"User: {self.user} IP: {self.ip_address} Action: {self.action} at {self.timestamp}"
+
+
+
+class PasswordResetRequest(models.Model):
+    """
+    A "forgot my password" request. Nothing happens until the platform team approves it:
+
+        PENDING   -> someone asked; waiting in the platform_admin dashboard
+        APPROVED  -> platform approved; a one-time link was emailed (token stored only as a hash)
+        REJECTED  -> platform declined
+        COMPLETED -> the link was used and a new password was set
+
+    Deliberately NOT a TenantOwnedModel: requests are created by people who are not signed in,
+    so there is no active tenant. The tenant is stored explicitly instead (like PendingSignup).
+    """
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        COMPLETED = "COMPLETED", "Completed"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reset_requests")
+    tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE, related_name="reset_requests")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    requested_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=255, blank=True)
+
+    token_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    link_expires_at = models.DateTimeField(null=True, blank=True)
+    link_sent_to = models.EmailField(blank=True, help_text="Where the approved link was emailed.")
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user"], condition=models.Q(status="PENDING"),
+                                    name="one_pending_reset_per_user"),
+        ]
+
+    def __str__(self):
+        return f"Reset request for {self.user_id} ({self.status})"

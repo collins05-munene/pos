@@ -1,0 +1,12 @@
+Hello {{ name }},
+
+{% if for_someone_else %}{{ person }} asked to reset their password on {{ shop }}, and our team approved it. This person has no email address on their account, so we're sending the link to you as the shop owner. Please pass it on to them yourself.{% else %}Our team approved your request to reset your password on {{ shop }}.{% endif %}
+
+Choose a new password here:
+{{ url }}
+
+The link works for {{ hours }} hours and can be used once.
+
+If you didn't ask for this, you can ignore this email and your password stays as it is. Contact support if it worries you.
+
+-- UniSale Systems

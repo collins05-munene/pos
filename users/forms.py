@@ -1,44 +1,72 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.password_validation import validate_password
 
 from tenants.services import compose_username
 
 
-class StandardLoginForm(AuthenticationForm):
+class LoginForm(AuthenticationForm):
     """
-    Owners log in with their email (leave business code blank).
-    Managers log in with business code + username.
+    The one login form, for everybody.
+
+    * Owner / platform admin: username (the owner's username is their email) + password.
+    * Staff (managers, cashiers): username + password, plus the shop code -- staff usernames are only
+      unique inside one shop, so the code is what says WHICH shop's "njeri" is signing in.
+      Typing the full `shopcode__njeri` into the username box works too.
     """
-    business_code = forms.CharField(
-        required=False, max_length=40,
-        widget=forms.TextInput(attrs={'placeholder': 'Business code (staff only)'}),
-    )
+    shop_code = forms.CharField(required=False, max_length=40)
 
     def clean(self):
-        code = (self.cleaned_data.get("business_code") or "").strip()
-        username = self.cleaned_data.get("username")
+        code = (self.cleaned_data.get("shop_code") or "").strip()
+        username = (self.cleaned_data.get("username") or "").strip()
         if username:
             if code:
-                self.cleaned_data["username"] = compose_username(code, username)
+                username = compose_username(code, username)
             elif "@" in username:
-                self.cleaned_data["username"] = username.strip().lower()
+                username = username.lower()
+            self.cleaned_data["username"] = username
         return super().clean()
 
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        "invalid_login": "Wrong username or password. Staff: check your shop code too.",
+    }
 
-class CashierPinLoginForm(forms.Form):
-    shop_code = forms.CharField(label="Shop Code", required=True)
-    username = forms.CharField(label="Cashier Username", required=True)
-    pin = forms.CharField(label="PIN", widget=forms.PasswordInput, required=True)
+
+class PasswordResetRequestForm(forms.Form):
+    shop_code = forms.CharField(required=False, max_length=40)
+    username = forms.CharField(max_length=150)
 
     def clean(self):
-        cleaned_data = super().clean()
-        shop_code = (cleaned_data.get("shop_code") or "").strip().lower()
-        handle = (cleaned_data.get("username") or "").strip().lower()
+        cleaned = super().clean()
+        code = (cleaned.get("shop_code") or "").strip()
+        username = (cleaned.get("username") or "").strip()
+        if username:
+            if code:
+                username = compose_username(code, username)
+            elif "@" in username:
+                username = username.lower()
+            cleaned["username"] = username
+        return cleaned
 
-        if shop_code and handle:
-            # Build the composed username expected by PINAuthenticationBackend
-            if "__" in handle:
-                cleaned_data["composed_username"] = handle
+
+class SetNewPasswordForm(forms.Form):
+    password1 = forms.CharField(strip=False)
+    password2 = forms.CharField(strip=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean(self):
+        cleaned = super().clean()
+        p1, p2 = cleaned.get("password1"), cleaned.get("password2")
+        if p1 and p2:
+            if p1 != p2:
+                self.add_error("password2", "The two passwords don't match.")
             else:
-                cleaned_data["composed_username"] = f"{shop_code}__{handle}"
-        return cleaned_data
+                try:
+                    validate_password(p1, user=self.user)
+                except forms.ValidationError as exc:
+                    self.add_error("password1", exc)
+        return cleaned

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#2563eb">
-    <title>Management Login</title>
+    <title>Sign in</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
     <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
     <link rel="stylesheet" href="{% static 'users/css/auth.css' %}">
@@ -24,10 +24,17 @@
             <img src="{% static 'img/unisale-logo.png' %}" alt="UniSale Systems" width="409" height="141">
         </div>
 
-        <h2 class="auth-title">Management Access</h2>
+        <h2 class="auth-title">Sign in</h2>
 
-        <form method="POST" id="authForm">
+        <form method="POST" action="{% url 'login' %}" id="authForm">
             {% csrf_token %}
+
+            {% if verified %}
+                <div class="alert-banner alert-success">Email confirmed. Sign in with the password you chose.</div>
+            {% endif %}
+            {% if password_reset_done %}
+                <div class="alert-banner alert-success">Your password was changed. Sign in with the new one.</div>
+            {% endif %}
 
             {% if form.non_field_errors %}
                 <div class="alert-banner alert-danger">
@@ -36,23 +43,30 @@
             {% endif %}
 
             <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" required autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+                <label for="id_shop_code">Shop code <span class="field-hint">(staff only &mdash; owners leave this empty)</span></label>
+                <input type="text" name="shop_code" id="id_shop_code" value="{{ form.shop_code.value|default_if_none:'' }}"
+                       placeholder="e.g. mama-njeri-mart" autocapitalize="none" autocorrect="off" spellcheck="false">
             </div>
 
             <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required autocomplete="current-password">
+                <label for="id_username">Username</label>
+                <input type="text" name="username" id="id_username" value="{{ form.username.value|default_if_none:'' }}"
+                       required autofocus autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+            </div>
+
+            <div class="form-group">
+                <label for="id_password">Password</label>
+                <input type="password" name="password" id="id_password" required autocomplete="current-password">
             </div>
             <input type="hidden" name="next" value="{{ next }}">
             <button class="btn-primary" type="submit" id="submitBtn">
-                Authenticate
+                Sign in
             </button>
 
         </form>
 
-        <a href="{% url 'pin_login' %}" class="toggle-auth-link">
-            Switch to Cashier Terminal
+        <a href="{% url 'password-reset' %}" class="toggle-auth-link">
+            Forgot your password?
         </a>
 
         <a href="{% url 'tenants:signup' %}" class="toggle-auth-link">
@@ -64,15 +78,31 @@
 </div>
 
 <script>
-    document.getElementById('authForm').addEventListener('submit', function(e) {
-        const container = document.getElementById('progressContainer');
-        const btn = document.getElementById('submitBtn');
-        
-        container.style.display = 'block';
-        btn.disabled = true;
-        btn.style.opacity = '0.7';
-        btn.innerText = 'Authenticating...';
-    });
+    // Remember the shop code on this device so cashiers only type username + password each shift.
+    (function () {
+        const codeInput = document.getElementById('id_shop_code');
+        const KEY = 'unisale_shop_code';
+        try {
+            if (!codeInput.value) {
+                const saved = localStorage.getItem(KEY);
+                if (saved) codeInput.value = saved;
+            }
+        } catch (e) { /* storage blocked: fine */ }
+
+        document.getElementById('authForm').addEventListener('submit', function () {
+            try {
+                const code = codeInput.value.trim().toLowerCase();
+                if (code) localStorage.setItem(KEY, code); else localStorage.removeItem(KEY);
+            } catch (e) { /* ignore */ }
+
+            const container = document.getElementById('progressContainer');
+            const btn = document.getElementById('submitBtn');
+            container.style.display = 'block';
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.innerText = 'Signing in...';
+        });
+    })();
 </script>
 
 </body>

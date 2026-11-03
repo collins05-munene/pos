@@ -20,7 +20,7 @@
     <main>
       <div class="wrap">
         <h1>Staff</h1>
-        <p class="lede" id="shop-line">Cashiers log in with your shop's code and a PIN. Managers log in with the code, their username and a password.</p>
+        <p class="lede" id="shop-line">Everyone signs in with a username and password. Staff also type your shop code.</p>
 
         <div id="alert" class="alert" role="alert"></div>
 
@@ -66,8 +66,8 @@
           <div class="field" data-field="role">
             <label for="role">Role</label>
             <select id="role" name="role">
-              <option value="CASHIER">Cashier -- logs in with a PIN</option>
-              <option value="MANAGER">Manager -- logs in with a password</option>
+              <option value="CASHIER">Cashier</option>
+              <option value="MANAGER">Manager</option>
             </select>
             <div class="err"></div>
           </div>
@@ -79,8 +79,8 @@
           </div>
 
           <div class="field" data-field="credential">
-            <label for="credential" id="credential-label">PIN (4-6 digits)</label>
-            <input id="credential" name="credential" type="password" autocomplete="new-password" required>
+            <label for="credential" id="credential-label">Password <small>(at least 8 characters)</small></label>
+            <input id="credential" name="credential" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
             <div class="err"></div>
           </div>
 
@@ -100,13 +100,12 @@
               <th>Phone</th>
               <th>ID</th>
               <th>Email</th>
-              <th>Login</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="staff-rows">
-            <tr class="empty-row"><td colspan="10">Loading&hellip;</td></tr>
+            <tr class="empty-row"><td colspan="9">Loading&hellip;</td></tr>
           </tbody>
         </table>
       </div>

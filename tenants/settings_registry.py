@@ -9,7 +9,7 @@ SECTIONS = [
     {
         "key": "discounts",
         "title": "Discounts",
-        "desc": "Rules for the discounts managers and admins set up. The discounts themselves live under Manage discounts.",
+        "desc": "Rules for the discounts managers and admins set up.",
         "link": ("discount-list", "Manage discounts"),
         "fields": ["discounts_enabled", "managers_can_manage_discounts", "max_discount_percent",
                    "manager_max_discount_percent", "below_cost_policy"],
