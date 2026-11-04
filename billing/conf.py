@@ -18,18 +18,15 @@ DEFAULTS = {
     "STK_PUSH_MESSAGE": ("STK push payment is still in development. We'll make it available as soon as it's ready. For now, pay to the number shown below and enter your M-Pesa code to activate your subscription."),
     "MANUAL_PAYMENTS_ENABLED": True,
     "MANUAL_PAY_LABEL": "Till number",    
-    "MANUAL_PAY_NUMBER": "",              
-    "MANUAL_PAY_NAME": "",               
+    "MANUAL_PAY_NUMBER": "1764388",              
+    "MANUAL_PAY_NAME": "MUNENE COLLINS GITONGA",               
     "MANUAL_MAX_ATTEMPTS_PER_HOUR": 8,
-    # Printed in the header of every subscription receipt (override in settings.BILLING).
     "COMPANY_NAME": "UniSale Systems",
-    "COMPANY_ADDRESS": "",
-    "COMPANY_PHONE": "",
-    "COMPANY_EMAIL": "",
+    "COMPANY_ADDRESS": "187-60100 Embu, Kenya",
+    "COMPANY_PHONE": "0790342156",
+    "COMPANY_EMAIL": "unisalesystems@gmail.com",
     "RECEIPT_FOOTER": "Thank you for your business.",
-    # Public address of the site, e.g. "https://app.unisale.co.ke". Used for the QR code on receipts.
-    # Leave empty to use whatever host the download request came in on.
-    "SITE_URL": "",
+    "SITE_URL": "https://pos-wctc.onrender.com",
 }
 
 
