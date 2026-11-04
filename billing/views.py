@@ -26,6 +26,7 @@ from .mpesa import MpesaError
 from .pricing import quote_table
 
 
+@method_decorator(never_cache, name="dispatch")
 class BillingOverviewView(OwnerRequiredMixin, View):
     def get(self, request):
         tenant = request.tenant

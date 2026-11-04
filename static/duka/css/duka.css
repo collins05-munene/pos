@@ -733,3 +733,30 @@ table.ledger tr:last-child td {
 .invoice-total-label + .invoice-total { 
   margin-top: 2px; 
 }
+
+
+/* ---- Pay-by-code popup ---- */
+.modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; padding-top: calc(16px + env(safe-area-inset-top, 0px)); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(20, 23, 28, 0.55); }
+.modal-card { position: relative; width: 100%; max-width: 460px; max-height: 100%; overflow-y: auto;
+  background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 24px 22px 20px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); outline: none; }
+.modal-card h2 { margin: 0 28px 12px 0; }
+.modal-x { position: absolute; top: 8px; right: 10px; background: none; border: 0; font-size: 26px; line-height: 1;
+  color: var(--ink-soft); cursor: pointer; padding: 4px 8px; }
+.modal-x:hover { color: var(--ink); }
+.modal-amount-label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); }
+.modal-amount { font-family: var(--mono); font-size: 30px; margin: 2px 0 6px; color: var(--mpesa); }
+.modal-sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; }
+.modal-sub:empty { display: none; }
+.modal-steps { margin: 0 0 16px; padding-left: 20px; font-size: 14px; }
+.modal-steps li { margin-bottom: 8px; }
+.modal-steps strong { font-family: var(--mono); font-weight: 600; }
+.modal-steps .copy { margin-left: 6px; font-size: 12px; padding: 1px 8px; cursor: pointer; border: 1px solid var(--line);
+  background: var(--paper); border-radius: var(--radius); }
+.modal-label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 5px; }
+.modal-foot { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; }
+#pm-result:not(:empty) { margin-top: 12px; }
+@media (max-width: 480px) { .modal { align-items: flex-end; padding: 0; } .modal-card { max-width: none; border-radius: 10px 10px 0 0; } }

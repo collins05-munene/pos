@@ -1,6 +1,6 @@
 
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `pos-static-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `pos-offline-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline/";
@@ -112,6 +112,29 @@ self.addEventListener("fetch", (event) => {
 
   if (url.pathname === SHELL_URL && request.mode === "navigate") {
     event.respondWith(shellResponse(request));
+    return;
+  }
+
+  // CSS/JS: serve the cached copy instantly (works offline) but always refresh it in the background,
+  // so a deploy reaches users on their next visit instead of never.
+  if (url.pathname.startsWith("/static/") && /\.(css|js)$/.test(url.pathname)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(STATIC_CACHE);
+        const cached = await cache.match(request);
+        const network = fetch(request)
+          .then((response) => {
+            if (response && response.ok) cache.put(request, response.clone());
+            return response;
+          })
+          .catch(() => null);
+        if (cached) {
+          event.waitUntil(network);
+          return cached;
+        }
+        return (await network) || Response.error();
+      })()
+    );
     return;
   }
 

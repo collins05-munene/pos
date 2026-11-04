@@ -11,11 +11,16 @@
   const rowsEl = document.getElementById('invoice-rows');
   const shopMeta = document.getElementById('shop-meta');
   const selectPlanBtn = document.getElementById('select-plan-btn');
+  const stkBlock = document.getElementById('stk-block');
 
   let pollTimer = null;
   let currentPlans = [];
   let selectedTerm = null;
   let lastData = null;
+  let proceeded = false;      // owner clicked a term and is on the pay panel, but no invoice exists yet
+  let quietLoading = false;
+  let autoTimer = null;
+  const AUTO_REFRESH_MS = 10000;
   const noticesEl = document.getElementById('notices');
 
   function showAlert(msg, kind = 'bad') {
@@ -56,16 +61,9 @@
     plans.forEach(p => {
       const btn = Duka.el('button', {
         type: 'button', class: 'plan', 'aria-pressed': String(p.term_months === selectedTerm),
-        onclick: async () => { 
-          selectedTerm = p.term_months; 
-          renderPlanPicker(currentPlans);
-          
-          termPicker.hidden = true;
-          invoicePanel.hidden = false;
-
-          document.getElementById('inv-number').textContent = 'Pending...';
-          document.getElementById('inv-term').textContent = `${p.term_months} month(s)`;
-          showAmounts(Number(p.total), Math.max(Number(p.total) - creditNow(), 0), Math.min(creditNow(), Number(p.total)));
+        onclick: () => {
+          selectedTerm = p.term_months;
+          renderPlanPicker(currentPlans);   // just selects; "Proceed to Payment" moves on
         },
       }, [
         Duka.el('span', { class: 'months', text: `${p.term_months} mo` }),
@@ -93,12 +91,14 @@
 
   function renderOpenInvoice(inv, plans) {
     if (!inv) {
+      if (proceeded) return;
       invoicePanel.hidden = true;
       termPicker.hidden = false;
       selectedTerm = selectedTerm || (plans[0] && plans[0].term_months);
       renderPlanPicker(plans);
       return;
     }
+    proceeded = false;
     termPicker.hidden = true;
     invoicePanel.hidden = false;
     document.getElementById('inv-number').textContent = inv.number;
@@ -173,6 +173,7 @@
     }
     const plan = currentPlans.find(p => p.term_months === selectedTerm);
     if (!plan) return;
+    proceeded = true;
 
     termPicker.hidden = true;
     invoicePanel.hidden = false;
@@ -180,12 +181,40 @@
     document.getElementById('inv-number').textContent = 'Pending...';
     document.getElementById('inv-term').textContent = `${plan.term_months} month(s)`;
     showAmounts(Number(plan.total), Math.max(Number(plan.total) - creditNow(), 0), Math.min(creditNow(), Number(plan.total)));
+    openPayPopup(plan.term_months);
   });
 
-  async function load() {
+  // The popup itself lives in manual-pay.js; this just tells it which term to show.
+  function openPayPopup(term) {
+    window.dispatchEvent(new CustomEvent('billing:pay', { detail: { term } }));
+  }
+  document.getElementById('open-pay-btn').addEventListener('click', () => {
+    const inv = lastData && lastData.open_invoice;
+    openPayPopup(inv && !proceeded ? inv.term_months : selectedTerm);
+  });
+
+  // What the owner can see changing on this page. If this is identical, a background refresh does nothing.
+  function signature(d) {
+    return JSON.stringify([
+      d.status, d.has_access, d.current_period_end, d.credit_balance, d.open_invoice,
+      (d.invoices || []).map(i => [i.number, i.status]),
+      (d.manual_requests || []).map(r => [r.id, r.status]),
+      (d.credit_entries || []).map(e => e.id),
+    ]);
+  }
+
+  async function load({ quiet = false } = {}) {
     try {
       const data = await Duka.api('/billing/');
+      const prev = lastData;
+      if (quiet && prev && signature(prev) === signature(data)) return;   // nothing new
       lastData = data;
+      stkBlock.hidden = !data.stk_enabled;     // STK push stays hidden until it is switched on
+
+      // Did the platform admin just confirm the payment while this page was open?
+      const activated = !!prev && data.has_access && data.status === 'ACTIVE'
+        && (!prev.has_access || prev.status !== 'ACTIVE' || prev.current_period_end !== data.current_period_end);
+      if (activated) proceeded = false;
       const daysLeft = Duka.daysUntil(data.current_period_end);
       shopMeta.textContent = data.has_access ? 'Account active' : 'Account locked';
 
@@ -205,9 +234,34 @@
       renderInvoiceRows(data.invoices);
       renderNotices(data);
       renderCreditLedger(data);
+
+      if (quiet && prev) {
+        if (activated) {
+          const paid = (data.invoices || []).find(i => i.status === 'PAID');
+          showAlert('Payment confirmed -- your account is active.', 'good');
+          if (paid) {
+            alertBox.appendChild(document.createTextNode(' '));
+            alertBox.appendChild(Duka.el('a', { href: receiptUrl(paid.number), download: '',
+                                                text: 'Download your receipt', style: 'text-decoration:underline;' }));
+          }
+          window.dispatchEvent(new CustomEvent('billing:activated', { detail: data }));
+        }
+        window.dispatchEvent(new Event('billing:changed'));   // let the M-Pesa code section refresh too
+      }
     } catch (e) {
-      showAlert(e.message);
+      if (!quiet) { showAlert(e.message); return; }
+      if (e.status === 401 || e.status === 403) {      // session ended: stop polling and say so
+        clearInterval(autoTimer);
+        showAlert('Your session has expired. Please log in again.');
+      }                                               // other errors (offline, 5xx): try again next tick
     }
+  }
+
+  // Keep the page current: the shop owner never has to reload after the platform admin confirms a payment.
+  async function quietRefresh() {
+    if (document.hidden || quietLoading) return;
+    quietLoading = true;
+    try { await load({ quiet: true }); } finally { quietLoading = false; }
   }
 
   payBtn.addEventListener('click', async () => {
@@ -273,6 +327,9 @@
     }, 3000);
   }
 
-  window.addEventListener('billing:refresh', load);
+  window.addEventListener('billing:refresh', () => load());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) quietRefresh(); });
+  window.addEventListener('online', quietRefresh);
+  autoTimer = setInterval(quietRefresh, AUTO_REFRESH_MS);
   load();
 })();
