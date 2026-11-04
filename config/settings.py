@@ -45,8 +45,8 @@ if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
 
 CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app',
-    "unisalesystems.store",
-    "www.unisalesystems.store",
+    "https://unisalesystems.store",
+    "https://www.unisalesystems.store",
     ]
 
 
