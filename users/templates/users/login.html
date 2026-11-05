@@ -43,7 +43,7 @@
             {% endif %}
 
             <div class="form-group">
-                <label for="id_shop_code">Shop code <span class="field-hint">(staff only &mdash; owners leave this empty)</span></label>
+                <label for="id_shop_code">Shop code</label>
                 <input type="text" name="shop_code" id="id_shop_code" value="{{ form.shop_code.value|default_if_none:'' }}"
                        placeholder="e.g. mama-njeri-mart" autocapitalize="none" autocorrect="off" spellcheck="false">
             </div>
@@ -78,7 +78,6 @@
 </div>
 
 <script>
-    // Remember the shop code on this device so cashiers only type username + password each shift.
     (function () {
         const codeInput = document.getElementById('id_shop_code');
         const KEY = 'unisale_shop_code';

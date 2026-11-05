@@ -26,7 +26,7 @@ DEFAULTS = {
     "COMPANY_PHONE": "0790342156",
     "COMPANY_EMAIL": "unisalesystems@gmail.com",
     "RECEIPT_FOOTER": "Thank you for your business.",
-    "SITE_URL": "https://pos-wctc.onrender.com",
+    "SITE_URL": "unisalesystems.store",
 }
 
 
