@@ -9,6 +9,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
     <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
     <link rel="stylesheet" href="{% static 'users/css/auth.css' %}">
+    {% if turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <style>.turnstile-wrap{display:flex;justify-content:center;min-height:65px;margin:0 0 14px}</style>
+    {% endif %}
 </head>
 
 <body>
@@ -59,6 +63,12 @@
                 <input type="password" name="password" id="id_password" required autocomplete="current-password">
             </div>
             <input type="hidden" name="next" value="{{ next }}">
+
+            {% if turnstile_site_key %}
+            <div class="turnstile-wrap">
+                <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-action="login"></div>
+            </div>
+            {% endif %}
             <button class="btn-primary" type="submit" id="submitBtn">
                 Sign in
             </button>
@@ -88,7 +98,15 @@
             }
         } catch (e) { /* storage blocked: fine */ }
 
-        document.getElementById('authForm').addEventListener('submit', function () {
+        document.getElementById('authForm').addEventListener('submit', function (ev) {
+            // Turnstile adds its token to the form once solved; don't send the form before that.
+            const widget = document.querySelector('.cf-turnstile');
+            const tokenInput = this.querySelector('[name="cf-turnstile-response"]');
+            if (widget && !(tokenInput && tokenInput.value)) {
+                ev.preventDefault();
+                alert('Please wait for the security check to finish, then try again.');
+                return;
+            }
             try {
                 const code = codeInput.value.trim().toLowerCase();
                 if (code) localStorage.setItem(KEY, code); else localStorage.removeItem(KEY);

@@ -17,6 +17,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from billing import conf
 from billing.pricing import quote_table
 from .branches import active_branches, assign_user_branch
+from users import turnstile
+
 from .forms import SignupForm, StaffDetailsForm
 from .mixins import OwnerRequiredMixin
 from .models import PendingSignup
@@ -27,6 +29,11 @@ from .services import (SIGNUP_EMAIL_KEY, SIGNUP_STARTED_KEY, ResendTooSoon, Sign
                        staff_handle, start_signup, update_staff_details)
 from notifications.models import Notification
 from notifications.utils import notify, MANAGEMENT
+
+
+def client_ip(request):
+    return (request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("REMOTE_ADDR"))
 
 
 def _form_errors(form):
@@ -58,6 +65,9 @@ class SignupView(View):
                 return JsonResponse({"error": "invalid_json"}, status=400)
         else:
             data = request.POST
+
+        if not turnstile.verify(data.get("turnstile_token") or data.get(turnstile.FIELD), client_ip(request)):
+            return JsonResponse({"errors": {"__all__": [turnstile.ERROR_MESSAGE]}}, status=400)
 
         form = SignupForm(data)
         if not form.is_valid():

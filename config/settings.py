@@ -108,6 +108,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 "assistant.context_processors.assistant",
                 "tenants.context_processors.branch_switcher",
+                "users.turnstile.context_processor",
             ],
         },
     },
@@ -246,6 +247,10 @@ SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 SUPPORT_EMAIL = "collinsgitonga.dev@gmail.com"    
 SUPPORT_WHATSAPP_NUMBER = "254790342156"     
 SUPPORT_UPLOAD_ROOT = "/var/app/private_uploads" 
+
+# Cloudflare Turnstile bot check on the sign-in / sign-up pages. Leave either key empty to switch it off.
+TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY", default="")
+TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")

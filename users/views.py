@@ -12,7 +12,7 @@ from django.views.decorators.cache import never_cache
 from django.views.generic import DetailView, FormView, ListView, RedirectView, TemplateView
 from django_ratelimit.decorators import ratelimit
 
-from . import password_reset
+from . import password_reset, turnstile
 from .dashboard import build_dashboard_context
 from .dashboard_live import get_version
 from .forms import LoginForm, PasswordResetRequestForm, SetNewPasswordForm
@@ -87,6 +87,13 @@ class LoginView(FormView):
             )
             return self.form_invalid(form)
 
+        # Bot check comes before the password is even looked at.
+        if not turnstile.verify(request.POST.get(turnstile.FIELD), _client_ip(request)):
+            self._bot_check_failed = True
+            form = self.get_form()
+            form.add_error(None, turnstile.ERROR_MESSAGE)
+            return self.form_invalid(form)
+
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
@@ -103,6 +110,8 @@ class LoginView(FormView):
 
     def form_invalid(self, form):
         username = form.cleaned_data.get('username') if hasattr(form, 'cleaned_data') else None
+        if getattr(self, '_bot_check_failed', False):
+            username = None   # no password was tried, so don't log it or count it as a failed sign-in
         failed_user = User.objects.select_related('tenant').filter(username=username).first() if username else None
         if failed_user is not None and failed_user.tenant_id:
             tenant = failed_user.tenant

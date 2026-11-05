@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Open your shop's account -- UniSale Systems</title>
 <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
+{% if turnstile_site_key %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+<style>.turnstile-wrap{display:flex;justify-content:center;min-height:65px;margin:18px 0 6px}</style>
+{% endif %}
 </head>
 <body>
 
@@ -83,6 +87,10 @@
       <h2>Choose your plan</h2>
       <div class="plans" id="plans" role="group" aria-label="Subscription term"></div>
       <p class="plan-note" id="plan-note">Loading pricing&hellip;</p>
+
+      {% if turnstile_site_key %}
+      <div class="turnstile-wrap"><div id="turnstile-widget" data-sitekey="{{ turnstile_site_key }}"></div></div>
+      {% endif %}
 
       <button type="submit" class="primary" id="submit-btn">Create my shop's account &rarr;</button>
       <p class="plan-note">Already have an account? <a href="{% url 'login' %}">Sign in</a>. By signing up you agree to our <a href="{% url 'terms' %}">Terms</a> and <a href="{% url 'privacy' %}">Privacy Policy</a>.</p>

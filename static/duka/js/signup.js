@@ -12,6 +12,26 @@
   const branchNote = document.getElementById('branch-note');
   const branchNamesEl = document.getElementById('branch-names');
 
+  // Cloudflare Turnstile (only present when the page was rendered with a site key).
+  const tsEl = document.getElementById('turnstile-widget');
+  let tsId = null;
+  let tsToken = '';
+  function initTurnstile() {
+    if (!tsEl || tsId !== null) return;
+    if (!window.turnstile) { setTimeout(initTurnstile, 200); return; }   // api.js still loading
+    tsId = window.turnstile.render(tsEl, {
+      sitekey: tsEl.dataset.sitekey,
+      action: 'signup',
+      callback: (t) => { tsToken = t; },
+      'expired-callback': () => { tsToken = ''; },
+      'error-callback': () => { tsToken = ''; },
+    });
+  }
+  function resetTurnstile() {    // a token works once, so every attempt needs a fresh one
+    tsToken = '';
+    if (tsId !== null && window.turnstile) window.turnstile.reset(tsId);
+  }
+
   function showAlert(msg) {
     alertBox.textContent = msg;
     alertBox.classList.add('show');
@@ -116,6 +136,10 @@
     ev.preventDefault();
     clearAlert();
     clearFieldErrors();
+    if (tsEl && !tsToken) {
+      showAlert('Please wait for the security check to finish, then try again.');
+      return;
+    }
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending your confirmation email\u2026';
 
@@ -129,6 +153,7 @@
       term_months: selectedTerm,
       branch_count: branchCount,
       branch_names: branchNames(),
+      turnstile_token: tsToken,
     };
 
     try {
@@ -143,10 +168,12 @@
         showAlert(e.message);
       }
     } finally {
+      resetTurnstile();
       submitBtn.disabled = false;
       submitBtn.textContent = "Create my shop's account \u2192";
     }
   });
 
+  initTurnstile();
   loadPricing();
 })();
