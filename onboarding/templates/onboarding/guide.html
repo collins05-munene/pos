@@ -1,0 +1,160 @@
+{% extends 'users/base.html' %}
+
+{% block title %}Setup Guide{% endblock %}
+
+{% block extra_head %}
+<style>
+.gs{--gs-border:#e2e8f0;--gs-text:#0f172a;--gs-muted:#64748b;--gs-accent:#4f46e5;--gs-accent-dark:#4338ca;--gs-good:#047857;--gs-good-bg:#d1fae5;
+    max-width:760px;margin:0 auto;color:var(--gs-text);font-family:system-ui,-apple-system,sans-serif}
+.gs h1{font-size:1.5rem;margin:0 0 .25rem}
+.gs-lead{color:var(--gs-muted);margin:0 0 1.25rem}
+.gs-progress{display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;font-size:.85rem;color:var(--gs-muted)}
+.gs-progress-bar{flex:1;height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden}
+.gs-progress-bar span{display:block;height:100%;background:var(--gs-accent);border-radius:99px;transition:width .3s}
+
+.gs-step{background:#fff;border:1px solid var(--gs-border);border-radius:12px;margin-bottom:.9rem;overflow:hidden}
+.gs-step.is-active{border-color:var(--gs-accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.gs-head{display:flex;align-items:center;gap:.85rem;padding:1rem 1.15rem;text-decoration:none;color:inherit}
+.gs-num{flex:none;width:2rem;height:2rem;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.9rem;background:#f1f5f9;color:var(--gs-muted)}
+.is-active .gs-num{background:var(--gs-accent);color:#fff}
+.is-done .gs-num{background:var(--gs-good-bg);color:var(--gs-good)}
+.gs-head-title{font-weight:600;flex:1}
+.gs-tag{font-size:.75rem;padding:.15rem .55rem;border-radius:99px;background:#f1f5f9;color:var(--gs-muted)}
+.is-done .gs-tag{background:var(--gs-good-bg);color:var(--gs-good)}
+.gs-body{padding:0 1.15rem 1.25rem 4rem}
+.gs-why{margin:0 0 1rem;color:#334155;line-height:1.55}
+.gs-tip{margin:1rem 0 0;padding:.75rem .9rem;background:#f8fafc;border-left:3px solid var(--gs-accent);border-radius:6px;font-size:.88rem;color:#334155;line-height:1.5}
+
+.gs-field{margin-bottom:.95rem}
+.gs-field label{display:block;font-weight:600;font-size:.88rem;margin-bottom:.3rem}
+.gs-field input,.gs-field select{width:100%;box-sizing:border-box;padding:.6rem .7rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.95rem;background:#fff}
+.gs-field input:focus,.gs-field select:focus{outline:none;border-color:var(--gs-accent);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.gs-field.has-error input,.gs-field.has-error select{border-color:#be123c}
+.gs-help{font-size:.8rem;color:var(--gs-muted);margin-top:.25rem}
+.gs-error{font-size:.82rem;color:#be123c;margin-top:.3rem}
+.gs-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+@media(max-width:560px){.gs-row{grid-template-columns:1fr}.gs-body{padding-left:1.15rem}}
+
+.gs-actions{display:flex;align-items:center;gap:.9rem;flex-wrap:wrap;margin-top:.5rem}
+.gs-btn{display:inline-block;background:var(--gs-accent);color:#fff;border:0;border-radius:8px;padding:.65rem 1.2rem;font-weight:600;font-size:.95rem;cursor:pointer;text-decoration:none}
+.gs-btn:hover{background:var(--gs-accent-dark)}
+.gs-link{background:none;border:0;color:var(--gs-muted);font-size:.88rem;cursor:pointer;text-decoration:underline;padding:0}
+.gs-foot{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.25rem;font-size:.85rem;color:var(--gs-muted)}
+
+.gs-done{background:#fff;border:1px solid var(--gs-border);border-radius:12px;padding:1.5rem 1.5rem 1.25rem}
+.gs-done h2{margin:0 0 .35rem;font-size:1.25rem}
+.gs-next{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:1rem}
+.gs-next a{display:block;padding:.9rem 1rem;border:1px solid var(--gs-border);border-radius:10px;text-decoration:none;color:inherit}
+.gs-next a:hover{border-color:var(--gs-accent);background:#f8fafc}
+.gs-next strong{display:block;margin-bottom:.15rem}
+.gs-next span{font-size:.84rem;color:var(--gs-muted)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gs">
+  <h1>Let's get your shop ready to sell</h1>
+  <p class="gs-lead">Four short steps: organise your products, add your first one, and bring it into stock. After that the POS is ready to use.</p>
+
+  <div class="gs-progress" role="status">
+    <div class="gs-progress-bar" aria-hidden="true"><span style="width:{{ progress.percent }}%"></span></div>
+    <span>{{ progress.done_count }} of {{ progress.total }} done</span>
+  </div>
+
+  {% if progress.complete %}
+  <div class="gs-done">
+    <h2>You're all set 🎉</h2>
+    <p class="gs-why">Your first product is in stock and ready to sell. Here is where most shops go next:</p>
+    <div class="gs-next">
+      <a href="{% url 'open_register' %}"><strong>Open the register</strong><span>Start your cash drawer for the day, then sell from the POS terminal.</span></a>
+      <a href="{% url 'pos_terminal' %}"><strong>Make a test sale</strong><span>Ring up your product to see how checkout works.</span></a>
+      <a href="{% url 'staff:staff-list' %}"><strong>Add your cashiers</strong><span>Give each person their own login.</span></a>
+      <a href="{% url 'product-create' %}"><strong>Add more products</strong><span>Sizes, colours, boxes and packs are available here.</span></a>
+      <a href="{% url 'support:help-center' %}"><strong>Help center</strong><span>Short guides for everything else.</span></a>
+    </div>
+  </div>
+  {% else %}
+
+  {% for step in steps %}
+  <section class="gs-step {% if step.done %}is-done{% endif %} {% if step.key == active %}is-active{% endif %}" id="step-{{ step.key }}">
+    <a class="gs-head" href="?step={{ step.key }}#step-{{ step.key }}">
+      <span class="gs-num">{% if step.done %}✓{% else %}{{ step.number }}{% endif %}</span>
+      <span class="gs-head-title">{{ step.title }}</span>
+      {% if step.done %}<span class="gs-tag">{% if step.skipped %}Skipped for now{% else %}Done{% endif %}</span>
+      {% elif step.skippable %}<span class="gs-tag">Optional</span>{% endif %}
+    </a>
+
+    {% if step.key == active %}
+    <div class="gs-body">
+
+      {% if step.key == 'category' %}
+        <p class="gs-why">Categories group your products so they're easy to find at the till and in reports, for example <em>Pain relief</em>, <em>Drinks</em> or <em>Hardware</em>. We've already made one called <strong>General</strong>, so you can start right away. Add one that fits your shop:</p>
+        <form method="post" action="{% url 'onboarding:step' 'category' %}" novalidate>
+          {% csrf_token %}
+          {% include 'onboarding/_field.html' with field=forms.category.name %}
+          <div class="gs-actions">
+            <button class="gs-btn" type="submit">Add category</button>
+            {% if step.skippable %}<button class="gs-link" type="submit" formaction="{% url 'onboarding:skip' 'category' %}" formnovalidate>Skip, I'll use General for now</button>{% endif %}
+          </div>
+        </form>
+
+      {% elif step.key == 'brand' %}
+        <p class="gs-why">A brand is the maker or label on the product, like <em>Panadol</em> or <em>Coca-Cola</em>. It's optional, but it helps when you search and when you look at which labels sell best.</p>
+        <form method="post" action="{% url 'onboarding:step' 'brand' %}" novalidate>
+          {% csrf_token %}
+          {% include 'onboarding/_field.html' with field=forms.brand.name %}
+          {% include 'onboarding/_field.html' with field=forms.brand.description %}
+          <div class="gs-actions">
+            <button class="gs-btn" type="submit">Add brand</button>
+            {% if step.skippable %}<button class="gs-link" type="submit" formaction="{% url 'onboarding:skip' 'brand' %}" formnovalidate>Skip, my products have no brand</button>{% endif %}
+          </div>
+        </form>
+
+      {% elif step.key == 'product' %}
+        <p class="gs-why">Now the main one. Add a single product to begin with; you can add the rest of your catalogue afterwards.</p>
+        <form method="post" action="{% url 'onboarding:step' 'product' %}" novalidate>
+          {% csrf_token %}
+          {% include 'onboarding/_field.html' with field=forms.product.name %}
+          <div class="gs-row">
+            {% include 'onboarding/_field.html' with field=forms.product.category %}
+            {% include 'onboarding/_field.html' with field=forms.product.brand %}
+          </div>
+          {% include 'onboarding/_field.html' with field=forms.product.unit_of_measure %}
+          <div class="gs-row">
+            {% include 'onboarding/_field.html' with field=forms.product.cost_price %}
+            {% include 'onboarding/_field.html' with field=forms.product.retail_price %}
+          </div>
+          {% include 'onboarding/_field.html' with field=forms.product.sku %}
+          <div class="gs-actions"><button class="gs-btn" type="submit">Save product</button></div>
+        </form>
+        <p class="gs-tip">Need sizes, colours, or selling by the box and the single item? Save the basics now. You can add those later under <strong>Products</strong>.</p>
+
+      {% elif step.key == 'stock' %}
+        <p class="gs-why">A product can't be sold until the system knows you have some. Record what's on your shelf as a purchase and it goes straight into stock.</p>
+        <div class="gs-actions">
+          <a class="gs-btn" href="{{ stock_url }}">Record my first purchase</a>
+          {% if step.skippable %}
+          <form method="post" action="{% url 'onboarding:skip' 'stock' %}">{% csrf_token %}<button class="gs-link" type="submit">I'll do this later</button></form>
+          {% endif %}
+        </div>
+        <p class="gs-tip">On the purchase page, enter how many you have and tick <strong>"Stock has arrived - receive it now"</strong>. If you don't want to record a payment, leave <strong>Pay with</strong> as "Not paying now".</p>
+      {% endif %}
+
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% endif %}
+
+  <div class="gs-foot">
+    <span>Stuck? <a href="{% url 'support:help-center' %}">Open the Help Center</a> or <a href="{% url 'support:contact' %}">contact support</a>.</span>
+    {% if not progress.complete %}
+      {% if progress.dismissed %}
+        <form method="post" action="{% url 'onboarding:restore' %}">{% csrf_token %}<button class="gs-link" type="submit">Show the reminder on my dashboard again</button></form>
+      {% else %}
+        <form method="post" action="{% url 'onboarding:dismiss' %}">{% csrf_token %}<button class="gs-link" type="submit">Hide the reminder on my dashboard</button></form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+<div class="gs-field {% if field.errors %}has-error{% endif %}">
+  <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+  {{ field }}
+  {% if field.help_text %}<div class="gs-help">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<div class="gs-error">{{ error }}</div>{% endfor %}
+</div>

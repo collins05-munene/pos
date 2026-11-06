@@ -73,7 +73,7 @@ INSTALLED_APPS = [
     "notifications",
     "support",
     "assistant",
-    
+    "onboarding"
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,26 @@
+{# Dashboard reminder. Include inside any page; renders only while setup is unfinished and not hidden. #}
+{% if onboarding.show_banner %}
+<style>
+.gs-banner{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:0 0 1.25rem;padding:1rem 1.25rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#1e1b4b}
+.gs-banner-text{flex:1 1 260px;min-width:0}
+.gs-banner-title{font-weight:700;margin:0 0 .15rem}
+.gs-banner-sub{margin:0;font-size:.88rem;color:#4338ca}
+.gs-banner-bar{height:6px;border-radius:99px;background:#c7d2fe;margin-top:.6rem;overflow:hidden}
+.gs-banner-bar span{display:block;height:100%;background:#4f46e5;border-radius:99px}
+.gs-banner-actions{display:flex;align-items:center;gap:.6rem}
+.gs-banner .gs-go{background:#4f46e5;color:#fff;padding:.5rem 1rem;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem}
+.gs-banner .gs-go:hover{background:#4338ca}
+.gs-banner button{background:none;border:0;color:#4338ca;font-size:.82rem;cursor:pointer;text-decoration:underline;padding:.25rem}
+</style>
+<div class="gs-banner" role="region" aria-label="Setup progress">
+  <div class="gs-banner-text">
+    <p class="gs-banner-title">Finish setting up your shop ({{ onboarding.done_count }} of {{ onboarding.total }} done)</p>
+    <p class="gs-banner-sub">{% if onboarding.current %}Next: {{ onboarding.current.title|lower }}.{% endif %} It takes a few minutes and you can stop any time.</p>
+    <div class="gs-banner-bar" aria-hidden="true"><span style="width:{{ onboarding.percent }}%"></span></div>
+  </div>
+  <div class="gs-banner-actions">
+    <a class="gs-go" href="{% url 'onboarding:guide' %}">{% if onboarding.done_count %}Continue setup{% else %}Start setup{% endif %}</a>
+    <form method="post" action="{% url 'onboarding:dismiss' %}">{% csrf_token %}<button type="submit">Hide</button></form>
+  </div>
+</div>
+{% endif %}
