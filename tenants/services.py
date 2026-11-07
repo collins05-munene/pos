@@ -43,7 +43,7 @@ class SignupLinkExpired(Exception):
 
 
 class VerificationEmailFailed(Exception):
-    """The mail server refused or timed out; nothing reached the person."""
+    """The email provider (Resend) refused, timed out or is misconfigured; nothing reached the person."""
 
 
 class ResendTooSoon(Exception):
@@ -76,10 +76,16 @@ def _send_verification_email(pending, raw_token):
     )
     msg.attach_alternative(render_to_string("tenants/emails/verify_email.html", ctx), "text/html")
     try:
-        msg.send(fail_silently=False)
-    except Exception as exc:             
-        log.exception("Could not send sign-up verification email to %s", pending.email)
+        # Delivered through the Resend API (settings.EMAIL_BACKEND = config.email_backends.ResendEmailBackend).
+        # fail_silently=False so a provider outage surfaces here instead of vanishing.
+        sent = msg.send(fail_silently=False)
+    except Exception as exc:
+        # The backend has already logged Resend's error code/message; this line adds the business context.
+        log.error("Sign-up verification email to %s was not delivered: %s", pending.email, exc)
         raise VerificationEmailFailed(str(exc)) from exc
+    if not sent:
+        log.error("Sign-up verification email to %s was not delivered (provider accepted 0 messages).", pending.email)
+        raise VerificationEmailFailed("The email provider accepted no messages.")
 
 
 def purge_expired_signups():
@@ -104,21 +110,25 @@ def start_signup(*, business_name, business_type, owner_name, email, phone, pass
         if wait > 0:
             raise ResendTooSoon(int(wait) + 1)
     raw = secrets.token_urlsafe(32)
-    pending, _ = PendingSignup.objects.update_or_create(
-        email=email,
-        defaults=dict(
-            token_hash=_hash_token(raw),
-            password_hash=make_password(password),
-            data=dict(
-                business_name=business_name.strip(), business_type=business_type,
-                owner_name=owner_name.strip(), phone=phone, term_months=int(term_months),
-                branch_count=int(branch_count or 1), branch_names=list(branch_names or []),
+    # Save and send as one unit: if the email can't go out, the save is rolled back, so an earlier
+    # (still working) link isn't invalidated and the resend cooldown isn't burned for nothing.
+    # Nothing but this one pending row is ever written here, so a failure never leaves a half-made account.
+    with transaction.atomic():
+        pending, _ = PendingSignup.objects.update_or_create(
+            email=email,
+            defaults=dict(
+                token_hash=_hash_token(raw),
+                password_hash=make_password(password),
+                data=dict(
+                    business_name=business_name.strip(), business_type=business_type,
+                    owner_name=owner_name.strip(), phone=phone, term_months=int(term_months),
+                    branch_count=int(branch_count or 1), branch_names=list(branch_names or []),
+                ),
+                expires_at=now + timedelta(hours=settings.SIGNUP_VERIFY_HOURS),
+                last_sent_at=now,
             ),
-            expires_at=now + timedelta(hours=settings.SIGNUP_VERIFY_HOURS),
-            last_sent_at=now,
-        ),
-    )
-    _send_verification_email(pending, raw)
+        )
+        _send_verification_email(pending, raw)
     return pending
 
 
@@ -138,8 +148,11 @@ def resend_verification(email):
     pending.token_hash = _hash_token(raw)
     pending.expires_at = now + timedelta(hours=settings.SIGNUP_VERIFY_HOURS)
     pending.last_sent_at = now
-    pending.save(update_fields=["token_hash", "expires_at", "last_sent_at"])
-    _send_verification_email(pending, raw)
+    # Same rule as start_signup: if the new email fails, roll back so the link they already
+    # received keeps working (previously a failed resend would have killed it).
+    with transaction.atomic():
+        pending.save(update_fields=["token_hash", "expires_at", "last_sent_at"])
+        _send_verification_email(pending, raw)
     return True
 
 

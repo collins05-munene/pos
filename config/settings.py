@@ -266,16 +266,22 @@ BILLING = {
 }
 
 
+# --- Email: delivered through the Resend API (config/email_backends.py), not SMTP ---------------
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
+RESEND_TIMEOUT = env.int("RESEND_TIMEOUT", default=10)   # seconds per API call; keeps sign-up responsive
+# Production sends through Resend. Local development without a key prints emails to the console
+# instead (so you can click verification links without sending anything real).
 EMAIL_BACKEND = env("EMAIL_BACKEND", default=(
-    "django.core.mail.backends.console.EmailBackend" if DEBUG
-    else "django.core.mail.backends.smtp.EmailBackend"))
-EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
-EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
-EMAIL_TIMEOUT = 10
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=f"UniSale Systems <{EMAIL_HOST_USER or 'no-reply@localhost'}>")
+    "django.core.mail.backends.console.EmailBackend" if (DEBUG and not RESEND_API_KEY)
+    else "config.email_backends.ResendEmailBackend"))
+# Must be an address on a domain verified in Resend, e.g. "UniSale Systems <no-reply@mail.example.co.ke>".
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="UniSale Systems <no-reply@localhost>")
+if not DEBUG and EMAIL_BACKEND.endswith("ResendEmailBackend"):
+    import logging as _logging
+    if not RESEND_API_KEY:
+        _logging.getLogger(__name__).warning("RESEND_API_KEY is not set: no email (sign-up links, password resets) will be delivered.")
+    if "@localhost" in DEFAULT_FROM_EMAIL:
+        _logging.getLogger(__name__).warning("DEFAULT_FROM_EMAIL is not set to an address on a Resend-verified domain.")
 SIGNUP_VERIFY_HOURS = env.int("SIGNUP_VERIFY_HOURS", default=48) 
 SIGNUP_RESEND_SECONDS = 60   
 
