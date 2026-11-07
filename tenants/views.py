@@ -185,8 +185,8 @@ class VerifyEmailView(View):
         request.session.pop(SIGNUP_STARTED_KEY, None)
 
         notify(tenant, f"Welcome to {tenant.name}",
-               "Next steps: add your products, record a purchase to bring stock in, "
-               "then add your cashiers.", user=owner)
+               "Once your subscription is active, open 'Setup Guide' in the sidebar: it walks you "
+               "through adding a category, your first product and your first stock.", user=owner)
         notify(tenant, "Invoice awaiting payment",
                f"Invoice {invoice.number} for KSH {invoice.total} is ready. Pay from Billing to activate your subscription.",
                level=Notification.Level.WARNING, user=owner)

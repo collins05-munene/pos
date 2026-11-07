@@ -252,6 +252,14 @@ class ActivityLogDetailView(AdminRequiredMixin, TenantScopedQuerysetMixin, Detai
 class AdminDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'users/admin-dashboard.html'
 
+    def get(self, request, *args, **kwargs):
+        # A brand-new shop's owner is taken to the setup guide once; after that it's a banner + sidebar link.
+        from onboarding.services import welcome_redirect
+        target = welcome_redirect(request)
+        if target:
+            return redirect(target)
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         tenant = self.request.tenant

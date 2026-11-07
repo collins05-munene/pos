@@ -227,6 +227,7 @@ table.dash-table tr:last-child td { border-bottom: none; }
 
 {% block content %}
 <div class="dash">
+  {% include 'onboarding/_banner.html' %}
   <div class="dash-header">
     <div class="wordmark">{{ request.tenant.name }}</div>
     

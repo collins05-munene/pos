@@ -112,6 +112,7 @@
     <ul class="menu">
         <li class="menu-title">Dashboard</li>
         <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
+        {% if onboarding.show_link %}<li><a href="{% url 'onboarding:guide' %}">Setup Guide ({{ onboarding.done_count }}/{{ onboarding.total }})</a></li>{% endif %}
         <li class="menu-title">Sales</li>
         <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
         <li><a href="{% url 'receipt-list' %}">Receipts</a></li>
