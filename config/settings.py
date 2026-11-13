@@ -47,6 +47,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app',
     "https://unisalesystems.store",
     "https://www.unisalesystems.store",
+    "https://app.unisalesystems.store"
     ]
 
 
