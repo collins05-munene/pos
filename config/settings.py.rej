@@ -1,0 +1,23 @@
+--- config/settings.py	2026-11-13 07:29:30.208772517 +0000
++++ config/settings.py	2026-11-13 07:29:30.211417641 +0000
+@@ -36,8 +36,7 @@
+ ALLOWED_HOSTS = [
+     '127.0.0.1',
+     '.ngrok-free.app',
+-    "unisalesystems.store",
+-    "www.unisalesystems.store",
++    "app.unisalesystems.store",   # the POS lives here; the marketing site (unisalesystems.store) is served separately
+ ]
+ 
+ if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+@@ -45,9 +44,7 @@
+ 
+ CSRF_TRUSTED_ORIGINS = [
+     'https://*.ngrok-free.app',
+-    "https://unisalesystems.store",
+-    "https://www.unisalesystems.store",
+-    "https://app.unisalesystems.store"
++    "https://app.unisalesystems.store",
+     ]
+ 
+ 

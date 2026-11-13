@@ -36,8 +36,7 @@ DEBUG = env.bool('DEBUG', default=True)
 ALLOWED_HOSTS = [
     '127.0.0.1',
     '.ngrok-free.app',
-    "unisalesystems.store",
-    "www.unisalesystems.store",
+    "app.unisalesystems.store",   # the POS lives here; the marketing site (unisalesystems.store) is served separately
 ]
 
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
@@ -45,9 +44,7 @@ if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
 
 CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app',
-    "https://unisalesystems.store",
-    "https://www.unisalesystems.store",
-    "https://app.unisalesystems.store"
+    "https://app.unisalesystems.store",
     ]
 
 

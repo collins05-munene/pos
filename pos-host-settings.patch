@@ -1,0 +1,34 @@
+--- a/config/settings.py	2026-11-13 07:29:30.208772517 +0000
++++ b/config/settings.py	2026-11-13 07:29:30.211417641 +0000
+@@ -36,8 +36,7 @@
+ ALLOWED_HOSTS = [
+     '127.0.0.1',
+     '.ngrok-free.app',
+-    "unisalesystems.store",
+-    "www.unisalesystems.store",
++    "app.unisalesystems.store",   # the POS lives here; the marketing site (unisalesystems.store) is served separately
+ ]
+ 
+ if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+@@ -45,9 +44,7 @@
+ 
+ CSRF_TRUSTED_ORIGINS = [
+     'https://*.ngrok-free.app',
+-    "https://unisalesystems.store",
+-    "https://www.unisalesystems.store",
+-    "https://app.unisalesystems.store"
++    "https://app.unisalesystems.store",
+     ]
+ 
+ 
+--- a/billing/conf.py	2026-11-13 07:29:30.210241793 +0000
++++ b/billing/conf.py	2026-11-13 07:29:30.212624666 +0000
+@@ -19,7 +19,7 @@
+     "COMPANY_PHONE": "0790342156",
+     "COMPANY_EMAIL": "unisalesystems@gmail.com",
+     "RECEIPT_FOOTER": "Thank you for your business.",
+-    "SITE_URL": "unisalesystems.store",
++    "SITE_URL": "https://app.unisalesystems.store",   # receipt QR codes must point at the POS, not the marketing site
+ }
+ 
+ 

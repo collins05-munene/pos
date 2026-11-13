@@ -8,3 +8,5 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+!website/dist/
+!website/dist/**

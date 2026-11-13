@@ -19,7 +19,7 @@ DEFAULTS = {
     "COMPANY_PHONE": "0790342156",
     "COMPANY_EMAIL": "unisalesystems@gmail.com",
     "RECEIPT_FOOTER": "Thank you for your business.",
-    "SITE_URL": "unisalesystems.store",
+    "SITE_URL": "https://app.unisalesystems.store",   # receipt QR codes must point at the POS, not the marketing site
 }
 
 
