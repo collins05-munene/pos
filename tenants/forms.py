@@ -4,7 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 import re
 
 from billing import conf
-from billing.mpesa import normalize_phone
+from billing.phone import normalize_phone
 from .models import Tenant
 
 

@@ -13,7 +13,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
-from billing import manual, receipts, services
+from billing import receipts, services
+from billing.utils import read_payload
 from billing.models import Invoice, Receipt
 from .views import SuperuserRequiredMixin
 
@@ -79,7 +80,7 @@ class ReceiptGenerateView(SuperuserRequiredMixin, View):
 
     def post(self, request):
         try:
-            data = manual.read_payload(request)
+            data = read_payload(request)
         except ValueError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
 
@@ -141,7 +142,7 @@ class ReceiptVoidView(SuperuserRequiredMixin, View):
         if action not in ("void", "restore"):
             raise Http404
         try:
-            data = manual.read_payload(request)
+            data = read_payload(request)
         except ValueError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
         receipt = get_object_or_404(Receipt, number=number)

@@ -120,14 +120,15 @@ def new_verify_code():
 class Receipt(models.Model):
     """
     Proof of payment for one PAID invoice. Created automatically when the invoice is paid
-    (STK push, M-Pesa code or credit) and never edited afterwards: the shop details and payment
+    (Paystack or credit; older receipts may say M-Pesa) and never edited afterwards: the shop details and payment
     reference are copied here, so the receipt stays correct even if the shop later renames itself.
     Invoices paid before receipts existed get theirs the first time someone asks for it.
     """
 
     class Method(models.TextChoices):
-        MPESA_STK = "MPESA_STK", "M-Pesa (STK push)"
-        MPESA_MANUAL = "MPESA_MANUAL", "M-Pesa (paid to till/paybill)"
+        PAYSTACK = "PAYSTACK", "Paystack"
+        MPESA_STK = "MPESA_STK", "M-Pesa (STK push)"                    # legacy, kept for old receipts
+        MPESA_MANUAL = "MPESA_MANUAL", "M-Pesa (paid to till/paybill)"  # legacy, kept for old receipts
         CREDIT = "CREDIT", "Account credit"
         OTHER = "OTHER", "Other"
 
@@ -138,7 +139,7 @@ class Receipt(models.Model):
     paid_at = models.DateTimeField(db_index=True)
     payment_method = models.CharField(max_length=14, choices=Method.choices, default=Method.OTHER)
     payment_reference = models.CharField(
-        max_length=255, blank=True, help_text="M-Pesa code(s), comma separated.")
+        max_length=255, blank=True, help_text="Paystack reference(s) (or legacy M-Pesa codes), comma separated.")
     payer_name = models.CharField(max_length=120, blank=True)
     payer_phone = models.CharField(max_length=20, blank=True)
 
@@ -181,8 +182,45 @@ class Receipt(models.Model):
             super().save(update_fields=["number"])
 
 
+class PaystackPayment(models.Model):
+    """
+    One Paystack checkout attempt. An invoice may have several (abandoned, declined, retried).
+    `amount` is what we asked Paystack to collect (the invoice's amount due after credit);
+    `paid_amount` is what Paystack says it actually collected.
+    """
+
+    class Status(models.TextChoices):
+        INITIATED = "INITIATED", "Waiting for customer"
+        SUCCESS = "SUCCESS", "Paid"
+        FAILED = "FAILED", "Failed"
+        CANCELLED = "CANCELLED", "Not completed"
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="paystack_payments")
+    tenant = models.ForeignKey(Tenant, on_delete=models.PROTECT, related_name="paystack_payments")
+    reference = models.CharField(max_length=64, unique=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default="KES")
+    payer_email = models.EmailField(blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.INITIATED, db_index=True)
+    authorization_url = models.URLField(max_length=500, blank=True)
+    access_code = models.CharField(max_length=64, blank=True)
+    paystack_id = models.BigIntegerField(null=True, blank=True)
+    channel = models.CharField(max_length=30, blank=True, help_text="card, mobile_money, bank, ...")
+    gateway_response = models.CharField(max_length=255, blank=True)
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    raw_event = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.reference} ({self.status})"
+
+
 class MpesaPayment(models.Model):
-    """One STK-push attempt. An invoice may have several (cancelled, wrong PIN, retry)."""
+    """LEGACY (M-Pesa STK push, retired). Kept only so old payment history and receipts stay intact."""
 
     class Status(models.TextChoices):
         INITIATED = "INITIATED", "Waiting for customer"
@@ -222,9 +260,8 @@ class BillingEvent(models.Model):
 
 class MpesaCode(models.Model):
     """
-    A payment YOU received, entered from the M-Pesa confirmation SMS in the platform
-    admin. A shop's typed-in code is approved only if it matches an unused row here
-    and the amount covers the invoice. Each code can pay exactly one invoice.
+    LEGACY (manual M-Pesa till payments, retired). A payment received and entered from the
+    M-Pesa confirmation SMS. Kept so old credits and receipts still point at their code.
     """
     code = models.CharField(max_length=20, unique=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -257,7 +294,7 @@ class MpesaCode(models.Model):
 
 
 class ManualPaymentRequest(models.Model):
-    """A shop saying "I paid, here is my M-Pesa code". Audit trail for every attempt."""
+    """LEGACY (manual M-Pesa till payments, retired): a shop saying "I paid, here is my code"."""
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Waiting for confirmation"
@@ -285,9 +322,9 @@ class ManualPaymentRequest(models.Model):
 
 class BillingCredit(models.Model):
     """
-    Per-shop wallet ledger (signed amounts; balance = sum). Manual payments land here first:
-    an underpayment sits as credit until the balance covers the invoice, and an overpayment
-    leaves the surplus for the next invoice.
+    Per-shop wallet ledger (signed amounts; balance = sum). Every Paystack payment lands here
+    first: a part payment sits as credit until the balance covers the invoice, and an
+    overpayment leaves the surplus for the next invoice.
     """
 
     class Kind(models.TextChoices):
@@ -299,7 +336,9 @@ class BillingCredit(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     kind = models.CharField(max_length=12, choices=Kind.choices)
     mpesa_code = models.ForeignKey(MpesaCode, null=True, blank=True,
-                                   on_delete=models.SET_NULL, related_name="credits")
+                                   on_delete=models.SET_NULL, related_name="credits")   # legacy
+    paystack_payment = models.ForeignKey(PaystackPayment, null=True, blank=True,
+                                         on_delete=models.SET_NULL, related_name="credits")
     invoice = models.ForeignKey(Invoice, null=True, blank=True,
                                 on_delete=models.SET_NULL, related_name="credits")
     note = models.CharField(max_length=255, blank=True)

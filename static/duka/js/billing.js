@@ -6,12 +6,11 @@
   const plansEl = document.getElementById('plans');
   const planNote = document.getElementById('plan-note');
   const payBtn = document.getElementById('pay-btn');
-  const phoneInput = document.getElementById('phone');
-  const stkStatus = document.getElementById('stk-status');
+  const payStatus = document.getElementById('pay-status');
+  const termSelect = document.getElementById('inv-term-select');
   const rowsEl = document.getElementById('invoice-rows');
   const shopMeta = document.getElementById('shop-meta');
   const selectPlanBtn = document.getElementById('select-plan-btn');
-  const stkBlock = document.getElementById('stk-block');
 
   let pollTimer = null;
   let currentPlans = [];
@@ -134,7 +133,7 @@
    
     if (inv && Number(inv.credit_applied) > 0 && Number(inv.amount_due) > 0) {
       add(Duka.notice('warn', `${Duka.money(inv.amount_due)} still due on ${inv.number}`,
-        `We\u2019ve received ${Duka.money(inv.credit_applied)} so far. Pay the rest, then enter the new M-Pesa code below.`,
+        `We\u2019ve received ${Duka.money(inv.credit_applied)} so far. Pay the rest with Paystack to finish.`,
         { meter: { value: Number(inv.credit_applied), max: Number(inv.total),
                    label: `${Duka.money(inv.credit_applied)} of ${Duka.money(inv.total)} received` } }));
     } else if (credit > 0 && !inv) {
@@ -142,10 +141,10 @@
         'It will be deducted from your next invoice, and paid automatically if it covers the whole amount.'));
     }
 
-    (d.manual_requests || []).filter((r) => r.status === 'PENDING').forEach((r) => {
-      add(Duka.notice('info', 'Waiting for payment confirmation',
-        `We haven\u2019t seen M-Pesa code ${r.code} yet. Your account switches on automatically once we confirm it. You can leave this page.`));
-    });
+    if (d.pending_payment && !(inv && Number(inv.credit_applied) > 0 && Number(inv.amount_due) > 0)) {
+      add(Duka.notice('info', 'Waiting for your Paystack payment',
+        'If you finished paying, this page updates by itself within a few seconds. If you closed the Paystack page, press Pay again.'));
+    }
   }
 
   function renderCreditLedger(d) {
@@ -156,7 +155,8 @@
     box.hidden = entries.length === 0;
     entries.forEach((e) => {
       const amt = Number(e.amount);
-      const what = e.kind === 'TOPUP' ? `Payment received${e.mpesa_code__code ? ' (' + e.mpesa_code__code + ')' : ''}`
+      const ref = e.paystack_payment__reference || e.mpesa_code__code;
+      const what = e.kind === 'TOPUP' ? `Payment received${ref ? ' (' + ref + ')' : ''}`
         : e.kind === 'APPLIED' ? `Applied to ${e.invoice__number || 'an invoice'}`
         : (e.note || 'Adjustment');
       rows.appendChild(Duka.el('tr', {}, [
@@ -166,39 +166,79 @@
       ]));
     });
   }
-  selectPlanBtn.addEventListener('click', () => {
-    if (!selectedTerm) {
-      showAlert('Please select a term option.');
-      return;
+  // ---- paying: everything goes through one Paystack checkout --------------------------------
+  function setBusy(busy, label) {
+    [payBtn, selectPlanBtn].forEach((b) => { if (b) b.disabled = busy; });
+    payBtn.textContent = busy ? (label || 'Please wait\u2026') : 'Pay with Paystack';
+  }
+
+  async function startCheckout(term) {
+    clearAlert();
+    setBusy(true, 'Opening Paystack\u2026');
+    try {
+      const body = new URLSearchParams();
+      if (term) body.set('term_months', String(term));
+      const data = await Duka.api('/billing/checkout/', { method: 'POST', json: false, body });
+      if (data.status === 'PAID') {                      // credit covered the whole invoice
+        showAlert('Paid from your credit -- your account is active.', 'good');
+        if (data.receipt_url) {
+          alertBox.appendChild(document.createTextNode(' '));
+          alertBox.appendChild(Duka.el('a', { href: data.receipt_url, download: '',
+                                              text: 'Download your receipt', style: 'text-decoration:underline;' }));
+        }
+        proceeded = false;
+        setBusy(false);
+        load();
+        return;
+      }
+      if (!/^https:\/\//.test(data.authorization_url || '')) throw new Error('Could not open the payment page. Please try again.');
+      payStatus.textContent = 'Taking you to Paystack\u2026';
+      window.location.assign(data.authorization_url);
+    } catch (e) {
+      showAlert(e.message);
+      payStatus.textContent = '';
+      setBusy(false);
     }
-    const plan = currentPlans.find(p => p.term_months === selectedTerm);
-    if (!plan) return;
-    proceeded = true;
+  }
 
-    termPicker.hidden = true;
-    invoicePanel.hidden = false;
-
-    document.getElementById('inv-number').textContent = 'Pending...';
-    document.getElementById('inv-term').textContent = `${plan.term_months} month(s)`;
-    showAmounts(Number(plan.total), Math.max(Number(plan.total) - creditNow(), 0), Math.min(creditNow(), Number(plan.total)));
-    openPayPopup(plan.term_months);
+  payBtn.addEventListener('click', () => startCheckout(termSelect.value || (lastData && lastData.term_months)));
+  selectPlanBtn.addEventListener('click', () => {
+    if (!selectedTerm) { showAlert('Please select a term option.'); return; }
+    startCheckout(selectedTerm);
   });
 
-  // The popup itself lives in manual-pay.js; this just tells it which term to show.
-  function openPayPopup(term) {
-    window.dispatchEvent(new CustomEvent('billing:pay', { detail: { term } }));
+  // The term dropdown on the invoice panel: switching it re-prices the screen (the invoice is re-issued on pay).
+  function fillTermSelect(plans, current) {
+    const keep = termSelect.value;
+    termSelect.innerHTML = '';
+    (plans || []).forEach((p) => {
+      termSelect.appendChild(Duka.el('option', { value: String(p.term_months),
+        text: `${p.term_months} ${p.term_months === 1 ? 'month' : 'months'} - ${Duka.money(p.total)}` }));
+    });
+    const want = keep || String(current || '');
+    if (want && (plans || []).some((p) => String(p.term_months) === want)) termSelect.value = want;
   }
-  document.getElementById('open-pay-btn').addEventListener('click', () => {
-    const inv = lastData && lastData.open_invoice;
-    openPayPopup(inv && !proceeded ? inv.term_months : selectedTerm);
+  termSelect.addEventListener('change', () => {
+    if (!lastData) return;
+    const plan = (lastData.plans || []).find((p) => String(p.term_months) === termSelect.value);
+    const inv = lastData.open_invoice;
+    if (!plan) return;
+    document.getElementById('inv-term').textContent = `${plan.term_months} month(s)`;
+    if (inv && String(inv.term_months) === termSelect.value) {
+      showAmounts(Number(inv.total), Number(inv.amount_due), Number(inv.credit_applied || 0));
+    } else {
+      showAmounts(Number(plan.total), Math.max(Number(plan.total) - creditNow(), 0), Math.min(creditNow(), Number(plan.total)));
+    }
+    const covered = Math.max(Number(plan.total) - creditNow(), 0) <= 0 && !(inv && String(inv.term_months) === termSelect.value);
+    payBtn.textContent = (inv && String(inv.term_months) === termSelect.value ? Number(inv.amount_due) <= 0 : covered)
+      ? 'Pay with my credit' : 'Pay with Paystack';
   });
 
   // What the owner can see changing on this page. If this is identical, a background refresh does nothing.
   function signature(d) {
     return JSON.stringify([
-      d.status, d.has_access, d.current_period_end, d.credit_balance, d.open_invoice,
+      d.status, d.has_access, d.current_period_end, d.credit_balance, d.open_invoice, d.pending_payment,
       (d.invoices || []).map(i => [i.number, i.status]),
-      (d.manual_requests || []).map(r => [r.id, r.status]),
       (d.credit_entries || []).map(e => e.id),
     ]);
   }
@@ -209,7 +249,6 @@
       const prev = lastData;
       if (quiet && prev && signature(prev) === signature(data)) return;   // nothing new
       lastData = data;
-      stkBlock.hidden = !data.stk_enabled;     // STK push stays hidden until it is switched on
 
       // Did the platform admin just confirm the payment while this page was open?
       const activated = !!prev && data.has_access && data.status === 'ACTIVE'
@@ -231,6 +270,10 @@
       statusLine.textContent = line;
 
       renderOpenInvoice(data.open_invoice, data.plans);
+      fillTermSelect(data.plans, data.open_invoice ? data.open_invoice.term_months : data.term_months);
+      termSelect.dispatchEvent(new Event('change'));
+      if (!data.paystack_enabled) payStatus.textContent = 'Online payment is not set up yet -- please contact support.';
+      else if (payStatus.textContent.startsWith('Online payment')) payStatus.textContent = '';
       renderInvoiceRows(data.invoices);
       renderNotices(data);
       renderCreditLedger(data);
@@ -246,7 +289,6 @@
           }
           window.dispatchEvent(new CustomEvent('billing:activated', { detail: data }));
         }
-        window.dispatchEvent(new Event('billing:changed'));   // let the M-Pesa code section refresh too
       }
     } catch (e) {
       if (!quiet) { showAlert(e.message); return; }
@@ -264,65 +306,52 @@
     try { await load({ quiet: true }); } finally { quietLoading = false; }
   }
 
-  payBtn.addEventListener('click', async () => {
-    clearAlert();
-    const phone = phoneInput.value.trim();
-    if (!phone) { showAlert('Enter the M-Pesa number to pay from.'); return; }
-    payBtn.disabled = true;
-    payBtn.textContent = 'Sending\u2026';
-    stkStatus.innerHTML = '';
-    try {
-      const openInvoiceTerm = document.getElementById('inv-term').textContent;
-      const data = await Duka.api('/billing/checkout/', {
-        method: 'POST', json: false,
-        body: new URLSearchParams({ term_months: parseInt(openInvoiceTerm) || '', phone }),
-      });
-      stkStatus.innerHTML = '<span class="spinner"></span>Check your phone and enter your M-Pesa PIN\u2026';
-      pollPayment(data.payment_id);
-    } catch (e) {
-      showAlert(e.message);
-      payBtn.disabled = false;
-      payBtn.textContent = 'Send STK push';
-    }
-  });
+  // ---- coming back from Paystack (?paystack=success|pending|failed|unknown&ref=...) ----------
+  function handleReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('paystack');
+    if (!outcome) return;
+    const ref = params.get('ref');
+    history.replaceState(null, '', window.location.pathname);   // a refresh shouldn't repeat the message
 
-  function pollPayment(paymentId) {
+    if (outcome === 'success') {
+      showAlert('Payment received -- thank you. Your account is up to date.', 'good');
+    } else if (outcome === 'failed') {
+      showAlert('The payment did not go through, and you have not been charged. You can try again below.');
+    } else if (outcome === 'unknown') {
+      showAlert('We could not match that payment. If money left your account, contact support with your Paystack reference.');
+    } else if (outcome === 'pending' && ref) {
+      showAlert('Confirming your payment with Paystack\u2026', 'info');
+      pollPayment(ref);
+    }
+  }
+
+  function pollPayment(reference) {
     let attempts = 0;
     clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
       attempts += 1;
       try {
-        const data = await Duka.api(`/billing/payments/${paymentId}/`);
-        if (data.status === 'SUCCESS') {
+        const data = await Duka.api(`/billing/payments/${encodeURIComponent(reference)}/`);
+        if (data.outcome === 'success') {
           clearInterval(pollTimer);
-          stkStatus.textContent = '';
           showAlert('Payment received -- your account is active.', 'good');
           if (data.receipt_url) {
             alertBox.appendChild(document.createTextNode(' '));
             alertBox.appendChild(Duka.el('a', { href: data.receipt_url, download: '',
                                                 text: 'Download your receipt', style: 'text-decoration:underline;' }));
           }
-          payBtn.disabled = false;
-          payBtn.textContent = 'Send STK push';
           load();
-        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
+        } else if (data.outcome === 'failed') {
           clearInterval(pollTimer);
-          stkStatus.textContent = '';
-          showAlert(data.result_desc || 'The payment did not go through -- try again.');
-          payBtn.disabled = false;
-          payBtn.textContent = 'Send STK push';
+          showAlert(data.reason || 'The payment did not go through -- try again.');
         } else if (attempts > 40) {
           clearInterval(pollTimer);
-          stkStatus.textContent = "Still waiting -- if you approved it on your phone, refresh in a minute.";
-          payBtn.disabled = false;
-          payBtn.textContent = 'Send STK push';
+          showAlert('Still waiting for Paystack. If you completed the payment, this page updates by itself once it is confirmed.', 'info');
         }
       } catch (e) {
         clearInterval(pollTimer);
-        stkStatus.textContent = '';
         showAlert(e.message);
-        payBtn.disabled = false;
-        payBtn.textContent = 'Send STK push';
       }
     }, 3000);
   }
@@ -331,5 +360,6 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) quietRefresh(); });
   window.addEventListener('online', quietRefresh);
   autoTimer = setInterval(quietRefresh, AUTO_REFRESH_MS);
+  handleReturn();
   load();
 })();
