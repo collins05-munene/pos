@@ -1,510 +1,22 @@
+import hashlib
+import hmac
 import json
+import unittest
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
+import requests
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase, override_settings
-from django.utils import timezone
-
-from billing import manual, services
-from billing.models import (BillingCredit, BillingEvent, Invoice, ManualPaymentRequest, MpesaCode, Subscription)
-from tenants.models import Tenant
-
-User = get_user_model()
-
-SMS = ("SJK3L9X2QP Confirmed. Ksh2.00 received from JOHN DOE 0712345678 on 24/10/26 at 2:15 PM. "
-       "New Account balance is Ksh5,000.00. Transaction cost, Ksh0.00.")
-
-
-def make_shop(name="Shop A", email="a@example.com", term=1):
-    tenant = Tenant.objects.create(name=name, slug=name.lower().replace(" ", "-"), phone="0712000000")
-    owner = User.objects.create_user(username=email, email=email, password="pw", tenant=tenant,
-                                     is_owner=True, role="ADMIN")
-    _sub, invoice = services.start_subscription(tenant, term)
-    return tenant, owner, invoice
-
-
-class SmsParsingTests(TestCase):
-    def test_till_message(self):
-        p = manual.parse_mpesa_sms(SMS)
-        self.assertEqual(p["code"], "SJK3L9X2QP")
-        self.assertEqual(p["amount"], Decimal("2.00"))
-        self.assertEqual(p["phone"], "0712345678")
-        self.assertEqual(p["name"], "JOHN DOE")
-        self.assertEqual((p["transaction_at"].hour, p["transaction_at"].minute), (14, 15))
-
-    def test_paybill_message_phone_first_and_thousands(self):
-        p = manual.parse_mpesa_sms(
-            "UJK1ABC2DE Confirmed. Ksh1,499.00 received from 254712345678 JANE W on 3/1/2026 at 12:05 AM. Account Number X")
-        self.assertEqual((p["code"], p["amount"], p["phone"], p["name"]),
-                         ("UJK1ABC2DE", Decimal("1499.00"), "254712345678", "JANE W"))
-        self.assertEqual(p["transaction_at"].hour, 0)
-
-    def test_masked_phone(self):
-        p = manual.parse_mpesa_sms("ABCDE12345 Confirmed. Ksh500.00 received from 2547*****123 SAM K on 1/2/26 at 9:00 AM.")
-        self.assertEqual(p["phone"], "2547*****123")
-
-    def test_no_code(self):
-        with self.assertRaises(services.BillingError):
-            manual.parse_mpesa_sms("hello there")
-
-    def test_code_normalising(self):
-        self.assertEqual(manual.normalize_code(" sjk3 l9x2qp "), "SJK3L9X2QP")
-        for bad in ("", "SHORT", "has-dash-123", "X" * 30):
-            with self.assertRaises(services.BillingError):
-                manual.normalize_code(bad)
-
-
-class ManualPaymentFlowTests(TestCase):
-    def setUp(self):
-        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
-        self.tenant, self.owner, self.invoice = make_shop()   # 1 month = KES 1 + 2 install = 3 total
-        self.assertEqual(self.invoice.total, Decimal("3"))
-
-    def add(self, code="SJK3L9X2QP", amount="3"):
-        return manual.register_mpesa_code(by=self.admin, code=code, amount=amount)
-
-    def submit(self, code="SJK3L9X2QP", tenant=None, invoice=None, user=None):
-        return manual.submit_manual_payment(tenant or self.tenant, user=user or self.owner,
-                                            invoice=invoice or self.invoice, raw_code=code)
-
-    def test_listed_code_approves_and_activates(self):
-        self.add()
-        req = self.submit("sjk3l9x2qp")
-        self.assertEqual(req.status, "APPROVED")
-        self.invoice.refresh_from_db()
-        self.assertEqual(self.invoice.status, Invoice.Status.PAID)
-        sub = Subscription.objects.get(tenant=self.tenant)
-        self.assertEqual(sub.status, Subscription.Status.ACTIVE)
-        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
-        code = MpesaCode.objects.get(code="SJK3L9X2QP")
-        self.assertEqual((code.state, code.used_by_tenant, code.used_invoice), ("USED", self.tenant, self.invoice))
-        self.assertTrue(BillingEvent.objects.filter(type="invoice.payment_succeeded").exists())
-
-    def test_unknown_code_waits_then_auto_approves_when_listed(self):
-        req = self.submit()
-        self.assertEqual(req.status, "PENDING")
-        self.assertFalse(Tenant.objects.get(pk=self.tenant.pk).has_access)
-        _code, approved = self.add()
-        self.assertEqual([r.pk for r in approved], [req.pk])
-        req.refresh_from_db()
-        self.assertEqual(req.status, "APPROVED")
-        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
-
-    def test_resubmitting_pending_code_does_not_duplicate(self):
-        self.submit(); self.submit()
-        self.assertEqual(ManualPaymentRequest.objects.count(), 1)
-
-    def test_underpayment_is_kept_as_credit_and_topped_up(self):
-        self.add(amount="1"); self.add("TOPUP00002", amount="2")
-        first = self.submit()
-        self.assertEqual(first.status, "PARTIAL")
-        self.assertIn("2 is still due", first.reason)
-        self.invoice.refresh_from_db()
-        self.assertEqual(self.invoice.status, Invoice.Status.OPEN)
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("1"))
-        self.assertEqual(MpesaCode.objects.get(code="SJK3L9X2QP").state, "USED")   # can't be replayed
-        self.assertFalse(Tenant.objects.get(pk=self.tenant.pk).has_access)
-
-        second = self.submit("TOPUP00002")
-        self.assertEqual(second.status, "APPROVED")
-        self.invoice.refresh_from_db()
-        self.assertEqual(self.invoice.status, Invoice.Status.PAID)
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("0"))
-        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
-
-    def test_partial_code_cannot_be_replayed(self):
-        self.add(amount="1")
-        self.submit()
-        again = self.submit()
-        self.assertEqual(again.status, "REJECTED")
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("1"))
-
-    def test_overpayment_pays_and_keeps_surplus_as_credit(self):
-        self.add(amount="10")
-        req = self.submit()
-        self.assertEqual(req.status, "APPROVED")
-        self.assertIn("extra", req.reason)
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("7"))
-        self.assertTrue(BillingEvent.objects.filter(type="manual_payment.credit_carried").exists())
-
-    def test_surplus_credit_pays_next_invoice_automatically(self):
-        self.add(amount="10"); self.submit()                         # 3 paid, 7 credit
-        renewal = services.issue_invoice(self.tenant, 1, include_install_fee=False)   # KES 1
-        self.assertEqual(renewal.status, Invoice.Status.PAID)
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("6"))
-        self.assertTrue(BillingEvent.objects.filter(type="invoice.paid_from_credit").exists())
-
-    def test_credit_less_than_next_invoice_reduces_amount_due(self):
-        self.add(amount="3"); self.submit()
-       
-        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("0.50"),
-                                     kind=BillingCredit.Kind.ADJUSTMENT)
-        t3 = services.issue_invoice(self.tenant, 3, include_install_fee=False)        # 3 months = KES 2
-        self.assertEqual(t3.status, Invoice.Status.OPEN)
-        self.assertEqual(services.amount_due(t3), Decimal("1.50"))
-
-    def test_code_cannot_pay_a_second_invoice(self):
-        self.add()
-        self.submit()
-        other_tenant, other_owner, other_invoice = make_shop("Shop B", "b@example.com")
-        req = self.submit(tenant=other_tenant, invoice=other_invoice, user=other_owner)
-        self.assertEqual(req.status, "REJECTED")
-        self.assertIn("already been used", req.reason)
-        other_invoice.refresh_from_db()
-        self.assertEqual(other_invoice.status, Invoice.Status.OPEN)
-        self.assertTrue(BillingEvent.objects.filter(type="manual_payment.code_reuse_attempt").exists())
-
-    def test_voided_code_is_rejected(self):
-        code, _ = self.add()
-        manual.void_code(code, by=self.admin)
-        self.assertEqual(self.submit().status, "REJECTED")
-
-    def test_cannot_void_used_code(self):
-        code, _ = self.add()
-        self.submit()
-        with self.assertRaises(services.BillingError):
-            manual.void_code(code, by=self.admin)
-
-    def test_duplicate_listing_rejected(self):
-        self.add()
-        with self.assertRaises(services.BillingError):
-            self.add()
-
-    def test_contested_code_is_not_auto_approved(self):
-        other_tenant, other_owner, other_invoice = make_shop("Shop B", "b@example.com")
-        mine = self.submit()
-        theirs = self.submit(tenant=other_tenant, invoice=other_invoice, user=other_owner)
-        _code, approved = self.add()
-        self.assertEqual(approved, [])
-        mine.refresh_from_db(); theirs.refresh_from_db()
-        self.assertEqual((mine.status, theirs.status), ("PENDING", "PENDING"))
-        # you decide: approve one, the other is then rejected as "already used"
-        manual.approve_request(mine, by=self.admin)
-        manual.reject_request(theirs, by=self.admin, reason="Not our payment")
-        mine.refresh_from_db(); theirs.refresh_from_db()
-        self.assertEqual((mine.status, theirs.status), ("APPROVED", "REJECTED"))
-
-    def test_approve_needs_listed_code(self):
-        req = self.submit()
-        with self.assertRaises(services.BillingError):
-            manual.approve_request(req, by=self.admin)
-
-    def test_throttle_after_too_many_misses(self):
-        for i in range(8):
-            self.submit(code=f"ZZZZZZZZ{i:02d}")
-        with self.assertRaises(services.BillingError) as cm:
-            self.submit(code="ZZZZZZZZ99")
-        self.assertIn("Too many", str(cm.exception))
-
-    def test_paid_invoice_not_payable_again(self):
-        self.add(); self.submit()
-        self.add("AAAAAAAAAA")
-        with self.assertRaises(services.BillingError):
-            self.submit("AAAAAAAAAA")
-
-    @override_settings(BILLING={"MANUAL_PAYMENTS_ENABLED": False})
-    def test_feature_switch(self):
-        with self.assertRaises(services.BillingError):
-            self.submit()
-
-    def test_renewal_extends_from_current_period_end(self):
-        self.add(); self.submit()
-        sub = Subscription.objects.get(tenant=self.tenant)
-        first_end = sub.current_period_end
-        renewal = services.issue_invoice(self.tenant, 1, include_install_fee=False)   # KES 1
-        self.add("RENEWAL001", amount="1")
-        self.assertEqual(self.submit("RENEWAL001", invoice=renewal).status, "APPROVED")
-        sub.refresh_from_db()
-        self.assertGreater(sub.current_period_end, first_end)
-
-
-class ManualPaymentViewTests(TestCase):
-    def setUp(self):
-        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
-        self.tenant, self.owner, self.invoice = make_shop()
-        self.client_owner = Client(); self.client_owner.force_login(self.owner)
-        self.client_admin = Client(); self.client_admin.force_login(self.admin)
-
-    def post_json(self, client, url, body):
-        return client.post(url, json.dumps(body), content_type="application/json")
-
-    def attach_tenant(self):
-        # the project's TenantMiddleware isn't in the test settings; emulate it
-        from tenants.context import set_current_tenant
-        return set_current_tenant(self.tenant)
-
-    def test_owner_flow_over_http(self):
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        manual.register_mpesa_code(by=self.admin, code="SJK3L9X2QP", amount="3")
-        rf = RequestFactory()
-        req = rf.post("/billing/manual-payment/", json.dumps({"code": "sjk3l9x2qp"}),
-                      content_type="application/json")
-        req.user, req.tenant = self.owner, self.tenant
-        resp = ManualPaymentView.as_view()(req)
-        data = json.loads(resp.content)
-        self.assertEqual((resp.status_code, data["status"], data["has_access"]), (200, "APPROVED", True))
-
-    def test_partial_payment_response(self):
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        manual.register_mpesa_code(by=self.admin, code="SJK3L9X2QP", amount="1")
-        req = RequestFactory().post("/billing/manual-payment/", {"code": "SJK3L9X2QP"})
-        req.user, req.tenant = self.owner, self.tenant
-        resp = ManualPaymentView.as_view()(req)
-        d = json.loads(resp.content)
-        self.assertEqual((resp.status_code, d["status"]), (200, "PARTIAL"))
-        self.assertEqual((Decimal(d["credit_balance"]), Decimal(d["amount_due"])), (Decimal("1"), Decimal("2")))
-        self.assertFalse(d["has_access"])
-
-    def test_reused_code_returns_422_with_reason(self):
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        manual.register_mpesa_code(by=self.admin, code="SJK3L9X2QP", amount="3")
-        other, other_owner, other_inv = make_shop("Shop B", "b@example.com")
-        manual.submit_manual_payment(other, user=other_owner, invoice=other_inv, raw_code="SJK3L9X2QP")
-        req = RequestFactory().post("/billing/manual-payment/", {"code": "SJK3L9X2QP"})
-        req.user, req.tenant = self.owner, self.tenant
-        resp = ManualPaymentView.as_view()(req)
-        self.assertEqual(resp.status_code, 422)
-        self.assertIn("already been used", json.loads(resp.content)["reason"])
-
-    def test_credit_alone_can_cover_invoice_without_a_code(self):
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("50"),
-                                     kind=BillingCredit.Kind.ADJUSTMENT)
-        req = RequestFactory().post("/billing/manual-payment/", {})
-        req.user, req.tenant = self.owner, self.tenant
-        d = json.loads(ManualPaymentView.as_view()(req).content)
-        self.assertEqual((d["status"], d["has_access"]), ("APPROVED", True))
-
-    def test_stk_checkout_is_blocked_with_friendly_message(self):
-        from django.test import RequestFactory
-        from billing.views import CheckoutView
-        open_before = Invoice.objects.filter(tenant=self.tenant, status="OPEN").count()
-        req = RequestFactory().post("/billing/checkout/", {"term_months": 12, "phone": "0712345678"})
-        req.user, req.tenant = self.owner, self.tenant
-        resp = CheckoutView.as_view()(req)
-        d = json.loads(resp.content)
-        self.assertEqual((resp.status_code, d["code"]), (400, "stk_unavailable"))
-        self.assertIn("in development", d["error"])
-        self.assertEqual(Invoice.objects.filter(tenant=self.tenant, status="OPEN").count(), open_before)
-        self.assertEqual(Invoice.objects.filter(tenant=self.tenant, status="VOID").count(), 0)
-
-    def test_stk_service_guard(self):
-        with self.assertRaises(services.BillingError):
-            services.initiate_stk_payment(self.invoice, "0712345678")
-
-    def test_bad_code_format_is_400(self):
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        req = RequestFactory().post("/billing/manual-payment/", {"code": "!!"})
-        req.user, req.tenant = self.owner, self.tenant
-        self.assertEqual(ManualPaymentView.as_view()(req).status_code, 400)
-
-    def test_non_owner_forbidden(self):
-        from django.core.exceptions import PermissionDenied
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        cashier = User.objects.create_user(username="c", password="pw", tenant=self.tenant, role="CASHIER")
-        req = RequestFactory().post("/billing/manual-payment/", {"code": "SJK3L9X2QP"})
-        req.user, req.tenant = cashier, self.tenant
-        with self.assertRaises(PermissionDenied):
-            ManualPaymentView.as_view()(req)
-
-    # ---- platform admin ----
-    def test_platform_pages_need_superuser(self):
-        self.assertEqual(self.client_owner.get("/platform/payments/api/").status_code, 403)
-        self.assertEqual(self.client_owner.post("/platform/payments/api/add/", {}).status_code, 403)
-        self.assertEqual(self.client_admin.get("/platform/payments/api/").status_code, 200)
-
-    def test_add_from_pasted_sms_and_list(self):
-        r = self.post_json(self.client_admin, "/platform/payments/api/parse/", {"message": SMS})
-        self.assertEqual(r.json()["code"], "SJK3L9X2QP")
-        self.assertFalse(r.json()["exists"])
-        r = self.post_json(self.client_admin, "/platform/payments/api/add/", {"message": SMS})
-        self.assertEqual(r.status_code, 201)
-        self.assertEqual(r.json()["code"]["amount"], "2.00")
-        listing = self.client_admin.get("/platform/payments/api/").json()
-        self.assertEqual(listing["summary"]["unused_count"], 1)
-        self.assertEqual(listing["codes"][0]["sender_name"], "JOHN DOE")
-        # second paste of the same message -> friendly field error, not a 500
-        r = self.post_json(self.client_admin, "/platform/payments/api/add/", {"message": SMS})
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("already", r.json()["errors"]["code"])
-
-    def test_manual_fields_override_and_validation(self):
-        r = self.post_json(self.client_admin, "/platform/payments/api/add/", {"code": "ABCDE12345"})
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("amount", r.json()["errors"])
-        r = self.post_json(self.client_admin, "/platform/payments/api/add/",
-                           {"code": "ABCDE12345", "amount": "1,499"})
-        self.assertEqual(r.status_code, 201)
-
-    def test_pending_shows_then_admin_actions(self):
-        manual.submit_manual_payment(self.tenant, user=self.owner, invoice=self.invoice, raw_code="PENDING001")
-        listing = self.client_admin.get("/platform/payments/api/").json()
-        self.assertEqual(listing["summary"]["pending_count"], 1)
-        row = listing["pending"][0]
-        self.assertFalse(row["code_listed"])
-        r = self.client_admin.post(f"/platform/payments/api/requests/{row['id']}/approve/")
-        self.assertEqual(r.status_code, 400)                    # code not listed yet
-        r = self.post_json(self.client_admin, f"/platform/payments/api/requests/{row['id']}/reject/",
-                           {"reason": "No such payment"})
-        self.assertEqual(r.json()["status"], "REJECTED")
-        self.assertEqual(self.client_admin.post(f"/platform/payments/api/requests/{row['id']}/explode/").status_code, 404)
-
-    def test_adding_code_reports_who_was_approved(self):
-        manual.submit_manual_payment(self.tenant, user=self.owner, invoice=self.invoice, raw_code="ABCDE12345")
-        r = self.post_json(self.client_admin, "/platform/payments/api/add/", {"code": "ABCDE12345", "amount": "3"})
-        self.assertEqual(r.json()["approved"], [{"tenant": "Shop A", "invoice": self.invoice.number}])
-
-
-class OverviewPayloadAndTemplateTests(TestCase):
-    def setUp(self):
-        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
-        self.tenant, self.owner, self.invoice = make_shop()
-
-    @override_settings(BILLING={"MANUAL_PAY_LABEL": "Till number", "MANUAL_PAY_NUMBER": "123456",
-                                "MANUAL_PAY_NAME": "UniSale"})
-    def test_overview_json_carries_manual_pay_and_requests(self):
-        from django.test import RequestFactory
-        from billing.views import BillingOverviewView
-        manual.submit_manual_payment(self.tenant, user=self.owner, invoice=self.invoice, raw_code="PENDING001")
-        req = RequestFactory().get("/billing/", headers={"Accept": "application/json"})
-        req.user, req.tenant = self.owner, self.tenant
-        d = json.loads(BillingOverviewView.as_view()(req).content)
-        self.assertEqual(d["manual_pay"], {"enabled": True, "label": "Till number",
-                                           "number": "123456", "name": "UniSale"})
-        self.assertEqual([(r["code"], r["status"]) for r in d["manual_requests"]], [("PENDING001", "PENDING")])
-        self.assertEqual(d["open_invoice"]["number"], self.invoice.number)
-
-    def test_platform_payments_page_renders(self):
-        c = Client(); c.force_login(self.admin)
-        r = c.get("/platform/payments/")
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "data-add=\"/platform/payments/api/add/\"")
-        self.assertContains(r, "platform-payments.js")
-
-    def test_billing_template_compiles(self):
-        from django.template.loader import get_template
-        get_template("billing/overview.html")
-
-
-class CreditNoticeTests(TestCase):
-    """Overpayment/credit behaviour and what the billing page + notifications are told."""
-
-    def setUp(self):
-        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
-        self.tenant, self.owner, self.invoice = make_shop()      # KES 3 (1 + 2 install)
-
-    def add(self, code, amount):
-        return manual.register_mpesa_code(by=self.admin, code=code, amount=amount)
-
-    def submit(self, code, invoice=None):
-        return manual.submit_manual_payment(self.tenant, user=self.owner,
-                                            invoice=invoice or self.invoice, raw_code=code)
-
-    def overview(self):
-        from django.test import RequestFactory
-        from billing.views import BillingOverviewView
-        req = RequestFactory().get("/billing/", headers={"Accept": "application/json"})
-        req.user, req.tenant = self.owner, self.tenant
-        return json.loads(BillingOverviewView.as_view()(req).content)
-
-    def test_part_then_overpay_keeps_only_the_surplus(self):
-        self.add("PART000001", "1"); self.add("OVER000001", "10")
-        self.assertEqual(self.submit("PART000001").status, "PARTIAL")
-        req = self.submit("OVER000001")
-        self.assertEqual(req.status, "APPROVED")
-        self.assertIn("KES 8 extra is kept as credit", req.reason)
-        self.assertEqual(services.credit_balance(self.tenant), Decimal("8"))
-        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
-
-    def test_pending_code_follows_a_term_change_to_the_current_invoice(self):
-        self.submit("MOVED00001")                                   # waits: not listed yet
-        new = services.issue_invoice(self.tenant, 3)                # shop switched term; old one is VOID
-        self.assertEqual(Invoice.objects.get(pk=self.invoice.pk).status, Invoice.Status.VOID)
-        self.add("MOVED00001", "1")
-        r = ManualPaymentRequest.objects.get(code="MOVED00001")
-        self.assertEqual(r.status, "PARTIAL")
-        self.assertEqual(r.invoice_id, new.pk)
-        self.assertIn(new.number, r.reason)
-        self.assertIn(f"KES {new.total - 1:.0f} is still due", r.reason)
-
-    def test_replaying_own_code_says_it_became_credit(self):
-        self.add("PART000001", "1")
-        self.submit("PART000001")
-        again = self.submit("PART000001")
-        self.assertEqual(again.status, "REJECTED")
-        self.assertIn("already been used", again.reason)
-        self.assertIn("added to your credit", again.reason)
-
-    def test_overview_reports_live_amount_due_and_hides_stale_attempts(self):
-        self.add("PART000001", "1"); self.add("USED000001", "1")
-        self.submit("PART000001")
-        self.submit("PART000001")                                    # REJECTED replay
-        d = self.overview()
-        self.assertEqual(Decimal(d["open_invoice"]["amount_due"]), Decimal("2"))
-        self.assertEqual(Decimal(d["open_invoice"]["credit_applied"]), Decimal("1"))
-        self.assertEqual(Decimal(d["credit_balance"]), Decimal("1"))
-        statuses = [r["status"] for r in d["manual_requests"]]
-        self.assertNotIn("PARTIAL", statuses)                       # covered by amount_due, not a stored message
-        self.assertEqual(statuses, ["REJECTED"])
-        self.assertEqual(d["credit_entries"][0]["kind"], "TOPUP")
-
-    def test_old_rejections_drop_off_the_page(self):
-        self.add("PART000001", "1")
-        self.submit("PART000001"); self.submit("PART000001")
-        ManualPaymentRequest.objects.filter(status="REJECTED").update(
-            created_at=timezone.now() - timedelta(days=2))
-        self.assertEqual(self.overview()["manual_requests"], [])
-
-    def test_credit_covering_a_term_pays_without_a_code_over_http(self):
-        self.add("BIG0000001", "20"); self.submit("BIG0000001")     # 3 paid, 17 credit
-        c = Client(); c.force_login(self.owner)
-        from tenants.context import set_current_tenant
-        set_current_tenant(self.tenant)
-        from django.test import RequestFactory
-        from billing.views import ManualPaymentView
-        req = RequestFactory().post("/billing/manual-payment/", json.dumps({"term_months": 6}),
-                                    content_type="application/json")
-        req.user, req.tenant = self.owner, self.tenant
-        r = ManualPaymentView.as_view()(req)
-        body = json.loads(r.content)
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(body["status"], "APPROVED")
-        from billing.pricing import quote
-        six = quote(6, include_install_fee=False)["total"]                 # install fee already paid
-        self.assertEqual(Decimal(body["credit_balance"]), Decimal("17") - six)
-
-    def test_notifications_for_part_payment_extra_credit_and_credit_renewal(self):
-        from notifications.models import Notification
-        self.add("PART000001", "1"); self.add("OVER000001", "10")
-        self.submit("PART000001"); self.submit("OVER000001")
-        titles = set(Notification.objects.filter(tenant=self.tenant).values_list("title", flat=True))
-        self.assertIn("Part payment received", titles)
-        self.assertIn("Credit added to your account", titles)
-        msg = Notification.objects.get(tenant=self.tenant, title="Credit added to your account").message
-        self.assertEqual(msg, "KES 8 extra is kept as credit and will be deducted from your next invoice.")
-        services.issue_invoice(self.tenant, 1, include_install_fee=False)
-        self.assertTrue(Notification.objects.filter(tenant=self.tenant,
-                                                    title="Invoice paid from your credit").exists())
-
-
-# ---------------------------------------------------------------------------------------------
-# Subscription receipts
-# ---------------------------------------------------------------------------------------------
-import unittest
-
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
-from django.test import RequestFactory
+from django.test import Client, RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
-from billing import receipts
-from billing.models import Receipt
+from billing import paystack, receipts, services
+from billing.models import (BillingCredit, BillingEvent, Invoice, PaystackPayment, Receipt,
+                            Subscription)
+from tenants.models import Tenant
 
 try:
     import reportlab  # noqa: F401
@@ -512,15 +24,527 @@ try:
 except ImportError:                                              # pragma: no cover
     HAVE_REPORTLAB = False
 
+User = get_user_model()
 
+KEY = "sk_test_secret"
+# KES 1 a month + KES 2 install fee = a first invoice of KES 3: small numbers keep the arithmetic readable.
+PRICES = {"MONTHLY_PRICE": Decimal("1"), "INSTALL_FEE": Decimal("2")}
+SETTINGS = dict(BILLING=PRICES, PAYSTACK_SECRET_KEY=KEY)
+CALLBACK = "https://testserver/billing/paystack/callback/"
+
+
+def make_shop(name="Shop A", email="a@example.com", term=1):
+    tenant = Tenant.objects.create(name=name, slug=name.lower().replace(" ", "-"),
+                                   phone="0712000000", email=email)
+    owner = User.objects.create_user(username=email, email=email, password="pw", tenant=tenant,
+                                     is_owner=True, role="ADMIN")
+    _sub, invoice = services.start_subscription(tenant, term)
+    return tenant, owner, invoice
+
+
+def charge(reference, amount, status="success", currency="KES"):
+    """What Paystack returns from /transaction/verify (and sends as webhook `data`)."""
+    return {"id": 4099260516, "reference": reference, "status": status, "currency": currency,
+            "amount": int(Decimal(str(amount)) * 100), "channel": "mobile_money",
+            "gateway_response": "Successful" if status == "success" else "Declined"}
+
+
+def start_payment(tenant, invoice, email="a@example.com"):
+    """Open a (mocked) Paystack checkout for what the shop owes on `invoice`."""
+    def fake_init(**kw):
+        return {"authorization_url": f"https://checkout.paystack.com/{kw['reference']}",
+                "access_code": "acc_1", "reference": kw["reference"]}
+    with mock.patch("billing.paystack.initialize_transaction", side_effect=fake_init):
+        return services.initiate_paystack_payment(invoice, email=email, callback_url=CALLBACK)
+
+
+def pay(tenant, invoice, amount=None, status="success"):
+    """Checkout + Paystack reporting `status` for `amount` (default: exactly what was asked)."""
+    payment = start_payment(tenant, invoice)
+    services.settle_paystack_transaction(charge(payment.reference, amount or payment.amount, status))
+    payment.refresh_from_db()
+    return payment
+
+
+def sign(body, key=KEY):
+    return hmac.new(key.encode(), body, hashlib.sha512).hexdigest()
+
+
+# --------------------------------------------------------------------------------------------
+class PaystackClientTests(TestCase):
+    def test_amounts_are_converted_to_and_from_cents(self):
+        self.assertEqual(paystack.to_subunit(Decimal("1499")), 149900)
+        self.assertEqual(paystack.to_subunit(Decimal("1499.50")), 149950)
+        self.assertEqual(paystack.to_subunit("0.01"), 1)
+        self.assertEqual(paystack.from_subunit(149950), Decimal("1499.50"))
+
+    @override_settings(PAYSTACK_SECRET_KEY=KEY)
+    def test_signature_check(self):
+        body = b'{"event":"charge.success"}'
+        self.assertTrue(paystack.valid_signature(body, sign(body)))
+        self.assertTrue(paystack.valid_signature(body, sign(body).upper()))
+        self.assertFalse(paystack.valid_signature(body, sign(body, key="other")))
+        self.assertFalse(paystack.valid_signature(body + b" ", sign(body)))     # body was altered
+        self.assertFalse(paystack.valid_signature(body, ""))
+        self.assertFalse(paystack.valid_signature(body, None))
+
+    @override_settings(PAYSTACK_SECRET_KEY="")
+    def test_nothing_is_valid_when_no_key_is_configured(self):
+        body = b"{}"
+        self.assertFalse(paystack.valid_signature(body, sign(body, key="")))
+        self.assertFalse(paystack.is_configured())
+        with self.assertRaises(paystack.PaystackError):
+            paystack.verify_transaction("ref")
+
+    @override_settings(PAYSTACK_SECRET_KEY=KEY)
+    def test_initialize_sends_the_right_request(self):
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = {"status": True, "data": {"authorization_url": "https://x", "reference": "R1"}}
+        with mock.patch("billing.paystack.requests.request", return_value=resp) as call:
+            out = paystack.initialize_transaction(email="a@b.co", amount=Decimal("1499"), reference="R1",
+                                                  callback_url=CALLBACK, currency="KES", metadata={"invoice": "INV-1"})
+        self.assertEqual(out["authorization_url"], "https://x")
+        (method, url), kw = call.call_args
+        self.assertEqual((method, url), ("POST", "https://api.paystack.co/transaction/initialize"))
+        self.assertEqual(kw["headers"]["Authorization"], f"Bearer {KEY}")
+        self.assertEqual(kw["json"]["amount"], 149900)
+        self.assertEqual(kw["json"]["currency"], "KES")
+        self.assertEqual(kw["json"]["callback_url"], CALLBACK)
+
+    @override_settings(PAYSTACK_SECRET_KEY=KEY)
+    def test_errors_become_friendly_messages(self):
+        bad_key = mock.Mock(status_code=401)
+        bad_key.json.return_value = {"status": False, "message": "Invalid key"}
+        with mock.patch("billing.paystack.requests.request", return_value=bad_key):
+            with self.assertRaises(paystack.PaystackError) as cm:
+                paystack.verify_transaction("R1")
+        self.assertNotIn("Invalid key", str(cm.exception))          # config problems aren't shown to shops
+        with mock.patch("billing.paystack.requests.request", side_effect=requests.ConnectionError("down")):
+            with self.assertRaises(paystack.PaystackError):
+                paystack.verify_transaction("R1")
+
+
+# --------------------------------------------------------------------------------------------
+@override_settings(**SETTINGS)
+class SettlementTests(TestCase):
+    def setUp(self):
+        self.tenant, self.owner, self.invoice = make_shop()
+        self.assertEqual(self.invoice.total, Decimal("3"))
+
+    def fresh(self):
+        return Tenant.objects.get(pk=self.tenant.pk)
+
+    def test_successful_payment_activates_the_subscription(self):
+        payment = pay(self.tenant, self.invoice)
+        self.assertEqual(payment.status, PaystackPayment.Status.SUCCESS)
+        self.assertEqual(payment.paid_amount, Decimal("3"))
+        self.assertEqual(payment.channel, "mobile_money")
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Invoice.Status.PAID)
+        sub = Subscription.objects.get(tenant=self.tenant)
+        self.assertEqual(sub.status, Subscription.Status.ACTIVE)
+        self.assertTrue(self.fresh().has_access)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("0"))
+
+    def test_repeated_webhooks_and_callbacks_credit_only_once(self):
+        payment = pay(self.tenant, self.invoice)
+        for _ in range(3):
+            services.settle_paystack_transaction(charge(payment.reference, "3"))
+        self.assertEqual(BillingCredit.objects.filter(kind="TOPUP", tenant=self.tenant).count(), 1)
+        self.assertEqual(Receipt.objects.filter(invoice=self.invoice).count(), 1)
+        self.assertEqual(self.tenant.billing_events.filter(type="invoice.payment_succeeded").count(), 1)
+
+    def test_the_amount_asked_for_is_the_amount_due_after_credit(self):
+        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("1"), kind="ADJUSTMENT")
+        payment = start_payment(self.tenant, self.invoice)
+        self.assertEqual(payment.amount, Decimal("2"))
+        self.assertTrue(payment.reference.startswith(self.invoice.number))
+        self.assertEqual(payment.currency, "KES")
+
+    def test_part_payment_is_kept_as_credit_until_the_rest_arrives(self):
+        first = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(first.reference, "1"))      # Paystack collected only 1
+        self.assertFalse(self.fresh().has_access)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("1"))
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Invoice.Status.OPEN)
+        self.assertEqual(services.amount_due(self.invoice), Decimal("2"))
+        self.assertTrue(self.tenant.billing_events.filter(type="paystack.partial").exists())
+
+        second = start_payment(self.tenant, self.invoice)
+        self.assertEqual(second.amount, Decimal("2"))
+        services.settle_paystack_transaction(charge(second.reference, "2"))
+        self.assertTrue(self.fresh().has_access)
+        self.assertEqual(Receipt.objects.get(invoice=self.invoice).payment_reference,
+                         f"{first.reference}, {second.reference}")
+
+    def test_overpayment_pays_the_invoice_and_keeps_the_surplus(self):
+        payment = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(payment.reference, "10"))
+        self.assertTrue(self.fresh().has_access)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("7"))
+        event = self.tenant.billing_events.get(type="paystack.credit_carried")
+        self.assertEqual(Decimal(str(event.payload["credit"])), Decimal("7"))
+
+    def test_surplus_credit_pays_the_next_invoice_automatically(self):
+        payment = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(payment.reference, "10"))
+        nxt = services.issue_invoice(self.tenant, 1, include_install_fee=False)
+        self.assertEqual(nxt.status, Invoice.Status.PAID)
+        self.assertEqual(Receipt.objects.get(invoice=nxt).payment_method, Receipt.Method.CREDIT)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("6"))
+
+    def test_declined_payment_changes_nothing_and_tells_the_shop(self):
+        payment = pay(self.tenant, self.invoice, status="failed")
+        self.assertEqual(payment.status, PaystackPayment.Status.FAILED)
+        self.assertFalse(self.fresh().has_access)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("0"))
+        self.assertTrue(self.tenant.billing_events.filter(type="invoice.payment_failed").exists())
+
+    def test_abandoned_checkout_is_quiet_but_can_still_succeed_later(self):
+        payment = pay(self.tenant, self.invoice, status="abandoned")
+        self.assertEqual(payment.status, PaystackPayment.Status.CANCELLED)
+        self.assertFalse(self.tenant.billing_events.filter(type="invoice.payment_failed").exists())
+        services.settle_paystack_transaction(charge(payment.reference, "3"))    # customer paid after all
+        self.assertTrue(self.fresh().has_access)
+
+    def test_unfinished_payment_stays_waiting(self):
+        payment = pay(self.tenant, self.invoice, status="ongoing")
+        self.assertEqual(payment.status, PaystackPayment.Status.INITIATED)
+        self.assertFalse(self.fresh().has_access)
+
+    def test_unknown_reference_is_ignored(self):
+        self.assertIsNone(services.settle_paystack_transaction(charge("NOT-OURS", "3")))
+        self.assertFalse(self.fresh().has_access)
+
+    def test_wrong_currency_is_never_credited(self):
+        payment = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(payment.reference, "3", currency="USD"))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaystackPayment.Status.FAILED)
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("0"))
+        self.assertTrue(self.tenant.billing_events.filter(type="paystack.mismatch").exists())
+
+    def test_payment_started_on_a_replaced_invoice_still_pays_the_current_one(self):
+        payment = start_payment(self.tenant, self.invoice)                      # owner is on Paystack's page...
+        new = services.issue_invoice(self.tenant, 1, include_install_fee=True)  # ...meanwhile the term changes
+        three = services.issue_invoice(self.tenant, 3)
+        self.assertEqual(Invoice.objects.get(pk=self.invoice.pk).status, Invoice.Status.VOID)
+        services.settle_paystack_transaction(charge(payment.reference, "3"))    # money is real
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("3"))
+        three.refresh_from_db()
+        self.assertEqual(three.status, Invoice.Status.OPEN)                     # 3 months costs more than 3
+        self.assertEqual(services.amount_due(three), three.total - 3)
+
+    def test_renewal_extends_from_the_current_period_end(self):
+        pay(self.tenant, self.invoice)
+        sub = Subscription.objects.get(tenant=self.tenant)
+        end = sub.current_period_end
+        renewal = services.issue_invoice(self.tenant, 1, include_install_fee=False)
+        pay(self.tenant, renewal)
+        sub.refresh_from_db()
+        self.assertEqual(sub.current_period_end, services.add_months(end, 1))
+
+    def test_payment_after_lockout_reactivates(self):
+        pay(self.tenant, self.invoice)
+        sub = Subscription.objects.get(tenant=self.tenant)
+        end = sub.current_period_end
+        services.run_billing_cycle(now=end + timedelta(hours=1))        # past due
+        services.run_billing_cycle(now=end + timedelta(days=6))         # grace over: locked
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, Subscription.Status.SUSPENDED)
+        renewal = Invoice.objects.get(tenant=self.tenant, status=Invoice.Status.OPEN)
+        pay(self.tenant, renewal)
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, Subscription.Status.ACTIVE)
+        self.assertTrue(self.tenant.billing_events.filter(type="subscription.reactivated").exists())
+
+    # ---- starting a checkout
+    def test_cannot_start_checkout_for_a_paid_invoice(self):
+        pay(self.tenant, self.invoice)
+        self.invoice.refresh_from_db()
+        with self.assertRaises(services.BillingError):
+            start_payment(self.tenant, self.invoice)
+
+    def test_checkout_needs_an_email_for_paystack(self):
+        with self.assertRaises(services.BillingError):
+            services.initiate_paystack_payment(self.invoice, email="", callback_url=CALLBACK)
+
+    def test_nothing_to_pay_when_credit_covers_the_invoice(self):
+        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("50"), kind="ADJUSTMENT")
+        invoice = services.issue_invoice(self.tenant, 1)             # paid from credit on issue
+        self.assertEqual(invoice.status, Invoice.Status.PAID)
+
+    def test_paystack_errors_surface_as_billing_errors(self):
+        with mock.patch("billing.paystack.initialize_transaction",
+                        side_effect=paystack.PaystackError("We couldn't reach the payment provider.")):
+            with self.assertRaises(services.BillingError):
+                services.initiate_paystack_payment(self.invoice, email="a@example.com", callback_url=CALLBACK)
+        self.assertEqual(PaystackPayment.objects.count(), 0)
+
+    # ---- reconciliation
+    def test_reconcile_settles_payments_whose_webhook_never_came(self):
+        payment = start_payment(self.tenant, self.invoice)
+        PaystackPayment.objects.filter(pk=payment.pk).update(created_at=timezone.now() - timedelta(hours=1))
+        with mock.patch("billing.paystack.verify_transaction",
+                        return_value=charge(payment.reference, "3")):
+            self.assertEqual(services.reconcile_paystack_payments(), 1)
+        self.assertTrue(self.fresh().has_access)
+
+    def test_reconcile_leaves_fresh_payments_alone(self):
+        start_payment(self.tenant, self.invoice)                     # just now: the owner may still be paying
+        with mock.patch("billing.paystack.verify_transaction") as verify:
+            self.assertEqual(services.reconcile_paystack_payments(), 0)
+        verify.assert_not_called()
+
+
+# --------------------------------------------------------------------------------------------
+@override_settings(**SETTINGS)
+class ViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
+        self.tenant, self.owner, self.invoice = make_shop()
+
+    def call(self, view, method, path="/x/", user=None, tenant=None, data=None, json_body=None, **kwargs):
+        rf = RequestFactory()
+        if json_body is not None:
+            req = getattr(rf, method)(path, json.dumps(json_body), content_type="application/json")
+        else:
+            req = getattr(rf, method)(path, data or {})
+        req.user = user or self.owner
+        req.tenant = tenant or self.tenant
+        return view.as_view()(req, **kwargs)
+
+    # ---- checkout
+    def test_checkout_returns_the_paystack_page_to_open(self):
+        from billing.views import CheckoutView
+        def fake_init(**kw):
+            self.assertEqual(kw["email"], "a@example.com")
+            self.assertEqual(kw["amount"], Decimal("3"))
+            self.assertTrue(kw["callback_url"].endswith("/billing/paystack/callback/"))
+            return {"authorization_url": "https://checkout.paystack.com/abc", "access_code": "abc",
+                    "reference": kw["reference"]}
+        with mock.patch("billing.paystack.initialize_transaction", side_effect=fake_init):
+            r = self.call(CheckoutView, "post", data={"term_months": "1"})
+        body = json.loads(r.content)
+        self.assertEqual(r.status_code, 201, body)
+        self.assertEqual(body["authorization_url"], "https://checkout.paystack.com/abc")
+        self.assertEqual(body["invoice"], self.invoice.number)
+        self.assertEqual(PaystackPayment.objects.get(reference=body["reference"]).tenant, self.tenant)
+
+    def test_checkout_accepts_json_and_defaults_to_the_open_invoice_term(self):
+        from billing.views import CheckoutView
+        with mock.patch("billing.paystack.initialize_transaction",
+                        side_effect=lambda **kw: {"authorization_url": "https://checkout.paystack.com/z",
+                                                  "reference": kw["reference"]}):
+            r = self.call(CheckoutView, "post", json_body={})
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(json.loads(r.content)["invoice"], self.invoice.number)
+
+    def test_checkout_without_a_secret_key_is_a_clear_error(self):
+        from billing.views import CheckoutView
+        with override_settings(PAYSTACK_SECRET_KEY=""):
+            r = self.call(CheckoutView, "post", data={"term_months": "1"})
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(json.loads(r.content)["code"], "paystack_unconfigured")
+
+    def test_checkout_bad_term_is_a_400(self):
+        from billing.views import CheckoutView
+        r = self.call(CheckoutView, "post", data={"term_months": "7"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_checkout_pays_straight_from_credit_when_it_covers_the_term(self):
+        from billing.views import CheckoutView
+        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("50"), kind="ADJUSTMENT")
+        with mock.patch("billing.paystack.initialize_transaction") as init:
+            r = self.call(CheckoutView, "post", data={"term_months": "1"})
+        init.assert_not_called()
+        body = json.loads(r.content)
+        self.assertEqual((r.status_code, body["status"]), (200, "PAID"))
+        self.assertTrue(body["receipt_url"].endswith("/receipt/"))
+
+    def test_only_the_shop_owner_can_start_a_payment(self):
+        from billing.views import CheckoutView
+        cashier = User.objects.create_user(username="c@example.com", email="c@example.com", password="pw",
+                                           tenant=self.tenant, role="CASHIER")
+        with self.assertRaises(PermissionDenied):
+            self.call(CheckoutView, "post", user=cashier, data={"term_months": "1"})
+
+    # ---- webhook
+    def webhook(self, event, signature="valid", client=None):
+        body = json.dumps(event).encode()
+        sig = sign(body) if signature == "valid" else signature
+        return (client or Client()).post("/billing/paystack/webhook/", body, content_type="application/json",
+                                         HTTP_X_PAYSTACK_SIGNATURE=sig)
+
+    def test_signed_webhook_activates_the_shop(self):
+        payment = start_payment(self.tenant, self.invoice)
+        r = self.webhook({"event": "charge.success", "data": charge(payment.reference, "3")})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
+
+    def test_unsigned_or_badly_signed_webhooks_are_refused_and_do_nothing(self):
+        payment = start_payment(self.tenant, self.invoice)
+        event = {"event": "charge.success", "data": charge(payment.reference, "3")}
+        for sig in ("", "deadbeef", sign(b"something else")):
+            self.assertEqual(self.webhook(event, signature=sig).status_code, 401)
+        self.assertFalse(Tenant.objects.get(pk=self.tenant.pk).has_access)
+        PaystackPayment.objects.get(pk=payment.pk)                              # untouched
+        self.assertEqual(PaystackPayment.objects.get(pk=payment.pk).status, PaystackPayment.Status.INITIATED)
+
+    def test_webhook_ignores_other_events_and_bad_json(self):
+        payment = start_payment(self.tenant, self.invoice)
+        r = self.webhook({"event": "transfer.success", "data": charge(payment.reference, "3")})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(Tenant.objects.get(pk=self.tenant.pk).has_access)
+        body = b"not json"
+        r = Client().post("/billing/paystack/webhook/", body, content_type="application/json",
+                          HTTP_X_PAYSTACK_SIGNATURE=sign(body))
+        self.assertEqual(r.status_code, 400)
+
+    def test_webhook_for_an_unknown_reference_is_acknowledged(self):
+        r = self.webhook({"event": "charge.success", "data": charge("SOMEONE-ELSES", "3")})
+        self.assertEqual(r.status_code, 200)
+
+    def test_webhook_works_without_a_csrf_token_or_login(self):
+        client = Client(enforce_csrf_checks=True)
+        payment = start_payment(self.tenant, self.invoice)
+        r = self.webhook({"event": "charge.success", "data": charge(payment.reference, "3")}, client=client)
+        self.assertEqual(r.status_code, 200)
+
+    # ---- return from Paystack
+    def test_callback_verifies_with_paystack_instead_of_trusting_the_url(self):
+        from billing.views import PaystackCallbackView
+        payment = start_payment(self.tenant, self.invoice)
+        with mock.patch("billing.paystack.verify_transaction", return_value=charge(payment.reference, "3")):
+            r = self.call(PaystackCallbackView, "get", path=f"/billing/paystack/callback/?reference={payment.reference}")
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r["Location"], f"/billing/?paystack=success&ref={payment.reference}")
+        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
+
+    def test_callback_with_a_cancelled_checkout_reports_failure(self):
+        from billing.views import PaystackCallbackView
+        payment = start_payment(self.tenant, self.invoice)
+        with mock.patch("billing.paystack.verify_transaction",
+                        return_value=charge(payment.reference, "3", status="abandoned")):
+            r = self.call(PaystackCallbackView, "get", path=f"/x/?trxref={payment.reference}")
+        self.assertIn("paystack=failed", r["Location"])
+        self.assertFalse(Tenant.objects.get(pk=self.tenant.pk).has_access)
+
+    def test_callback_when_paystack_is_unreachable_says_pending(self):
+        from billing.views import PaystackCallbackView
+        payment = start_payment(self.tenant, self.invoice)
+        with mock.patch("billing.paystack.verify_transaction", side_effect=paystack.PaystackError("down")):
+            r = self.call(PaystackCallbackView, "get", path=f"/x/?reference={payment.reference}")
+        self.assertIn("paystack=pending", r["Location"])
+
+    def test_callback_ignores_other_shops_references(self):
+        from billing.views import PaystackCallbackView
+        other, _owner, other_invoice = make_shop("Shop B", "b@example.com")
+        theirs = start_payment(other, other_invoice, email="b@example.com")
+        with mock.patch("billing.paystack.verify_transaction") as verify:
+            r = self.call(PaystackCallbackView, "get", path=f"/x/?reference={theirs.reference}")
+        verify.assert_not_called()
+        self.assertIn("paystack=unknown", r["Location"])
+
+    def test_status_endpoint_rechecks_a_waiting_payment(self):
+        from billing.views import PaymentStatusView
+        payment = start_payment(self.tenant, self.invoice)
+        with mock.patch("billing.paystack.verify_transaction", return_value=charge(payment.reference, "3")):
+            r = self.call(PaymentStatusView, "get", reference=payment.reference)
+        body = json.loads(r.content)
+        self.assertEqual((body["outcome"], body["has_access"]), ("success", True))
+        self.assertEqual(body["receipt_url"], f"/billing/invoices/{self.invoice.number}/receipt/")
+
+    def test_status_endpoint_is_private_to_the_shop(self):
+        from billing.views import PaymentStatusView
+        other, _owner, other_invoice = make_shop("Shop B", "b@example.com")
+        theirs = start_payment(other, other_invoice, email="b@example.com")
+        with self.assertRaises(Http404):
+            self.call(PaymentStatusView, "get", reference=theirs.reference)
+
+    # ---- billing page
+    def overview(self):
+        from billing.views import BillingOverviewView
+        req = RequestFactory().get("/billing/", headers={"Accept": "application/json"})
+        req.user, req.tenant = self.owner, self.tenant
+        return json.loads(BillingOverviewView.as_view()(req).content)
+
+    def test_overview_json_is_paystack_only(self):
+        d = self.overview()
+        self.assertTrue(d["paystack_enabled"])
+        self.assertFalse(d["pending_payment"])
+        self.assertEqual(d["open_invoice"]["number"], self.invoice.number)
+        for retired in ("stk_enabled", "stk_message", "manual_pay", "manual_requests"):
+            self.assertNotIn(retired, d)
+        start_payment(self.tenant, self.invoice)
+        self.assertTrue(self.overview()["pending_payment"])
+
+    def test_overview_reports_live_amount_due_and_credit_entries(self):
+        payment = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(payment.reference, "1"))
+        d = self.overview()
+        self.assertEqual(Decimal(d["open_invoice"]["amount_due"]), Decimal("2"))
+        self.assertEqual(Decimal(d["open_invoice"]["credit_applied"]), Decimal("1"))
+        self.assertEqual(d["credit_entries"][0]["paystack_payment__reference"], payment.reference)
+
+    def test_billing_template_compiles_and_has_no_mpesa_leftovers(self):
+        from django.template.loader import get_template
+        html = get_template("billing/overview.html").template.source
+        self.assertIn("Pay with Paystack", html)
+        self.assertNotIn("manual-pay.js", html)
+        self.assertNotIn("M-Pesa confirmation code", html)
+
+    def test_notifications_for_part_payment_and_extra_credit(self):
+        from notifications.models import Notification
+        first = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(first.reference, "1"))
+        second = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(second.reference, "10"))
+        titles = set(Notification.objects.filter(tenant=self.tenant).values_list("title", flat=True))
+        self.assertIn("Part payment received", titles)
+        self.assertIn("Credit added to your account", titles)
+
+    # ---- platform admin
+    def test_platform_payments_page_and_list(self):
+        c = Client(); c.force_login(self.admin)
+        page = c.get("/platform/payments/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "platform-payments.js")
+        self.assertNotContains(page, "Add a received payment")
+        pay(self.tenant, self.invoice)
+        data = c.get("/platform/payments/api/").json()
+        self.assertTrue(data["configured"])
+        self.assertEqual(Decimal(str(data["summary"]["all_time_total"])), Decimal("3"))
+        self.assertEqual(data["payments"][0]["tenant"], "Shop A")
+
+    def test_platform_recheck_settles_a_stuck_payment(self):
+        c = Client(); c.force_login(self.admin)
+        payment = start_payment(self.tenant, self.invoice)
+        with mock.patch("billing.paystack.verify_transaction", return_value=charge(payment.reference, "3")):
+            r = c.post(f"/platform/payments/api/{payment.pk}/recheck/")
+        self.assertEqual((r.status_code, r.json()["status"]), (200, "SUCCESS"))
+        self.assertTrue(Tenant.objects.get(pk=self.tenant.pk).has_access)
+
+    def test_platform_payment_pages_need_a_superuser(self):
+        pay(self.tenant, self.invoice)                              # an active shop owner, but not a superuser
+        c = Client(); c.force_login(self.owner)
+        self.assertEqual(c.get("/platform/payments/").status_code, 403)
+        self.assertEqual(c.get("/platform/payments/api/").status_code, 403)
+        self.assertEqual(c.post("/platform/payments/api/1/recheck/").status_code, 403)
+
+
+# --------------------------------------------------------------------------------------------
+# Subscription receipts
+# --------------------------------------------------------------------------------------------
+@override_settings(**SETTINGS)
 class ReceiptTestBase(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(username="root", email="r@x.com", password="pw")
         self.tenant, self.owner, self.invoice = make_shop()          # 1 month = KES 3 incl. install fee
 
-    def pay(self, code="SJK3L9X2QP", amount="3"):
-        manual.register_mpesa_code(by=self.admin, code=code, amount=amount)
-        return manual.submit_manual_payment(self.tenant, user=self.owner, invoice=self.invoice, raw_code=code)
+    def pay(self, amount=None):
+        return pay(self.tenant, self.invoice, amount=amount)
 
     def get(self, view, user, path="/x/", **kwargs):
         req = RequestFactory().get(path)
@@ -532,31 +556,25 @@ class ReceiptTests(ReceiptTestBase):
 
     # ---- creation
     def test_paying_creates_one_receipt_with_the_payment_details(self):
-        self.pay()
+        payment = self.pay()
         r = Receipt.objects.get(invoice=self.invoice)
         self.assertTrue(r.number.startswith("RCT-"))
         self.assertEqual((r.tenant, r.amount), (self.tenant, Decimal("3")))
-        self.assertEqual(r.payment_method, Receipt.Method.MPESA_MANUAL)
-        self.assertEqual(r.payment_reference, "SJK3L9X2QP")
+        self.assertEqual(r.payment_method, Receipt.Method.PAYSTACK)
+        self.assertEqual(r.payment_reference, payment.reference)
         self.assertEqual(r.customer_name, "Shop A")
         self.assertIsNone(r.generated_by)
 
     def test_marking_paid_again_never_makes_a_second_receipt(self):
-        self.pay()
+        payment = self.pay()
         self.invoice.refresh_from_db()
-        services.mark_invoice_paid(self.invoice, receipt="SJK3L9X2QP")
+        services.mark_invoice_paid(self.invoice, receipt=payment.reference)
         receipts.issue_receipt(self.invoice)
         self.assertEqual(Receipt.objects.filter(invoice=self.invoice).count(), 1)
 
-    def test_part_payments_list_every_code(self):
-        self.pay("PART000001", "1")
-        self.pay("PART000002", "2")
-        r = Receipt.objects.get(invoice=self.invoice)
-        self.assertEqual(r.payment_reference, "PART000001, PART000002")
-        self.assertEqual(r.amount, Decimal("3"))
-
     def test_invoice_paid_from_credit_is_marked_as_credit(self):
-        self.pay("BIG0000001", "20")
+        payment = start_payment(self.tenant, self.invoice)
+        services.settle_paystack_transaction(charge(payment.reference, "20"))
         nxt = services.issue_invoice(self.tenant, 1, include_install_fee=False)
         self.assertEqual(nxt.status, Invoice.Status.PAID)
         self.assertEqual(Receipt.objects.get(invoice=nxt).payment_method, Receipt.Method.CREDIT)
@@ -571,11 +589,23 @@ class ReceiptTests(ReceiptTestBase):
             receipts.issue_receipt(self.invoice)
 
     def test_old_paid_invoice_gets_its_receipt_on_demand(self):
-        self.pay()
+        payment = self.pay()
         Receipt.objects.all().delete()
         self.invoice.refresh_from_db()
         r = receipts.issue_receipt(self.invoice, generated_by=self.admin)
-        self.assertEqual((r.payment_reference, r.generated_by), ("SJK3L9X2QP", self.admin))
+        self.assertEqual((r.payment_method, r.payment_reference, r.generated_by),
+                         (Receipt.Method.PAYSTACK, payment.reference, self.admin))
+
+    def test_receipts_for_invoices_paid_with_legacy_mpesa_still_work(self):
+        from billing.models import MpesaCode
+        code = MpesaCode.objects.create(code="SJK3L9X2QP", amount=Decimal("3"), sender_name="JOHN DOE",
+                                        sender_phone="0712345678")
+        BillingCredit.objects.create(tenant=self.tenant, amount=Decimal("3"), kind="TOPUP",
+                                     mpesa_code=code, invoice=self.invoice)
+        services.mark_invoice_paid(self.invoice, receipt="SJK3L9X2QP")
+        r = Receipt.objects.get(invoice=self.invoice)
+        self.assertEqual((r.payment_method, r.payment_reference),
+                         (Receipt.Method.MPESA_MANUAL, "SJK3L9X2QP"))
 
     # ---- shop download
     @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
@@ -598,17 +628,6 @@ class ReceiptTests(ReceiptTestBase):
         req.user, req.tenant = other_owner, other
         with self.assertRaises(Http404):                                  # someone else's invoice
             InvoiceReceiptView.as_view()(req, number=self.invoice.number)
-
-    def test_manual_payment_response_links_to_the_receipt(self):
-        from billing.views import ManualPaymentView
-        manual.register_mpesa_code(by=self.admin, code="SJK3L9X2QP", amount="3")
-        req = RequestFactory().post("/billing/manual-payment/",
-                                    json.dumps({"code": "SJK3L9X2QP", "term_months": 1}),
-                                    content_type="application/json")
-        req.user, req.tenant = self.owner, self.tenant
-        body = json.loads(ManualPaymentView.as_view()(req).content)
-        self.assertEqual(body["status"], "APPROVED")
-        self.assertEqual(body["receipt_url"], f"/billing/invoices/{self.invoice.number}/receipt/")
 
     # ---- platform admin
     @unittest.skipUnless(HAVE_REPORTLAB, "reportlab not installed")
@@ -674,7 +693,7 @@ class ReceiptVerificationTests(ReceiptTestBase):
         self.assertEqual(len({new_verify_code() for _ in range(200)}), 200)
 
     def test_verify_page_shows_the_record_but_not_private_details(self):
-        self.pay()
+        payment = self.pay()
         r = Receipt.objects.get(invoice=self.invoice)
         for typed in (r.verify_code, r.verify_code_display, r.verify_code.lower()):
             resp = self.verify(typed)
@@ -684,7 +703,7 @@ class ReceiptVerificationTests(ReceiptTestBase):
             self.assertIn(r.number, html)
             self.assertIn("Shop A", html)                             # two short words: nothing to mask
             self.assertNotIn("0712000000", html)                      # shop phone
-            self.assertNotIn("SJK3L9X2QP", html)                      # M-Pesa code
+            self.assertNotIn(payment.reference, html)                 # payment reference
 
     def test_unknown_code_is_a_404_page(self):
         resp = self.verify("ABCDEFGHJKLM")

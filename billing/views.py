@@ -1,9 +1,9 @@
-import hmac
 import json
+import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
-from django.db.models import Q
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -20,10 +20,24 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import conf, manual, receipts, services
-from .models import BillingCredit, Invoice, ManualPaymentRequest, MpesaPayment, Receipt
-from .mpesa import MpesaError
+from . import conf, paystack, receipts, services
+from .models import BillingCredit, Invoice, PaystackPayment, Receipt
 from .pricing import quote_table
+from .utils import read_payload
+
+logger = logging.getLogger(__name__)
+
+
+def _overview_url(**params):
+    base = reverse("billing:billing-overview")
+    return f"{base}?{urlencode(params)}" if params else base
+
+
+def _callback_url(request):
+    """Where Paystack sends the owner back to. BILLING_CALLBACK_BASE_URL overrides the host (ngrok in dev)."""
+    path = reverse("billing:paystack-callback")
+    base = (getattr(settings, "BILLING_CALLBACK_BASE_URL", "") or "").rstrip("/")
+    return f"{base}{path}" if base else request.build_absolute_uri(path)
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -34,13 +48,6 @@ class BillingOverviewView(OwnerRequiredMixin, View):
         open_invoice = Invoice.objects.filter(tenant=tenant, status=Invoice.Status.OPEN).first()
         balance = services.credit_balance(tenant)
         due = services.amount_due(open_invoice) if open_invoice else None
-        # Only attempts that still need the shop's attention: anything waiting for us, plus
-        # recent rejections. Part payments live in the open invoice's amount_due, and approved
-        # ones need no follow-up, so neither is listed (their old messages went stale).
-        recent = timezone.now() - timedelta(hours=24)
-        attempts = ManualPaymentRequest.objects.filter(tenant=tenant).filter(
-            Q(status=ManualPaymentRequest.Status.PENDING)
-            | Q(status=ManualPaymentRequest.Status.REJECTED, created_at__gte=recent))
         payload = {
             "status": sub.status,
             "has_access": tenant.has_access,
@@ -64,95 +71,100 @@ class BillingOverviewView(OwnerRequiredMixin, View):
             "credit_balance": balance,
             "credit_entries": list(BillingCredit.objects.filter(tenant=tenant).values(
                 "id", "kind", "amount", "note", "created_at", "invoice__number",
-                "mpesa_code__code")[:8]),
-            "stk_enabled": conf.get("STK_PUSH_ENABLED"),
-            "stk_message": conf.get("STK_PUSH_MESSAGE"),
-            "manual_pay": {
-                "enabled": conf.get("MANUAL_PAYMENTS_ENABLED"),
-                "label": conf.get("MANUAL_PAY_LABEL"),
-                "number": conf.get("MANUAL_PAY_NUMBER"),
-                "name": conf.get("MANUAL_PAY_NAME"),
-            },
-            "manual_requests": list(attempts.values(
-                "id", "code", "status", "reason", "created_at", "invoice__number")[:5]),
+                "paystack_payment__reference", "mpesa_code__code")[:8]),
+            "paystack_enabled": paystack.is_configured(),
+            "pending_payment": bool(PaystackPayment.objects.filter(
+                tenant=tenant, status=PaystackPayment.Status.INITIATED,
+                created_at__gte=timezone.now() - timedelta(hours=2)).exists()),
         }
         return html_or_json(request, "billing/overview.html", payload)
 
 
-@method_decorator(ratelimit(key="user", rate="6/m", method="POST", block=True), name="post")
-class CheckoutView(OwnerRequiredMixin, View):
-    """POST term_months + phone -> M-Pesa prompt on the owner's phone."""
-
-    def post(self, request):
-        tenant = request.tenant
-        if not conf.get("STK_PUSH_ENABLED"):
-            # Checked first so a blocked attempt doesn't issue or void any invoices.
-            return JsonResponse({"error": conf.get("STK_PUSH_MESSAGE"), "code": "stk_unavailable"},
-                                status=400)
-        try:
-            term = int(request.POST.get("term_months") or tenant.subscription.term_months)
-            invoice = services.issue_invoice(tenant, term)
-            payment = services.initiate_stk_payment(invoice, request.POST.get("phone", ""))
-        except (ValueError, services.BillingError) as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
-        except MpesaError as exc:
-            return JsonResponse({"error": str(exc)}, status=502)
-        return JsonResponse({"payment_id": payment.pk, "invoice": invoice.number,
-                             "amount": invoice.total, "status": payment.status}, status=201)
-
-
 @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True), name="post")
-class ManualPaymentView(OwnerRequiredMixin, View):
-    """POST code (+ optional term_months) -> approve against the codes listed in platform admin."""
+class CheckoutView(OwnerRequiredMixin, View):
+    """
+    POST term_months -> a Paystack checkout for what the shop owes. Reply: {authorization_url}
+    to send the browser to. If the shop's credit already covers the term, the invoice is paid
+    straight away and the reply says so (no Paystack involved).
+    """
 
     def post(self, request):
         tenant = request.tenant
         try:
-            data = manual.read_payload(request)
+            data = read_payload(request)
             term = data.get("term_months")
             if term in (None, ""):
                 open_invoice = Invoice.objects.filter(tenant=tenant, status=Invoice.Status.OPEN).first()
                 term = open_invoice.term_months if open_invoice else tenant.subscription.term_months
             invoice = services.issue_invoice(tenant, int(term))
-            if invoice.status == Invoice.Status.PAID:          # credit alone covered it
-                req = None
-            else:
-                req = manual.submit_manual_payment(tenant, user=request.user, invoice=invoice,
-                                                   raw_code=data.get("code", ""))
+
+            if invoice.status == Invoice.Status.PAID:           # credit alone covered it
+                return JsonResponse({
+                    "status": "PAID", "invoice": invoice.number,
+                    "receipt_url": reverse("billing:invoice-receipt", args=[invoice.number])})
+
+            if not paystack.is_configured():
+                return JsonResponse({"error": "Online payment isn't set up yet. Please contact support.",
+                                     "code": "paystack_unconfigured"}, status=503)
+            email = (tenant.email or getattr(request.user, "email", "") or "").strip()
+            payment = services.initiate_paystack_payment(
+                invoice, email=email, callback_url=_callback_url(request))
         except (ValueError, services.BillingError) as exc:
             return JsonResponse({"error": str(exc)}, status=400)
-
-        fresh = Tenant.objects.select_related("subscription").get(pk=tenant.pk)
-        invoice.refresh_from_db()
-        status = req.status if req else ManualPaymentRequest.Status.APPROVED
-        reason = req.reason if req else "Paid from your credit."
-
-        receipt_url = None
-        if status == ManualPaymentRequest.Status.APPROVED:
-            paid = req.invoice if req else invoice        # settling may have swapped in the current invoice
-            paid.refresh_from_db()
-            if paid.status == Invoice.Status.PAID:
-                receipt_url = reverse("billing:invoice-receipt", args=[paid.number])
         return JsonResponse({
-            "status": status, "reason": reason, "invoice": invoice.number,
-            "has_access": fresh.has_access, "period_end": fresh.subscription.current_period_end,
-            "credit_balance": services.credit_balance(tenant),
-            "amount_due": services.amount_due(invoice),
-            "receipt_url": receipt_url,
-        }, status=422 if status == ManualPaymentRequest.Status.REJECTED else 200)
+            "status": "REDIRECT", "authorization_url": payment.authorization_url,
+            "reference": payment.reference, "invoice": invoice.number, "amount": payment.amount,
+        }, status=201)
 
 
+def _outcome(payment):
+    if payment.status == PaystackPayment.Status.SUCCESS:
+        return "success"
+    if payment.status in (PaystackPayment.Status.FAILED, PaystackPayment.Status.CANCELLED):
+        return "failed"
+    return "pending"
+
+
+class PaystackCallbackView(OwnerRequiredMixin, View):
+    """
+    Paystack sends the owner's browser here after checkout (?reference=...). The query string is
+    never trusted: we ask Paystack for the real result, then bounce back to the billing page.
+    """
+
+    def get(self, request):
+        reference = (request.GET.get("reference") or request.GET.get("trxref") or "").strip()
+        payment = PaystackPayment.objects.filter(reference=reference, tenant=request.tenant).first() \
+            if reference else None
+        if payment is None:
+            return HttpResponseRedirect(_overview_url(paystack="unknown"))
+        try:
+            payment = services.verify_paystack_payment(payment)
+        except paystack.PaystackError:
+            return HttpResponseRedirect(_overview_url(paystack="pending", ref=payment.reference))
+        return HttpResponseRedirect(_overview_url(paystack=_outcome(payment), ref=payment.reference))
+
+
+@method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True), name="get")
 class PaymentStatusView(OwnerRequiredMixin, View):
-    """Front-end polls this every ~3s after the STK prompt."""
+    """The billing page polls this for a few seconds after returning from Paystack."""
 
-    def get(self, request, pk):
-        payment = get_object_or_404(MpesaPayment.objects.select_related("invoice"),
-                                    pk=pk, tenant=request.tenant)
+    def get(self, request, reference):
+        payment = get_object_or_404(PaystackPayment.objects.select_related("invoice"),
+                                    reference=reference, tenant=request.tenant)
+        if payment.status == PaystackPayment.Status.INITIATED:
+            try:
+                payment = services.verify_paystack_payment(payment)
+            except paystack.PaystackError:
+                pass                                          # still waiting; the page asks again
         receipt_url = None
-        if payment.status == MpesaPayment.Status.SUCCESS and payment.invoice.status == Invoice.Status.PAID:
-            receipt_url = reverse("billing:invoice-receipt", args=[payment.invoice.number])
-        return JsonResponse({"status": payment.status, "result_desc": payment.result_desc,
-                             "has_access": request.tenant.has_access, "receipt_url": receipt_url})
+        if payment.status == PaystackPayment.Status.SUCCESS:
+            invoice = Invoice.objects.filter(pk=payment.invoice_id, status=Invoice.Status.PAID).first()
+            if invoice:
+                receipt_url = reverse("billing:invoice-receipt", args=[invoice.number])
+        fresh = Tenant.objects.select_related("subscription").get(pk=request.tenant.pk)   # settling may have just activated it
+        return JsonResponse({"status": payment.status, "outcome": _outcome(payment),
+                             "reason": payment.gateway_response,
+                             "has_access": fresh.has_access, "receipt_url": receipt_url})
 
 
 class InvoiceReceiptView(OwnerRequiredMixin, View):
@@ -172,23 +184,24 @@ class InvoiceReceiptView(OwnerRequiredMixin, View):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-class MpesaCallbackView(View):
+class PaystackWebhookView(View):
     """
-    Daraja's STK callbacks are unsigned, so we defend in layers: secret query token,
-    exact CheckoutRequestID match against a payment WE initiated, amount check,
-    and idempotency.
+    Paystack's server-to-server notification (set this URL in the Paystack dashboard).
+    Authenticated by the x-paystack-signature header: HMAC-SHA512 of the raw body with our
+    secret key. Anything unsigned or wrongly signed is refused before it is even parsed.
     """
 
     def post(self, request):
-        token = request.GET.get("token", "")
-        if not hmac.compare_digest(token, settings.MPESA_BILLING_CALLBACK_SECRET):
-            raise Http404
+        if not paystack.valid_signature(request.body, request.headers.get("x-paystack-signature", "")):
+            return HttpResponse(status=401)
         try:
-            payload = json.loads(request.body)
+            event = json.loads(request.body)
         except ValueError:
-            payload = {}
-        services.handle_stk_callback(payload)
-        return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})  # always ack
+            return HttpResponse(status=400)
+        if isinstance(event, dict) and event.get("event") == "charge.success":
+            # An error here returns 500 on purpose: Paystack retries, so a payment is never lost.
+            services.settle_paystack_transaction(event.get("data") or {}, source="webhook")
+        return HttpResponse(status=200)
 
 
 def locked_view(request):

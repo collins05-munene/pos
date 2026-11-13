@@ -8,7 +8,7 @@ from django.views import View
 from django.shortcuts import render, redirect
 
 from billing import services
-from billing.models import BillingEvent, Invoice, ManualPaymentRequest, MpesaPayment
+from billing.models import BillingEvent, Invoice, PaystackPayment
 from tenants.middleware import SUPPORT_SESSION_KEY
 from tenants.models import Tenant
 from .metrics import platform_overview
@@ -66,11 +66,9 @@ class TenantDetailView(SuperuserRequiredMixin, View):
                              "override_note": sub.override_note},
             "invoices": list(Invoice.objects.filter(tenant=t).values(
                 "number", "status", "total", "term_months", "issued_at", "paid_at")[:20]),
-            "payments": list(MpesaPayment.objects.filter(tenant=t).values(
-                "mpesa_receipt", "amount", "status", "created_at")[:20]),
+            "payments": list(PaystackPayment.objects.filter(tenant=t).values(
+                "reference", "amount", "paid_amount", "channel", "status", "created_at")[:20]),
             "credit_balance": services.credit_balance(t),
-            "manual_payments": list(ManualPaymentRequest.objects.filter(tenant=t).values(
-                "code", "status", "reason", "created_at")[:20]),
             "events": list(BillingEvent.objects.filter(tenant=t).values("type", "payload", "created_at")[:30]),
         })
 

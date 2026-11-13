@@ -10,11 +10,7 @@ urlpatterns = [
 
     path("payments/", payment_views.PaymentsPageView.as_view(), name="payments"),
     path("payments/api/", payment_views.PaymentsListView.as_view(), name="payments-api"),
-    path("payments/api/parse/", payment_views.PaymentParseView.as_view(), name="payments-parse"),
-    path("payments/api/add/", payment_views.PaymentAddView.as_view(), name="payments-add"),
-    path("payments/api/codes/<int:pk>/void/", payment_views.PaymentVoidView.as_view(), name="payments-void"),
-    path("payments/api/requests/<int:pk>/<slug:action>/", payment_views.RequestActionView.as_view(),
-         name="payments-request-action"),
+    path("payments/api/<int:pk>/recheck/", payment_views.PaymentRecheckView.as_view(), name="payments-recheck"),
 
     path("resets/", reset_views.ResetsPageView.as_view(), name="resets"),
     path("resets/api/", reset_views.ResetsListView.as_view(), name="resets-api"),

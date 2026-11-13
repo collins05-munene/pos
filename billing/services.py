@@ -1,18 +1,17 @@
 import logging
+import uuid
 from calendar import monthrange
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 from operator import sub
 
-from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum
-from django.urls import reverse
 from django.utils import timezone
 
-from . import conf, mpesa
-from .models import BillingCredit, BillingEvent, Invoice, MpesaPayment, Subscription
+from . import conf, paystack
+from .models import BillingCredit, BillingEvent, Invoice, PaystackPayment, Subscription
 from .pricing import quote, _kes
 from .receipts import issue_receipt
 from .signals import billing_event
@@ -176,8 +175,12 @@ def amount_due(invoice):
     return max(invoice.total - credit_balance(invoice.tenant), Decimal("0"))
 
 
-def apply_credit(invoice):
-    """Pay `invoice` from the shop's credit if the credit fully covers it. Returns the invoice."""
+def apply_credit(invoice, *, reference="credit"):
+    """
+    Pay `invoice` from the shop's credit if the credit fully covers it. Returns the invoice.
+    `reference` is what the receipt records as the payment reference ("credit" for a plain
+    credit renewal, or the Paystack reference that just topped the credit up).
+    """
     with transaction.atomic():
         # Lock the subscription row: serialises everything that touches this shop's credit.
         Subscription.objects.select_for_update().get(tenant_id=invoice.tenant_id)
@@ -188,93 +191,172 @@ def apply_credit(invoice):
             return invoice
         BillingCredit.objects.create(tenant=invoice.tenant, amount=-invoice.total,
                                      kind=BillingCredit.Kind.APPLIED, invoice=invoice)
-        mark_invoice_paid(invoice, receipt="credit")
+        mark_invoice_paid(invoice, receipt=reference)
         record_event("invoice.paid_from_credit", invoice.tenant, invoice=invoice.number,
                      total=invoice.total)
         invoice.refresh_from_db()
     return invoice
 
 
-def initiate_stk_payment(invoice, phone):
-    if not conf.get("STK_PUSH_ENABLED"):
-        raise BillingError(conf.get("STK_PUSH_MESSAGE"))
+def _new_reference(invoice):
+    return f"{invoice.number}-{uuid.uuid4().hex[:10]}"
+
+
+def initiate_paystack_payment(invoice, *, email, callback_url):
+    """
+    Open a Paystack checkout for what the shop still owes on `invoice` (total minus credit).
+    Returns the saved PaystackPayment; send the owner to its `authorization_url`.
+    Raises BillingError (safe to show) when the invoice can't be paid this way.
+    """
     if invoice.status != Invoice.Status.OPEN:
         raise BillingError("This invoice is not payable.")
-        
-    msisdn = mpesa.normalize_phone(phone)
+    if not email:
+        raise BillingError("Add an email address to your shop profile first: Paystack needs it "
+                           "to send your payment receipt.")
+    due = amount_due(invoice)
+    if due <= 0:
+        raise BillingError("Your credit already covers this invoice.")
 
-    base_domain = getattr(
-        settings, 
-        "BILLING_CALLBACK_BASE_URL", 
-        "https://9e4c-154-159-252-56.ngrok-free.app"
-    ).rstrip("/")
-    
-    callback_path = reverse("billing:mpesa-callback")
-    full_callback_url = f"{base_domain}{callback_path}?token={settings.MPESA_BILLING_CALLBACK_SECRET}"
-
-    resp = mpesa.stk_push(
-        phone=msisdn,
-        amount=invoice.total,
-        account_reference=str(invoice.number),
-        description="Subscription",
-        callback_url=full_callback_url,
-    )
-
-    return MpesaPayment.objects.create(
-        invoice=invoice,
-        tenant=invoice.tenant,
-        phone=msisdn,
-        amount=invoice.total,
-        merchant_request_id=resp.get("MerchantRequestID", ""),
-        checkout_request_id=resp["CheckoutRequestID"],
-    )
-
-
-def handle_stk_callback(payload):
-    """
-    Idempotent handler for Daraja's STK result. Safaricom retries and callbacks
-    can arrive twice, so a payment is only ever processed once.
-    """
+    reference = _new_reference(invoice)
+    currency = conf.get("CURRENCY")
     try:
-        data = mpesa.parse_stk_callback(payload)
-    except (KeyError, TypeError, ValueError):
-        logger.warning("Malformed M-Pesa callback ignored")
-        return None
+        data = paystack.initialize_transaction(
+            email=email, amount=due, reference=reference, callback_url=callback_url,
+            currency=currency,
+            metadata={"tenant_id": invoice.tenant_id, "tenant": invoice.tenant.slug,
+                      "invoice": invoice.number})
+    except paystack.PaystackError as exc:
+        raise BillingError(str(exc)) from exc
 
+    return PaystackPayment.objects.create(
+        invoice=invoice, tenant=invoice.tenant, reference=data.get("reference") or reference,
+        amount=due, currency=currency, payer_email=email,
+        authorization_url=data.get("authorization_url", ""), access_code=data.get("access_code", ""),
+    )
+
+
+def settle_paystack_transaction(data, *, source="webhook"):
+    """
+    Idempotent. Takes a Paystack transaction object (from a signed webhook or from our own
+    verify call) and, if it is a successful payment we started, adds the money to the shop's
+    credit and pays the invoice when the credit covers it. Callbacks, webhooks and retries can
+    all arrive more than once; a payment is only ever credited once.
+    Returns the PaystackPayment (or None for a reference we don't know).
+    """
+    reference = (data or {}).get("reference") or ""
+    status = (data or {}).get("status") or ""
     with transaction.atomic():
-        payment = (MpesaPayment.objects.select_for_update(of=("self",))
-                   .select_related("invoice", "tenant")
-                   .filter(checkout_request_id=data["checkout_request_id"]).first())
+        payment = (PaystackPayment.objects.select_for_update(of=("self",))
+                   .select_related("invoice", "tenant").filter(reference=reference).first())
         if payment is None:
-            logger.warning("Callback for unknown CheckoutRequestID %s", data["checkout_request_id"])
+            logger.warning("Paystack %s for unknown reference %r", source, reference)
             return None
-        if payment.status != MpesaPayment.Status.INITIATED:
-            return payment 
+        if payment.status == PaystackPayment.Status.SUCCESS:
+            return payment                                   # already credited
 
         now = timezone.now()
-        payment.result_code = data["result_code"]
-        payment.result_desc = data["result_desc"][:255]
-        payment.raw_callback = payload
-        payment.completed_at = now
+        payment.raw_event = data
+        payment.channel = (data.get("channel") or "")[:30]
+        payment.gateway_response = (data.get("gateway_response") or "")[:255]
+        if data.get("id"):
+            payment.paystack_id = data["id"]
 
-        if data["result_code"] == 0:
-            paid = Decimal(str(data["items"].get("Amount", 0)))
-            payment.mpesa_receipt = data["items"].get("MpesaReceiptNumber")
-            payment.status = MpesaPayment.Status.SUCCESS
+        if status != "success":
+            if status == "failed":
+                payment.status = PaystackPayment.Status.FAILED
+                payment.completed_at = now
+                payment.save()
+                record_event("invoice.payment_failed", payment.tenant, invoice=payment.invoice.number,
+                             reason=payment.gateway_response or "declined", reference=reference)
+            elif status in ("abandoned", "reversed"):
+                payment.status = PaystackPayment.Status.CANCELLED
+                payment.completed_at = now
+                payment.save()
+            else:                                            # ongoing / pending / queued: not final yet
+                payment.save()
+            return payment
+
+        # --- success ---------------------------------------------------------------------
+        paid = paystack.from_subunit(data.get("amount") or 0)
+        if (data.get("currency") or payment.currency) != payment.currency or paid <= 0:
+            payment.status = PaystackPayment.Status.FAILED
+            payment.completed_at = now
             payment.save()
-            if paid < payment.invoice.total:
-                record_event("invoice.payment_underpaid", payment.tenant,
-                             invoice=payment.invoice.number, expected=payment.invoice.total,
-                             received=paid, receipt=payment.mpesa_receipt)
-            else:
-                mark_invoice_paid(payment.invoice, paid_at=now, receipt=payment.mpesa_receipt)
+            record_event("paystack.mismatch", payment.tenant, reference=reference,
+                         currency=data.get("currency"), amount=paid)
+            logger.error("Paystack %s succeeded with unexpected currency/amount: %r", reference, data)
+            return payment
+
+        payment.status = PaystackPayment.Status.SUCCESS
+        payment.paid_amount = paid
+        payment.completed_at = now
+        payment.save()
+        if paystack.to_subunit(paid) != paystack.to_subunit(payment.amount):
+            record_event("paystack.amount_differs", payment.tenant, reference=reference,
+                         expected=payment.amount, received=paid)
+
+        tenant = payment.tenant
+        Subscription.objects.select_for_update().get(tenant_id=tenant.pk)   # serialise credit changes
+        before = credit_balance(tenant)
+
+        # The invoice may have been replaced while the owner was on Paystack's page (they changed
+        # term, or a renewal was issued). The money is real: put it toward whatever is open now.
+        target = Invoice.objects.select_for_update().get(pk=payment.invoice_id)
+        if target.status != Invoice.Status.OPEN:
+            target = (Invoice.objects.select_for_update()
+                      .filter(tenant=tenant, status=Invoice.Status.OPEN).first())
+
+        BillingCredit.objects.create(
+            tenant=tenant, amount=paid, kind=BillingCredit.Kind.TOPUP, paystack_payment=payment,
+            invoice=target, note=f"Paystack {reference}")
+        record_event("paystack.payment_received", tenant, reference=reference, amount=paid,
+                     channel=payment.channel, source=source)
+
+        if target is None:
+            record_event("paystack.credit_carried", tenant, reference=reference, credit=credit_balance(tenant))
+            return payment
+
+        target = apply_credit(target, reference=reference)
+        if target.status == Invoice.Status.PAID:
+            extra = paid - max(target.total - before, Decimal("0"))
+            if extra > 0:
+                record_event("paystack.credit_carried", tenant, reference=reference,
+                             invoice=target.number, credit=extra)
         else:
-            payment.status = (MpesaPayment.Status.CANCELLED if data["result_code"] == 1032
-                              else MpesaPayment.Status.FAILED)
-            payment.save()
-            record_event("invoice.payment_failed", payment.tenant, invoice=payment.invoice.number,
-                         code=data["result_code"], reason=data["result_desc"])
+            record_event("paystack.partial", tenant, reference=reference, invoice=target.number,
+                         received=paid, still_due=amount_due(target))
     return payment
+
+
+def verify_paystack_payment(payment):
+    """Ask Paystack what happened to `payment` and settle it. Returns the refreshed payment."""
+    try:
+        data = paystack.verify_transaction(payment.reference)
+    except paystack.PaystackError:
+        payment.refresh_from_db()
+        raise
+    settled = settle_paystack_transaction(data, source="verify")
+    return settled or payment
+
+
+def reconcile_paystack_payments(*, min_age_minutes=5, max_age_days=3):
+    """
+    Safety net for a missed webhook or an owner who never came back: re-check payments still
+    marked as waiting. Run from the daily billing job. Returns how many were settled.
+    """
+    now = timezone.now()
+    stale = PaystackPayment.objects.filter(
+        status=PaystackPayment.Status.INITIATED,
+        created_at__lte=now - timedelta(minutes=min_age_minutes),
+        created_at__gte=now - timedelta(days=max_age_days))
+    done = 0
+    for payment in stale:
+        try:
+            if verify_paystack_payment(payment).status != PaystackPayment.Status.INITIATED:
+                done += 1
+        except paystack.PaystackError:
+            logger.warning("Could not re-check Paystack payment %s", payment.reference)
+    return done
 
 
 def _issue_receipt_safely(invoice, reference):
@@ -296,7 +378,7 @@ def mark_invoice_paid(invoice, *, paid_at=None, receipt=None):
     Extend the subscription. Also accepts VOID invoices: if the customer paid a
     prompt we'd since replaced, the money is real, so honour it.
     A Receipt is created for the invoice at the same time (`receipt` here is the payment
-    reference: an M-Pesa code, or "credit").
+    reference: a Paystack reference, or "credit").
     -> events `invoice.payment_succeeded`, plus `subscription.activated` /
        `subscription.reactivated` when relevant.
     """
@@ -407,7 +489,7 @@ def set_custom_price(tenant, *, monthly_price, by, note=""):
 
 
 def run_billing_cycle(now=None):
-    """Idempotent; run daily. M-Pesa can't auto-debit, so 'renewal' = open an invoice + notify."""
+    """Idempotent; run daily. Payment is always initiated by the shop, so 'renewal' = open an invoice + notify."""
     now = now or timezone.now()
     S = Subscription.Status
     stats = defaultdict(int)

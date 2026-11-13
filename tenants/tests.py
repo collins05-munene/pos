@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from billing import services
-from billing.models import Invoice, MpesaPayment, Subscription
+from billing.models import Invoice, Subscription
 from billing.pricing import quote
 from inventory.models import Branch
 from tenants.context import tenant_context
@@ -26,13 +26,26 @@ def signup(**over):
     return register_business(**{**SIGNUP, **over})
 
 
-def callback(checkout_id, amount, code=0, receipt="RCP123"):
-    body = {"MerchantRequestID": "m1", "CheckoutRequestID": checkout_id, "ResultCode": code,
-            "ResultDesc": "ok" if code == 0 else "Request cancelled by user"}
-    if code == 0:
-        body["CallbackMetadata"] = {"Item": [{"Name": "Amount", "Value": float(amount)},
-                                             {"Name": "MpesaReceiptNumber", "Value": receipt}]}
-    return {"Body": {"stkCallback": body}}
+def charge(reference, amount, status="success"):
+    """What Paystack sends (webhook `data`) / returns (verify) for a transaction. Amount in KES."""
+    return {"id": 4099260516, "reference": reference, "status": status, "currency": "KES",
+            "amount": int(Decimal(str(amount)) * 100), "channel": "mobile_money",
+            "gateway_response": "Successful" if status == "success" else "Declined"}
+
+
+def paystack_init(reference):
+    return {"authorization_url": f"https://checkout.paystack.com/{reference}",
+            "access_code": "acc_123", "reference": reference}
+
+
+def webhook_post(client, event, key="sk_test_secret"):
+    """POST a correctly signed Paystack webhook."""
+    import hashlib
+    import hmac
+    body = json.dumps(event).encode()
+    sig = hmac.new(key.encode(), body, hashlib.sha512).hexdigest()
+    return client.post("/billing/paystack/webhook/", body, content_type="application/json",
+                       HTTP_X_PAYSTACK_SIGNATURE=sig)
 
 
 class IsolationTests(TestCase):
@@ -84,12 +97,12 @@ class BillingFlowTests(TestCase):
         from tenants.models import Tenant
         return Tenant.objects.get(pk=self.tenant.pk)
 
-    def _pay(self, amount=None, code=0, receipt="RCP123"):
-        with mock.patch("billing.mpesa.stk_push",
-                        return_value={"MerchantRequestID": "m1", "CheckoutRequestID": f"ws_CO_{receipt}"}):
-            payment = services.initiate_stk_payment(self.invoice, "0712345678")
-        services.handle_stk_callback(callback(payment.checkout_request_id,
-                                              amount or self.invoice.total, code, receipt))
+    def _pay(self, amount=None, status="success", receipt="RCP123"):
+        ref = f"{self.invoice.number}-{receipt}"
+        with mock.patch("billing.paystack.initialize_transaction", return_value=paystack_init(ref)):
+            payment = services.initiate_paystack_payment(
+                self.invoice, email="njeri@example.com", callback_url="https://testserver/billing/paystack/callback/")
+        services.settle_paystack_transaction(charge(payment.reference, amount or payment.amount, status))
         return payment
 
     def test_first_invoice_includes_install_fee(self):
@@ -99,7 +112,7 @@ class BillingFlowTests(TestCase):
 
     def test_payment_activates_and_is_idempotent(self):
         p = self._pay()
-        services.handle_stk_callback(callback(p.checkout_request_id, self.invoice.total))  # duplicate
+        services.settle_paystack_transaction(charge(p.reference, self.invoice.total))  # duplicate webhook
         sub = Subscription.objects.get(tenant=self.tenant)
         self.assertEqual(sub.status, "ACTIVE")
         self.assertTrue(self.fresh.has_access)
@@ -110,12 +123,13 @@ class BillingFlowTests(TestCase):
         nxt = services.issue_invoice(self.tenant, 1)
         self.assertEqual(nxt.total, Decimal("1499"))
 
-    def test_cancelled_prompt_and_underpayment_do_not_activate(self):
-        self._pay(code=1032, receipt="A")
+    def test_abandoned_checkout_and_part_payment_do_not_activate(self):
+        self._pay(status="abandoned", receipt="A")
         self.assertFalse(self.fresh.has_access)
-        self._pay(amount=100, receipt="B")
+        self._pay(amount=100, receipt="B")                     # Paystack collected only KES 100
         self.assertFalse(self.fresh.has_access)
-        self.assertTrue(self.tenant.billing_events.filter(type="invoice.payment_underpaid").exists())
+        self.assertTrue(self.tenant.billing_events.filter(type="paystack.partial").exists())
+        self.assertEqual(services.credit_balance(self.tenant), Decimal("100"))
 
     def test_lapse_grace_then_lockout_then_reactivation(self):
         self._pay()
@@ -146,7 +160,7 @@ class BillingFlowTests(TestCase):
         self.assertTrue(Subscription.objects.get(tenant=self.tenant).grants_access())
 
 
-@override_settings(TENANCY_ALLOW_NULL_TENANT=False)
+@override_settings(TENANCY_ALLOW_NULL_TENANT=False, PAYSTACK_SECRET_KEY="sk_test_secret")
 class HttpTests(TestCase):
     def test_signup_gate_callback_and_platform(self):
         resp = self.client.post("/signup/", data=json.dumps({**SIGNUP, "phone": "0712345678"}),
@@ -158,16 +172,18 @@ class HttpTests(TestCase):
         tenant = User.objects.get(username="njeri@example.com").tenant
         # unpaid owner: billing reachable, everything else locked
         self.assertEqual(self.client.get("/billing/").status_code, 200)
-        with mock.patch("billing.mpesa.stk_push",
-                        return_value={"MerchantRequestID": "m", "CheckoutRequestID": "ws_1"}):
-            r = self.client.post("/billing/checkout/", {"term_months": 3, "phone": "0712345678"})
+        with mock.patch("billing.paystack.initialize_transaction", side_effect=lambda **kw: paystack_init(kw["reference"])):
+            r = self.client.post("/billing/checkout/", {"term_months": 3})
         self.assertEqual(r.status_code, 201, r.content)
-        bad = self.client.post("/billing/mpesa/callback/wrong/", json.dumps(callback("ws_1", 6148)),
-                               content_type="application/json")
-        self.assertEqual(bad.status_code, 404)
-        ok = self.client.post("/billing/mpesa/callback/topsecret/", json.dumps(callback("ws_1", 6148)),
-                              content_type="application/json")
-        self.assertEqual(ok.json()["ResultCode"], 0)
+        self.assertTrue(r.json()["authorization_url"].startswith("https://checkout.paystack.com/"))
+        reference = r.json()["reference"]
+        event = {"event": "charge.success", "data": charge(reference, 6148)}
+        bad = self.client.post("/billing/paystack/webhook/", json.dumps(event), content_type="application/json",
+                               HTTP_X_PAYSTACK_SIGNATURE="not-a-real-signature")
+        self.assertEqual(bad.status_code, 401)
+        self.assertFalse(tenant.has_access)
+        ok = webhook_post(self.client, event)
+        self.assertEqual(ok.status_code, 200)
         tenant.refresh_from_db()
         self.assertTrue(tenant.has_access)
         self.assertEqual(self.client.get("/platform/").status_code, 403)  # paid, but not a superuser

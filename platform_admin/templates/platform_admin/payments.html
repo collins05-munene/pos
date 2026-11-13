@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Payments -- UniSale Systems</title>
+<title>Paystack payments -- UniSale Systems</title>
 <link rel="stylesheet" href="{% static 'duka/css/duka.css' %}">
 <style>
   .wrap.pf { max-width: 960px; }
@@ -18,8 +18,8 @@
   .ok-text { color: #1b7f3b; font-size: 13px; margin-top: 8px; }
   .mono { font-family: var(--mono, monospace); }
   .chip { font-size: 11.5px; padding: 2px 7px; border-radius: 10px; border: 1px solid currentColor; }
-  .chip.UNUSED, .chip.APPROVED { color: #1b7f3b; } .chip.USED { color: #555; }
-  .chip.VOID, .chip.REJECTED { color: #b3261e; } .chip.PENDING { color: #a15c00; }
+  .chip.SUCCESS { color: #1b7f3b; } .chip.CANCELLED { color: #555; }
+  .chip.FAILED { color: #b3261e; } .chip.INITIATED { color: #a15c00; }
   .tbl-wrap { overflow-x: auto; }
   @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
@@ -39,58 +39,33 @@
 <main>
   <div class="wrap pf"
        data-api="{% url 'platform_admin:payments-api' %}"
-       data-parse="{% url 'platform_admin:payments-parse' %}"
-       data-add="{% url 'platform_admin:payments-add' %}"
-       data-codes-base="{% url 'platform_admin:payments-api' %}codes/"
-       data-requests-base="{% url 'platform_admin:payments-api' %}requests/">
-    <h1>M-Pesa payments</h1>
-    <p class="lede">Paste each M-Pesa "received" message here. When a shop types that code on its billing page, its subscription is approved automatically.</p>
+       data-recheck-base="{% url 'platform_admin:payments-api' %}">
+    <h1>Paystack payments</h1>
+    <p class="lede">Shops pay their subscriptions through Paystack. A payment switches the account on automatically; nothing to enter here. If one looks stuck, press Re-check to ask Paystack directly.</p>
+    <div class="err-text" id="cfg-warning" hidden>PAYSTACK_SECRET_KEY is not set on this server, so shops can't pay yet.</div>
 
     <div class="kpis">
-      <div class="kpi"><div class="label">Unused codes</div><div class="value" id="kpi-unused">--</div></div>
-      <div class="kpi"><div class="label">Unused total</div><div class="value" id="kpi-total">--</div></div>
-      <div class="kpi"><div class="label">Waiting requests</div><div class="value" id="kpi-pending">--</div></div>
+      <div class="kpi"><div class="label">Received this month</div><div class="value" id="kpi-month">--</div></div>
+      <div class="kpi"><div class="label">Payments this month</div><div class="value" id="kpi-month-count">--</div></div>
+      <div class="kpi"><div class="label">All time</div><div class="value" id="kpi-all">--</div></div>
+      <div class="kpi"><div class="label">Waiting on customer</div><div class="value" id="kpi-waiting">--</div></div>
     </div>
 
-    <section class="card" id="add-card">
-      <h2>Add a received payment</h2>
-      <label for="f-message">Paste the M-Pesa message</label>
-      <textarea id="f-message" placeholder="SJK3L9X2QP Confirmed. Ksh1,499.00 received from JOHN DOE 0712345678 on 24/10/26 at 2:15 PM..."></textarea>
-      <div class="row-actions"><button class="secondary" id="read-btn" type="button">Read message</button></div>
-
-      <div class="grid2" style="margin-top:14px;">
-        <div><label for="f-code">M-Pesa code</label><input id="f-code" type="text" maxlength="14" autocomplete="off" class="mono"><div class="err-text" id="e-code"></div></div>
-        <div><label for="f-amount">Amount (KES)</label><input id="f-amount" type="text" inputmode="decimal" autocomplete="off"><div class="err-text" id="e-amount"></div></div>
-        <div><label for="f-name">Sender name (optional)</label><input id="f-name" type="text" autocomplete="off"></div>
-        <div><label for="f-phone">Sender phone (optional)</label><input id="f-phone" type="text" autocomplete="off"></div>
-      </div>
-      <div class="err-text" id="e-form"></div>
-      <div class="row-actions"><button class="primary" id="add-btn" type="button" style="width:auto;">Add to list</button></div>
-      <div class="ok-text" id="add-result" role="status"></div>
-    </section>
-
-    <h2>Waiting for confirmation</h2>
-    <div class="tbl-wrap">
-    <table class="ledger">
-      <thead><tr><th>Shop</th><th>Code</th><th>Invoice</th><th class="num">Due</th><th>Sent</th><th></th></tr></thead>
-      <tbody id="pending-rows"><tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr></tbody>
-    </table>
-    </div>
-
-    <h2 style="margin-top:28px;">Received payments</h2>
     <div class="filter-bar">
-      <input id="search" type="text" placeholder="Search code, sender or shop&hellip;">
-      <select id="state-filter">
-        <option value="UNUSED">Unused</option>
-        <option value="USED">Used</option>
-        <option value="VOID">Voided</option>
+      <input id="search" type="text" placeholder="Search reference, shop, email or invoice&hellip;">
+      <select id="status-filter">
+        <option value="SUCCESS">Paid</option>
+        <option value="INITIATED">Waiting for customer</option>
+        <option value="FAILED">Failed</option>
+        <option value="CANCELLED">Not completed</option>
         <option value="ALL">All</option>
       </select>
     </div>
+    <div class="err-text" id="page-error" role="alert"></div>
     <div class="tbl-wrap">
     <table class="ledger">
-      <thead><tr><th>Code</th><th class="num">Amount</th><th>From</th><th>Added</th><th>Status</th><th></th></tr></thead>
-      <tbody id="code-rows"><tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr></tbody>
+      <thead><tr><th>Date</th><th>Shop</th><th>Invoice</th><th>Reference</th><th>Channel</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+      <tbody id="payment-rows"><tr class="empty-row"><td colspan="8">Loading&hellip;</td></tr></tbody>
     </table>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px;">

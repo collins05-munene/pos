@@ -4,7 +4,7 @@ from . import conf
 
 
 def _kes(value):
-    """M-Pesa STK push only accepts whole shillings."""
+    """Subscription prices are charged in whole shillings."""
     return Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 

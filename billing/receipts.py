@@ -33,6 +33,19 @@ def _payment_details(invoice, reference):
     ref = (reference or "").strip()
     M = Receipt.Method
 
+    # Paystack: every successful payment that went into this invoice (a part payment plus a
+    # top-up, for instance, lists both references).
+    topups = list(BillingCredit.objects
+                  .filter(invoice=invoice, kind=BillingCredit.Kind.TOPUP, paystack_payment__isnull=False)
+                  .select_related("paystack_payment").order_by("created_at", "id"))
+    refs = []
+    for t in topups:
+        if t.paystack_payment.reference not in refs:
+            refs.append(t.paystack_payment.reference)
+    if refs:
+        return M.PAYSTACK, ", ".join(refs), "", ""
+
+    # --- Legacy M-Pesa payments (made before Paystack); old invoices can still ask for a receipt.
     stk = None
     if ref and ref != "credit":
         stk = MpesaPayment.objects.filter(invoice=invoice, mpesa_receipt=ref).first()
@@ -42,17 +55,17 @@ def _payment_details(invoice, reference):
     if stk:
         return M.MPESA_STK, stk.mpesa_receipt or ref, "", stk.phone
 
-    topups = list(BillingCredit.objects
-                  .filter(invoice=invoice, kind=BillingCredit.Kind.TOPUP, mpesa_code__isnull=False)
-                  .select_related("mpesa_code").order_by("created_at", "id"))
+    mtopups = list(BillingCredit.objects
+                   .filter(invoice=invoice, kind=BillingCredit.Kind.TOPUP, mpesa_code__isnull=False)
+                   .select_related("mpesa_code").order_by("created_at", "id"))
     codes = []
-    for t in topups:
+    for t in mtopups:
         if t.mpesa_code.code not in codes:
             codes.append(t.mpesa_code.code)
     if ref and ref != "credit" and ref not in codes:
         codes.append(ref)
     if codes:
-        last = topups[-1].mpesa_code if topups else None
+        last = mtopups[-1].mpesa_code if mtopups else None
         return (M.MPESA_MANUAL, ", ".join(codes),
                 last.sender_name if last else "", last.sender_phone if last else "")
     if ref == "credit":
@@ -233,8 +246,10 @@ def render_receipt_pdf(receipt, base_url=""):
              ("Invoice", invoice.number),
              ("Payment method", receipt.get_payment_method_display())]
     if receipt.payment_reference:
-        facts.append(("M-Pesa reference" if receipt.payment_method != receipt.Method.OTHER else "Reference",
-                      receipt.payment_reference))
+        ref_label = {receipt.Method.PAYSTACK: "Paystack reference",
+                 receipt.Method.MPESA_STK: "M-Pesa reference",
+                 receipt.Method.MPESA_MANUAL: "M-Pesa reference"}.get(receipt.payment_method, "Reference")
+        facts.append((ref_label, receipt.payment_reference))
     if paid_by:
         facts.append(("Paid by", paid_by))
     facts_tbl = Table([[p(k, soft), p(v, right)] for k, v in facts], colWidths=[28 * mm, width * 0.45 - 28 * mm])

@@ -106,7 +106,7 @@ def _clean(name, code, location="", phone=""):
     if code and not CODE_RE.match(code):
         raise ValidationError("Code: 2-10 letters or digits.")
     if phone:
-        from billing.mpesa import normalize_phone
+        from billing.phone import normalize_phone
         try:
             phone = normalize_phone(phone)
         except ValueError as exc:
