@@ -231,6 +231,7 @@ BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL", default="")
 
 PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
 
+
 BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/", "/users/password-reset/"]  
 
 BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
