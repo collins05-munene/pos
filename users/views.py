@@ -36,6 +36,8 @@ def home_for(user):
         return reverse('platform_admin:overview')
     if user.role == User.Roles.CASHIER:
         return reverse('pos_terminal')
+    if user.role == User.Roles.ACCOUNTANT:
+        return reverse('accounting:overview')
     return reverse('admin-dashboard')
 
 

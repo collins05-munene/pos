@@ -193,7 +193,7 @@ class VerifyEmailView(View):
         return redirect("/billing/")
 
 
-ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER")  
+ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER", "ACCOUNTANT")  
 
 def _staff_payload(user):
     return {
@@ -223,7 +223,7 @@ class StaffListView(OwnerRequiredMixin, View):
         credential = request.POST.get("credential") or ""
 
         if role not in ALLOWED_STAFF_ROLES:
-            return JsonResponse({"errors": {"role": ["Choose Cashier or Manager."]}}, status=400)
+            return JsonResponse({"errors": {"role": ["Choose Cashier, Manager or Accountant."]}}, status=400)
 
         form = StaffDetailsForm(request.POST, tenant=request.tenant)
         if not form.is_valid():

@@ -100,103 +100,282 @@
             width: 100%; min-height: 44px; 
         }
     }
+
+    .menu-dropdown-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        background: none;
+        border: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .menu-dropdown-toggle .chevron {
+        font-size: 0.75rem;
+        transition: transform 0.2s ease;
+    }
+
+    .menu-dropdown.open .chevron {
+        transform: rotate(180deg);
+    }
+
+    .submenu {
+        list-style: none;
+        padding-left: 12px;
+        margin: 0;
+        display: none;
+    }
+
+    .menu-dropdown.open .submenu {
+        display: block;
+    }
 </style>
 {% if user.get_role_display == 'Admin' %}
-<aside class="sidebar" id="mainSidebar">
-    <div class="logo">
-        <a href="/" class="logo-link" aria-label="UniSale Systems home">
-            <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
-        </a>
-    </div>
+    <aside class="sidebar" id="mainSidebar">
+        <div class="logo">
+            <a href="/" class="logo-link" aria-label="UniSale Systems home">
+                <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
+            </a>
+        </div>
 
-    <ul class="menu">
-        <li class="menu-title">Dashboard</li>
-        <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
-        {% if onboarding.show_link %}<li><a href="{% url 'onboarding:guide' %}">Setup Guide ({{ onboarding.done_count }}/{{ onboarding.total }})</a></li>{% endif %}
-        <li class="menu-title">Sales</li>
-        <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a href="{% url 'receipt-list' %}">Receipts</a></li>
-        <li><a href="{% url 'refund-list' %}">Refunds</a></li>
-        <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In</a></li>
-        <li class="menu-title">Inventory</li>
-        <li><a href="{% url 'product-list' %}">Products</a></li>
-        <li><a href="{% url 'brand-list' %}">Brands</a></li>
-        <li><a href="{% url 'category-list' %}">Categories</a></li>
-        <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
-        <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
-        <li><a href="{% url 'purchase-order-list' %}">Purchase Orders</a></li>
-        <li><a href="{% url 'transfer-list' %}">Stock Transfer</a></li>
-        <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
-        <li class="menu-title">Register</li>
-        <li><a href="{% url 'open_register' %}">Open Register</a></li>
-        <li><a href="{% url 'close_register' %}">Close Register</a></li>
-        <li class="menu-title">Reports</li>
-        <li><a href="{% url 'sales-dashboard' %}">Sales Report</a></li>
-        <li class="menu-title">Billing</li>
-        <li><a href="{% url 'billing:billing-overview' %}">Billing Overview</a></li>
-        <li class="menu-title">Account</li>
-        <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
-        <li><a href="{% url 'staff:staff-list' %}">Staff</a></li>
-        <li><a href="{% url 'branches:branch-list' %}">Branches</a></li>
-        <li class="menu-title">System</li>
-        <li><a href="{% url 'settings' %}">Settings</a></li>
-        <li><a href="{% url 'discount-list' %}">Discounts</a></li>
-        <li><a href="{% url 'backup-list' %}">Backups</a></li>
-        <li><a href="{% url 'activity-logs' %}">Audit Logs</a></li>
-        <li class="menu-title">Support</li>
-        <li><a href="{% url 'support:home' %}">Help &amp; Support</a></li>
-        <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
-        <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
-        <li><a href="{% url 'support:feature-list' %}">Feature Requests</a></li>
-        <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
-        {% if user.is_staff %}<li><a href="{% url 'support:staff-queue' %}">Support Queue</a></li>{% endif %}
-        <li class="menu-title">Legal Agreements</li>
-        <li><a href="{% url 'terms' %}">Terms of Service</a></li>
-        <li><a href="{% url 'privacy' %}">Privacy Policy</a></li>
-    </ul>
-    <div class="sidebar-footer">
-        <strong>{{ user.username }}</strong>
-        <p>{{ user.get_role_display }}</p>
-        <a href="{% url 'logout' %}">Logout</a>
-    </div>
-</aside>
+        <ul class="menu">
+            <li class="menu-dropdown open">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="true">
+                        <span>Dashboard</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'admin-dashboard' %}">Overview</a></li>
+                    {% if onboarding.show_link %}
+                    <li><a href="{% url 'onboarding:guide' %}">Setup Guide ({{ onboarding.done_count }}/{{ onboarding.total }})</a></li>
+                    {% endif %}
+                </ul>
+            </li>
+
+            <!-- Sales Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Sales</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
+                    <li><a href="{% url 'receipt-list' %}">Receipts</a></li>
+                    <li><a href="{% url 'refund-list' %}">Refunds</a></li>
+                    <li><a onclick="document.getElementById('cashModal').style.display='flex'">Cash In</a></li>
+                </ul>
+            </li>
+
+            <!-- Inventory Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Inventory</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'product-list' %}">Products</a></li>
+                    <li><a href="{% url 'brand-list' %}">Brands</a></li>
+                    <li><a href="{% url 'category-list' %}">Categories</a></li>
+                    <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
+                    <li><a href="{% url 'supplier-list' %}">Suppliers</a></li>
+                    <li><a href="{% url 'purchase-order-list' %}">Purchase Orders</a></li>
+                    <li><a href="{% url 'transfer-list' %}">Stock Transfer</a></li>
+                    <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
+                </ul>
+            </li>
+
+            <!-- Register Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Register</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'open_register' %}">Open Register</a></li>
+                    <li><a href="{% url 'close_register' %}">Close Register</a></li>
+                </ul>
+            </li>
+
+            <!-- Reports Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Reports</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'sales-dashboard' %}">Sales Report</a></li>
+                </ul>
+            </li>
+
+            <!-- Financial Management Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Financial Management</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="#">Financial Overview</a></li>
+                </ul>
+            </li>
+
+            <!-- Billing Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Billing</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'billing:billing-overview' %}">Billing Overview</a></li>
+                </ul>
+            </li>
+
+            <!-- Account Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Account</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
+                    <li><a href="{% url 'staff:staff-list' %}">Staff</a></li>
+                    <li><a href="{% url 'branches:branch-list' %}">Branches</a></li>
+                </ul>
+            </li>
+
+            <!-- System Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>System</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'settings' %}">Settings</a></li>
+                    <li><a href="{% url 'discount-list' %}">Discounts</a></li>
+                    <li><a href="{% url 'backup-list' %}">Backups</a></li>
+                    <li><a href="{% url 'activity-logs' %}">Audit Logs</a></li>
+                </ul>
+            </li>
+
+            <!-- Support Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Support</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'support:home' %}">Help &amp; Support</a></li>
+                    <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
+                    <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
+                    <li><a href="{% url 'support:feature-list' %}">Feature Requests</a></li>
+                    <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
+                    {% if user.is_staff %}<li><a href="{% url 'support:staff-queue' %}">Support Queue</a></li>{% endif %}
+                </ul>
+            </li>
+
+            <!-- Legal Agreements Dropdown -->
+            <li class="menu-dropdown">
+                <div class="menu-title">
+                    <button type="button" class="menu-dropdown-toggle" aria-expanded="false">
+                        <span>Legal Agreements</span>
+                        <span class="chevron">▼</span>
+                    </button>
+                </div>
+                <ul class="submenu">
+                    <li><a href="{% url 'terms' %}">Terms of Service</a></li>
+                    <li><a href="{% url 'privacy' %}">Privacy Policy</a></li>
+                </ul>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <strong>{{ user.username }}</strong>
+            <p>{{ user.get_role_display }}</p>
+            <a href="{% url 'logout' %}">Logout</a>
+        </div>
+    </aside>
+{% elif user.role == 'ACCOUNTANT' %}
+    <aside class="sidebar" id="mainSidebar">
+        <div class="logo">
+            <a href="{% url 'accounting:overview' %}" class="logo-link" aria-label="UniSale Systems home">
+                <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
+            </a>
+        </div>
+        <ul class="menu">
+            <li class="menu-title">Financial Management</li>
+            <li><a href="{% url 'accounting:overview' %}">Financial Overview</a></li>
+            <li class="menu-title">Account</li>
+            <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
+            <li class="menu-title">Support</li>
+            <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
+            <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+            <p>{{ user.get_role_display }}</p>
+            <a href="{% url 'logout' %}">Logout</a>
+        </div>
+    </aside>
 {% else %}
-<aside class="sidebar" id="mainSidebar">
-    <div class="logo">
-        <a href="/" class="logo-link" aria-label="UniSale Systems home">
-            <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
-        </a>
-    </div>
-    <ul class="menu">
-        <li class="menu-title">Sales</li>
-        <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
-        <li><a href="{% url 'receipt-list' %}">Receipts</a></li>
-        <li class="menu-title">Inventory</li>
-        <li><a href="{% url 'product-list' %}">Products</a></li>
-        <li><a href="{% url 'category-list' %}">Categories</a></li>
-        <li><a href="{% url 'brand-list' %}">Brands</a></li>
-        <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
-        <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
-        <li class="menu-title">Register</li>
-        <li><a href="{% url 'close_register' %}">Close Register</a></li>
-        {% if user.role == 'MANAGER' %}
-        <li class="menu-title">Settings</li>
-        <li><a href="{% url 'settings' %}">Settings</a></li>
-        <li><a href="{% url 'discount-list' %}">Discounts</a></li>
-        {% endif %}
-        <li class="menu-title">Account</li>
-        <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
-        <li class="menu-title">Support</li>
-        <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
-        <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
-        <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
-    </ul>
-    <div class="sidebar-footer">
-        <strong>{{ user.first_name }} {{user.last_name}}</strong>
-        <p>{{ user.get_role_display }}</p>
-        <a href="{% url 'logout' %}">Logout</a>
-    </div>
-</aside>
+    <aside class="sidebar" id="mainSidebar">
+        <div class="logo">
+            <a href="/" class="logo-link" aria-label="UniSale Systems home">
+                <img src="{% static 'img/unisale-logo-light.png' %}" alt="UniSale Systems" class="logo-img" width="409" height="141">
+            </a>
+        </div>
+        <ul class="menu">
+            <li class="menu-title">Sales</li>
+            <li><a href="{% url 'pos_terminal' %}">POS Terminal</a></li>
+            <li><a href="{% url 'receipt-list' %}">Receipts</a></li>
+            <li class="menu-title">Inventory</li>
+            <li><a href="{% url 'product-list' %}">Products</a></li>
+            <li><a href="{% url 'category-list' %}">Categories</a></li>
+            <li><a href="{% url 'brand-list' %}">Brands</a></li>
+            <li><a href="{% url 'uom-list' %}">Units of Measure</a></li>
+            <li><a href="{% url 'stock-level-list' %}">Stock Management</a></li>
+            <li class="menu-title">Register</li>
+            <li><a href="{% url 'close_register' %}">Close Register</a></li>
+            {% if user.role == 'MANAGER' %}
+            <li class="menu-title">Settings</li>
+            <li><a href="{% url 'settings' %}">Settings</a></li>
+            <li><a href="{% url 'discount-list' %}">Discounts</a></li>
+            {% endif %}
+            <li class="menu-title">Account</li>
+            <li><a href="{% url 'tenants:my-profile' %}">My Profile</a></li>
+            <li class="menu-title">Support</li>
+            <li><a href="{% url 'support:help-center' %}">Help Center</a></li>
+            <li><a href="{% url 'support:report-issue' %}">Report an Issue</a></li>
+            <li><a href="{% url 'support:ticket-list' %}">My Tickets</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <strong>{{ user.first_name }} {{user.last_name}}</strong>
+            <p>{{ user.get_role_display }}</p>
+            <a href="{% url 'logout' %}">Logout</a>
+        </div>
+    </aside>
 {% endif %}
 
 <script>
@@ -221,7 +400,12 @@
                 <label for="transaction_type">Type</label>
                 <select name="transaction_type" id="transaction_type" class="form-control" required>
                     <option value="CASH_IN">Cash In (Float Addition)</option>
-                </select>
+                </select><script>
+    (function () {
+        var s = document.getElementById('mainSidebar');
+        if (s && !window.matchMedia('(max-width: 900px)').matches) s.classList.add('sidebar-hidden');
+    }());
+</script>
             </div>
 
             <div class="form-group">
@@ -244,7 +428,6 @@
         </form>
     </div>
 </div>
-
 <script>
 (function () {
     'use strict';
@@ -259,7 +442,7 @@
         function setDrawer(open) {
             document.body.classList.toggle('sidebar-open', open);
             toggle.setAttribute('aria-expanded', String(open));
-            toggle.textContent = open ? '\u2715' : '\u2630';   // X / hamburger
+            toggle.textContent = open ? '\u2715' : '\u2630';
         }
 
         toggle.addEventListener('click', function () {
@@ -281,6 +464,45 @@
             if (e.key === 'Escape' && document.body.classList.contains('sidebar-open')) setDrawer(false);
         });
 
+        // Handle sidebar accordion toggles (closes other open sections)
+        sidebar.querySelectorAll('.menu-dropdown-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var parent = btn.closest('.menu-dropdown');
+                var willOpen = !parent.classList.contains('open');
+
+                // Close all dropdowns first
+                sidebar.querySelectorAll('.menu-dropdown.open').forEach(function (item) {
+                    item.classList.remove('open');
+                    var otherBtn = item.querySelector('.menu-dropdown-toggle');
+                    if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+                });
+
+                // Open the clicked one if it was closed
+                if (willOpen) {
+                    parent.classList.add('open');
+                    btn.setAttribute('aria-expanded', 'true');
+                }
+            });
+        });
+
+        // Automatically expand only the dropdown matching the current URL
+        var currentPath = window.location.pathname;
+        sidebar.querySelectorAll('.submenu a[href]').forEach(function (link) {
+            if (link.getAttribute('href') === currentPath) {
+                link.classList.add('active');
+                var targetDropdown = link.closest('.menu-dropdown');
+                if (targetDropdown) {
+                    sidebar.querySelectorAll('.menu-dropdown.open').forEach(function (item) {
+                        item.classList.remove('open');
+                        var otherBtn = item.querySelector('.menu-dropdown-toggle');
+                        if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+                    });
+                    targetDropdown.classList.add('open');
+                    var toggleBtn = targetDropdown.querySelector('.menu-dropdown-toggle');
+                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+        });
         function syncToViewport() {
             if (MOBILE.matches) {
                 sidebar.classList.remove('sidebar-hidden');   

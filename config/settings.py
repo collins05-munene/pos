@@ -36,7 +36,8 @@ DEBUG = env.bool('DEBUG', default=True)
 ALLOWED_HOSTS = [
     '127.0.0.1',
     '.ngrok-free.app',
-    "app.unisalesystems.store",   # the POS lives here; the marketing site (unisalesystems.store) is served separately
+    "unisalesystems.store",
+    "www.unisalesystems.store",
 ]
 
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
@@ -44,7 +45,8 @@ if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
 
 CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app',
-    "https://app.unisalesystems.store",
+    "https://unisalesystems.store",
+    "https://www.unisalesystems.store",
     ]
 
 
@@ -71,7 +73,7 @@ INSTALLED_APPS = [
     "notifications",
     "support",
     "assistant",
-    "onboarding"
+    "onboarding",
 ]
 
 MIDDLEWARE = [
@@ -207,6 +209,13 @@ MEDIA_URL = '/media/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+MPESA_ENVIRONMENT=env('DARAJA_ENVIRONMENT', default='sandbox')
+MPESA_CONSUMER_KEY=env('MPESA_CONSUMER_KEY')
+MPESA_CONSUMER_SECRET=env('MPESA_CONSUMER_SECRET')
+MPESA_SHORTCODE=env('MPESA_SHORTCODE')
+MPESA_PASSKEY=env('MPESA_PASSKEY')
+MPESA_CALLBACK_URL=env('MPESA_CALLBACK_URL')
+
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -225,10 +234,9 @@ if not DEBUG:
 
 TENANCY_ALLOW_NULL_TENANT = env.bool("TENANCY_ALLOW_NULL_TENANT", default=False)
 
-BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL", default="")
+BILLING_CALLBACK_BASE_URL = env("BILLING_CALLBACK_BASE_URL")
 
-PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
-
+MPESA_BILLING_CALLBACK_SECRET = env("MPESA_BILLING_CALLBACK_SECRET")  
 
 BILLING_EXEMPT_PATH_PREFIXES = ["/users/logout/", "/users/password-reset/"]  
 
@@ -252,6 +260,12 @@ ASSISTANT_NAME = "POS Assistant"
 ASSISTANT_PRODUCT_NAME = "UniSale Systems POS"      
 ASSISTANT_DAILY_LIMIT_PER_TENANT = 100 
 
+BILLING = {
+    "MANUAL_PAY_LABEL": "Till number",  
+    "MANUAL_PAY_NUMBER": "1764388",
+    "MANUAL_PAY_NAME": "COLLINS GITONGA MUNENE",
+}
+
 
 # --- Email: delivered through the Resend API (config/email_backends.py), not SMTP ---------------
 RESEND_API_KEY = env("RESEND_API_KEY", default="")
@@ -261,6 +275,7 @@ RESEND_TIMEOUT = env.int("RESEND_TIMEOUT", default=10)   # seconds per API call;
 EMAIL_BACKEND = env("EMAIL_BACKEND", default=(
     "django.core.mail.backends.console.EmailBackend" if (DEBUG and not RESEND_API_KEY)
     else "config.email_backends.ResendEmailBackend"))
+# Must be an address on a domain verified in Resend, e.g. "UniSale Systems <no-reply@mail.example.co.ke>".
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="UniSale Systems <no-reply@localhost>")
 if not DEBUG and EMAIL_BACKEND.endswith("ResendEmailBackend"):
     import logging as _logging

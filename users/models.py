@@ -21,6 +21,7 @@ class User(AbstractUser):
         ADMIN = "ADMIN", "Admin"
         MANAGER = "MANAGER", "Manager"
         CASHIER = "CASHIER", "Cashier"
+        ACCOUNTANT = "ACCOUNTANT", "Accountant"
 
     role = models.CharField(max_length=15, choices=Roles.choices, default=Roles.CASHIER)
     last_seen = models.DateTimeField(null=True, blank=True)
