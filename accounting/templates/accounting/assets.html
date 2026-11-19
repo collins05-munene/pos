@@ -1,0 +1,28 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Assets &amp; Liabilities {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Assets &amp; Liabilities</h2><p>What the business owns long-term, what it has borrowed, and money moved in or out by the owner.</p></div>
+  <div class="fin-actions">
+    <a class="btn btn-primary" href="{% url 'accounting:asset-new' %}">Register asset</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:loan-new' %}">Record loan</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:owner-new' %}">Owner capital / withdrawal</a></div></div>
+<ul class="fin-subnav"><li><a href="?tab=assets" class="{% if tab == 'assets' %}on{% endif %}">Fixed assets</a></li><li><a href="?tab=loans" class="{% if tab == 'loans' %}on{% endif %}">Loans</a></li><li><a href="?tab=owner" class="{% if tab == 'owner' %}on{% endif %}">Owner transactions</a></li></ul>
+{% if tab == 'loans' %}
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Lender</th><th>Started</th><th>Rate</th><th class="num">Principal</th><th class="num">Principal repaid</th><th class="num">Interest paid</th><th class="num">Outstanding</th><th></th></tr></thead><tbody>
+{% for l in loans %}<tr><td>{{ l.lender }}</td><td>{{ l.start_date|date:"d M Y" }}</td><td>{{ l.interest_rate_percent }}%</td><td class="num">{{ l.principal|money }}</td><td class="num">{{ l.principal_repaid|money }}</td><td class="num">{{ l.interest_paid|money }}</td><td class="num">{{ l.outstanding_principal|money }}</td><td><a href="{% url 'accounting:loan' l.pk %}">{% if l.is_closed %}View{% else %}Repay / schedule{% endif %}</a></td></tr>
+{% empty %}<tr><td colspan="8" class="fin-empty">No loans recorded.</td></tr>{% endfor %}</tbody></table></div>
+{% elif tab == 'owner' %}
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Date</th><th>Type</th><th>Method</th><th>Branch</th><th>Note</th><th class="num">Amount</th></tr></thead><tbody>
+{% for t in owner_txns %}<tr><td>{{ t.txn_date|date:"d M Y" }}</td><td>{{ t.get_kind_display }}</td><td>{{ t.get_payment_method_display }}</td><td>{{ t.branch.name|default:"Head office" }}</td><td>{{ t.notes }}</td><td class="num">{{ t.amount|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="fin-empty">No owner transactions yet.</td></tr>{% endfor %}</tbody></table></div>
+{% else %}
+<div class="fin-actions" style="margin-bottom:10px"><form method="post" action="{% url 'accounting:depreciation-run' %}">{% csrf_token %}<button class="btn btn-secondary" type="submit">Post depreciation to last month end</button></form>
+<a class="btn btn-secondary" href="{% url 'accounting:report-export' key='asset-register' fmt='pdf' %}">Register PDF</a><a class="btn btn-secondary" href="{% url 'accounting:report-export' key='asset-register' fmt='xlsx' %}">Register Excel</a></div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Asset</th><th>Category</th><th>Branch</th><th>Bought</th><th>Life</th><th class="num">Cost</th><th class="num">Depreciation</th><th class="num">Book value</th><th>Status</th><th></th></tr></thead><tbody>
+{% for a in assets %}<tr class="{% if a.status == 'DISPOSED' %}muted{% endif %}"><td>{{ a.name }}</td><td>{{ a.get_category_display }}</td><td>{{ a.branch.name|default:"Head office" }}</td><td>{{ a.purchase_date|date:"d M Y" }}</td><td>{{ a.useful_life_months }} mo</td><td class="num">{{ a.cost|money }}</td><td class="num">{{ a.accumulated_depreciation|money }}</td><td class="num">{{ a.book_value|money }}</td><td>{{ a.get_status_display }}</td>
+  <td>{% if a.status == 'ACTIVE' %}<a href="{% url 'accounting:asset-dispose' a.pk %}">Dispose</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10" class="fin-empty">No fixed assets registered. Equipment, vehicles and furniture belong here, not in expenses.</td></tr>{% endfor %}
+{% if assets %}<tr class="total"><td colspan="5">Total (in use)</td><td class="num">{{ total_cost|money }}</td><td></td><td class="num">{{ total_book|money }}</td><td colspan="2"></td></tr>{% endif %}</tbody></table></div>
+{% endif %}
+{% endblock %}

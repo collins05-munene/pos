@@ -1,0 +1,39 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Edit floor layout{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Edit floor layout</h1><p class="rs-sub">Drag tables to match your restaurant, then Save layout. Drag the corner to resize.</p></div>
+    <div><a class="rs-btn" href="{% url 'restaurant:floor' %}">Back to floor</a> <button class="rs-btn primary" onclick="saveLayout()">Save layout</button></div></div>
+  <div class="rs-two" style="grid-template-columns:2fr 1fr">
+    <div class="rs-floor" id="plan"></div>
+    <div class="rs-card rs-form"><h3 style="margin-top:0" id="ftitle">Add a table</h3>
+      <label>Name / number</label><input id="f_name" class="rs-in" placeholder="T1">
+      <label>Seats</label><input id="f_seats" class="rs-in" type="number" value="4" min="1">
+      <label>Shape</label><select id="f_shape" class="rs-in"><option value="SQUARE">Square</option><option value="ROUND">Round</option><option value="RECT">Rectangle</option></select>
+      <label>Area</label><select id="f_zone" class="rs-in"><option value="">-</option>{% for z in zones %}<option value="{{ z.pk }}">{{ z.name }}</option>{% endfor %}</select>
+      <div class="rs-actions"><button class="rs-btn primary" onclick="saveTable()">Save table</button><button class="rs-btn" onclick="selectTable(null)">New</button><button class="rs-btn danger" id="delBtn" style="display:none" onclick="delTable()">Remove</button></div>
+      <p id="f_err" class="rs-low"></p><hr>
+      <label>Add an area (Patio, Rooftop...)</label><div style="display:flex;gap:6px"><input id="z_name" class="rs-in"><button class="rs-btn" onclick="addZone()">Add</button></div></div>
+  </div>
+</div>
+<script>
+const CSRF='{{ csrf_token }}';const $=id=>document.getElementById(id);let tables=[],sel=null;
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify(body||{})});return [r.ok,await r.json()]}
+async function load(){const j=await (await fetch('/restaurant/api/floor/')).json();tables=j.tables.filter(t=>t.state!=='MERGED'||true);draw()}
+function draw(){const p=$('plan');p.innerHTML=tables.map(t=>`<div class="rs-tbl ${t.shape} ${sel===t.id?'OCCUPIED':'AVAILABLE'}" data-id="${t.id}" style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;cursor:grab"><b>${t.name}</b><small>${t.seats} seats</small><span class="rz" style="position:absolute;right:0;bottom:0;width:14px;height:14px;background:#0f2a4a;cursor:nwse-resize;border-radius:3px"></span></div>`).join('')}
+let drag=null;
+$('plan').addEventListener('pointerdown',e=>{const el=e.target.closest('.rs-tbl');if(!el)return;const t=tables.find(x=>x.id==el.dataset.id);const r=$('plan').getBoundingClientRect();
+  drag={t,resize:e.target.classList.contains('rz'),sx:e.clientX,sy:e.clientY,ox:t.x,oy:t.y,ow:t.w,oh:t.h,r,moved:false};el.setPointerCapture(e.pointerId)});
+$('plan').addEventListener('pointermove',e=>{if(!drag)return;const dx=(e.clientX-drag.sx)/drag.r.width*100,dy=(e.clientY-drag.sy)/drag.r.height*100;if(Math.abs(dx)+Math.abs(dy)>.5)drag.moved=true;
+  if(drag.resize){drag.t.w=Math.max(4,Math.min(40,drag.ow+dx));drag.t.h=Math.max(4,Math.min(40,drag.oh+dy))}else{drag.t.x=Math.max(0,Math.min(100-drag.t.w,drag.ox+dx));drag.t.y=Math.max(0,Math.min(100-drag.t.h,drag.oy+dy))}
+  const el=$('plan').querySelector(`[data-id="${drag.t.id}"]`);el.style.left=drag.t.x+'%';el.style.top=drag.t.y+'%';el.style.width=drag.t.w+'%';el.style.height=drag.t.h+'%'});
+$('plan').addEventListener('pointerup',()=>{if(drag&&!drag.moved)selectTable(drag.t.id);drag=null});
+function selectTable(id){sel=id;const t=tables.find(x=>x.id===id);$('ftitle').textContent=t?'Edit '+t.name:'Add a table';$('delBtn').style.display=t?'inline-flex':'none';
+  $('f_name').value=t?t.name:'';$('f_seats').value=t?t.seats:4;$('f_shape').value=t?t.shape:'SQUARE';$('f_zone').value=t&&t.zone_id?t.zone_id:'';draw()}
+async function saveTable(){const [ok,j]=await post('/restaurant/api/table/save/',{id:sel,name:$('f_name').value,seats:$('f_seats').value,shape:$('f_shape').value,zone_id:$('f_zone').value||null});if(!ok){$('f_err').textContent=j.error;return}$('f_err').textContent='';sel=null;await load();selectTable(null)}
+async function delTable(){if(!confirm('Remove this table?'))return;const [ok,j]=await post('/restaurant/api/table/'+sel+'/delete/');if(!ok){$('f_err').textContent=j.error;return}sel=null;await load();selectTable(null)}
+async function saveLayout(){const [ok,j]=await post('/restaurant/api/floor/layout/',{tables:tables.map(t=>({id:t.id,x:t.x,y:t.y,w:t.w,h:t.h}))});alert(ok?'Layout saved.':j.error)}
+async function addZone(){const [ok,j]=await post('/restaurant/api/zone/save/',{name:$('z_name').value});if(ok)location.reload();else alert(j.error)}
+load();
+</script>
+{% endblock %}

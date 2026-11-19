@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     "support",
     "assistant",
     "onboarding",
+    "accounting",
+    "restaurant",
 ]
 
 MIDDLEWARE = [
@@ -109,6 +111,7 @@ TEMPLATES = [
                 "assistant.context_processors.assistant",
                 "tenants.context_processors.branch_switcher",
                 "onboarding.context_processors.onboarding",
+                "restaurant.context_processors.restaurant",
                 "users.turnstile.context_processor",
             ],
         },

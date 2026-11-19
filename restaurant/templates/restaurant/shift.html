@@ -1,0 +1,32 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}My shift{% endblock %}
+{% block content %}
+<div class="rs-page" style="max-width:820px">
+  <div class="rs-head"><div><h1>My shift</h1><p class="rs-sub">Your own takings, reconciled when you hand over. The branch cash drawer stays one shared pool.</p></div><a class="rs-btn" href="{% url 'restaurant:shifts' %}">Past shifts</a></div>
+  {% if not shift %}
+  <form method="post" class="rs-card rs-form">{% csrf_token %}<input type="hidden" name="action" value="open">
+    <h3 style="margin-top:0">Start a shift</h3>{% if not register %}<p class="rs-help" style="color:#b45309">The cash register is closed; you can still start a shift, but cash needs an open register.</p>{% endif %}
+    <label>Cash float you were given (KSH)</label><input class="form-input" name="opening_float" value="0" inputmode="decimal">
+    <button class="rs-btn primary" style="margin-top:12px">Start shift</button></form>
+  {% else %}
+  <div class="rs-grid">
+    <div class="rs-stat"><b>KSH {{ t.cash_sales }}</b><span>Cash taken</span></div>
+    {% if rs.accept_mpesa or t.mpesa %}<div class="rs-stat"><b>KSH {{ t.mpesa }}</b><span>M-Pesa</span></div>{% endif %}
+    {% if rs.accept_card or t.card %}<div class="rs-stat"><b>KSH {{ t.card }}</b><span>Card</span></div>{% endif %}
+    <div class="rs-stat"><b>{{ t.bills }}</b><span>Bills paid to</span></div>
+    <div class="rs-stat"><b>KSH {{ t.expected_cash }}</b><span>Cash you should hold</span></div>
+  </div>
+  <p class="rs-help">Cash you should hold = float {{ shift.opening_float }} + cash taken {{ t.cash_sales }} + cash-in {{ t.cash_in }} &minus; cash-out {{ t.cash_out }} &minus; refunds {{ t.refunds }}. Started {{ shift.opened_at|date:"d M H:i" }}.</p>
+  <form method="post" class="rs-card rs-form">{% csrf_token %}<input type="hidden" name="action" value="close">
+    <h3 style="margin-top:0">Close shift and reconcile</h3>
+    <label>Cash counted (KSH)</label><input class="form-input" name="counted_cash" inputmode="decimal" required>
+    {% if rs.accept_mpesa or t.mpesa %}<label>M-Pesa received (leave empty if it matches)</label><input class="form-input" name="counted_mpesa" inputmode="decimal">{% endif %}
+    {% if rs.accept_card or t.card %}<label>Card slips total (leave empty if it matches)</label><input class="form-input" name="counted_card" inputmode="decimal">{% endif %}
+    <label>Notes</label><input class="form-input" name="notes" maxlength="300">
+    <button class="rs-btn navy" style="margin-top:12px">Close shift</button></form>
+  <div class="rs-card rs-scroll"><h3 style="margin-top:0">Payments this shift</h3><table class="rs-table"><thead><tr><th>Time</th><th>Bill</th><th>Method</th><th class="rs-right">Amount</th></tr></thead><tbody>
+    {% for p in payments %}<tr><td>{{ p.created_at|date:"H:i" }}</td><td>{{ p.order.number }}</td><td>{{ p.get_method_display }}{% if p.reference %} ({{ p.reference }}){% endif %}</td><td class="rs-right">{{ p.amount }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="rs-muted">No payments yet.</td></tr>{% endfor %}</tbody></table></div>
+  {% endif %}
+</div>
+{% endblock %}

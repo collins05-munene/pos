@@ -1,0 +1,66 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance static %}
+{% block title %} Financial Overview {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Financial Overview</h2><p>Your books, built from every sale, purchase and expense.</p></div>
+  {% if cfg.opening_balance_date %}<div class="fin-actions">
+    <a class="btn btn-primary" href="{% url 'accounting:expense-new' %}">Record expense</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:reports' %}">Financial reports</a></div>{% endif %}
+</div>
+
+{% if not cfg.opening_balance_date %}
+<div class="fin-card">
+  <h3>Set up accounting</h3>
+  {% if can_configure %}
+  <p>Choose the day your books start. Sales, purchases and expenses from that day on are recorded automatically. Enter what the business had that day; leave a line blank if it does not apply.</p>
+  <form method="post" action="{% url 'accounting:setup' %}" class="fin-stack" style="max-width:520px">
+    {% csrf_token %}
+    <div><label for="opening_date">Books start on</label><input type="date" id="opening_date" name="opening_date" max="{{ today|date:'Y-m-d' }}" required></div>
+    <div><label for="opening_branch">Hold the opening balances in</label>
+      <select id="opening_branch" name="opening_branch">{% for b in branches %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></div>
+    {% for label, key in opening_fields %}
+    <div><label for="ob_{{ key }}">{{ label }} ({{ cfg.currency_code }})</label>
+      <input type="text" inputmode="decimal" id="ob_{{ key }}" name="{{ key }}" placeholder="{% if key == 'INVENTORY' %}Stock on hand is worth {{ stock_value|money }} at cost{% else %}0.00{% endif %}"></div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Start my books</button>
+  </form>
+  {% else %}<p>Accounting has not been set up yet. Ask the business owner or an admin to set it up.</p>{% endif %}
+</div>
+{% else %}
+{% include 'accounting/_filter.html' %}
+{% if not d.has_activity %}
+<div class="fin-card fin-empty"><h3>No financial activity in this period</h3><p>Make a sale, record an expense or pick another period. Everything on this page is calculated from your recorded transactions.</p></div>
+{% else %}
+<div class="fin-kpis">
+  {% for label, value, note in d.kpis %}
+  <div class="fin-kpi {% if forloop.counter == 8 %}hero{% endif %}"><div class="k">{{ label }}</div>
+    <div class="v {% if value|neg %}neg{% endif %}">{% if value|is_dec %}{{ value|money }}{% else %}{{ value }}{% endif %}</div>
+    {% if note %}<div class="d">{{ note }}{% if forloop.counter <= 8 and label != 'Profit margin' %} vs previous{% endif %}</div>{% endif %}</div>
+  {% endfor %}
+</div>
+<div class="fin-card" style="margin-bottom:16px"><h3>Performance summary</h3>{% for s in d.summary %}<p style="margin:4px 0">{{ s }}</p>{% endfor %}
+  <p class="fin-note">Figures above follow the {{ f.basis_label|lower }}. Charts show the last 12 months from the ledger (accrual) and actual cash movements.</p></div>
+<div class="fin-grid">
+  <div class="fin-card"><h3>Revenue vs expenses</h3><div style="height:260px"><canvas id="ch-rev-exp" role="img" aria-label="Revenue versus expenses by month"></canvas></div></div>
+  <div class="fin-card"><h3>Gross profit vs net profit</h3><div style="height:260px"><canvas id="ch-profit" role="img" aria-label="Gross profit versus net profit by month"></canvas></div></div>
+  <div class="fin-card"><h3>Monthly sales trend</h3><div style="height:260px"><canvas id="ch-sales" role="img" aria-label="Monthly net sales"></canvas></div></div>
+  <div class="fin-card"><h3>Monthly expense trend</h3><div style="height:260px"><canvas id="ch-opex" role="img" aria-label="Monthly operating expenses"></canvas></div></div>
+  <div class="fin-card"><h3>Where the money goes (this period)</h3><div style="height:260px"><canvas id="ch-cat" role="img" aria-label="Expense category distribution"></canvas></div></div>
+  {% if d.charts.branch_labels %}<div class="fin-card"><h3>Branch profitability (this period)</h3><div style="height:260px"><canvas id="ch-branch" role="img" aria-label="Net profit by branch"></canvas></div></div>{% endif %}
+  <div class="fin-card"><h3>Cash in vs cash out</h3><div style="height:260px"><canvas id="ch-cash" role="img" aria-label="Cash inflow versus outflow by month"></canvas></div></div>
+</div>
+<div class="fin-scroll"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">Recent financial transactions</h3>
+  <table class="fin-table"><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Source</th><th class="num">Amount</th></tr></thead><tbody>
+  {% for e in d.recent %}<tr><td>{{ e.entry_date|date:"d M Y" }}</td><td>{% if all_access %}<a href="{% url 'accounting:journal' e.pk %}">{{ e.reference }}</a>{% else %}{{ e.reference }}{% endif %}</td><td>{{ e.description }}</td><td>{{ e.source_type }}</td><td class="num">{{ e.amount|money }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="fin-empty">No transactions yet.</td></tr>{% endfor %}</tbody></table></div>
+{{ d.charts|json_script:"fin-charts" }}
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+{% if d.has_activity %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="{% static 'accounting/finance.js' %}"></script>
+<script>window.finOverviewCharts(JSON.parse(document.getElementById('fin-charts').textContent));</script>
+{% endif %}
+{% endblock %}

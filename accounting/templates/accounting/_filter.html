@@ -1,0 +1,31 @@
+<form method="get" class="fin-filter" aria-label="Report filters">
+  <div><label for="f-period">Period</label>
+    <select id="f-period" name="period" onchange="finPeriod(this.value)">
+      <option value="daily" {% if f.kind == 'daily' %}selected{% endif %}>Daily</option>
+      <option value="weekly" {% if f.kind == 'weekly' %}selected{% endif %}>Weekly</option>
+      <option value="monthly" {% if f.kind == 'monthly' %}selected{% endif %}>Monthly</option>
+      <option value="quarterly" {% if f.kind == 'quarterly' %}selected{% endif %}>Quarterly</option>
+      <option value="annual" {% if f.kind == 'annual' %}selected{% endif %}>Annual</option>
+      <option value="custom" {% if f.kind == 'custom' %}selected{% endif %}>Custom range</option>
+    </select></div>
+  <div id="f-anchor"><label for="f-date">Date in period</label><input id="f-date" type="date" name="date" value="{{ f.end|date:'Y-m-d' }}"></div>
+  <div class="f-custom"><label for="f-start">From</label><input id="f-start" type="date" name="start" value="{{ f.start|date:'Y-m-d' }}"></div>
+  <div class="f-custom"><label for="f-end">To</label><input id="f-end" type="date" name="end" value="{{ f.end|date:'Y-m-d' }}"></div>
+  {% if filter_branches %}
+  <div><label for="f-branch">Branch</label>
+    <select id="f-branch" name="branch"><option value="all">All branches</option>
+      {% for b in filter_branches %}<option value="{{ b.pk }}" {% if f.branch_ids and b.pk in f.branch_ids %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+    </select></div>
+  {% else %}<div><label>Branch</label><div style="padding:8px 0;font-weight:600">{{ f.branch_label }}</div></div>{% endif %}
+  {% if show_basis %}
+  <div><label for="f-basis">Accounting basis</label>
+    <select id="f-basis" name="basis"><option value="ACCRUAL" {% if f.basis == 'ACCRUAL' %}selected{% endif %}>Accrual</option>
+      <option value="CASH" {% if f.basis == 'CASH' %}selected{% endif %}>Cash</option></select></div>
+  {% endif %}
+  {% block extra_filters %}{% endblock %}
+  <div><button type="submit" class="btn btn-primary">Apply</button></div>
+</form>
+<script>
+function finPeriod(v){document.querySelectorAll('.f-custom').forEach(e=>e.style.display=v==='custom'?'':'none');var a=document.getElementById('f-anchor');if(a)a.style.display=v==='custom'?'none':'';}
+finPeriod(document.getElementById('f-period').value);
+</script>

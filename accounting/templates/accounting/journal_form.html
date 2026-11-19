@@ -1,0 +1,26 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} New journal entry {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>New journal entry</h2><p>For adjustments no screen covers. Total debits must equal total credits.</p></div></div>
+<form method="post" class="fin-card" novalidate id="jf">{% csrf_token %}
+  <input type="hidden" name="token" value="{{ token }}">
+  <div class="fin-inline" style="margin-bottom:12px">
+    <div><label for="jd" class="fin-note">Date</label><br><input id="jd" type="date" name="entry_date" value="{{ posted.entry_date|default:today|date:'Y-m-d' }}" required></div>
+    <div style="flex:1"><label for="jdesc" class="fin-note">Description</label><br><input id="jdesc" name="description" value="{{ posted.description }}" style="width:100%" required></div>
+    <div><label for="jb" class="fin-note">Branch</label><br><select id="jb" name="branch"><option value="">Head office</option>{% for b in branches %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></div></div>
+  <table class="fin-table" id="jt"><thead><tr><th>Account</th><th>Memo</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+  {% for i in "1234" %}<tr><td><select name="account" aria-label="Account"><option value="">Choose...</option>{% for a in accounts %}<option value="{{ a.pk }}">{{ a.code }} {{ a.name }}</option>{% endfor %}</select></td>
+    <td><input name="memo" aria-label="Memo"></td><td><input name="debit" inputmode="decimal" class="d" aria-label="Debit" style="text-align:right"></td><td><input name="credit" inputmode="decimal" class="c" aria-label="Credit" style="text-align:right"></td></tr>{% endfor %}
+  </tbody><tfoot><tr class="total"><td colspan="2">Totals</td><td class="num" id="td">0.00</td><td class="num" id="tc">0.00</td></tr></tfoot></table>
+  <p id="jmsg" class="fin-note" aria-live="polite"></p>
+  <div class="fin-actions"><button type="button" class="btn btn-secondary" id="addrow">Add line</button><button type="submit" class="btn btn-primary" id="jpost">Post entry</button><a class="btn btn-secondary" href="{% url 'accounting:ledger' %}">Cancel</a></div>
+</form>
+<script>
+(function(){var t=document.querySelector('#jt tbody');
+function sum(c){var s=0;document.querySelectorAll(c).forEach(function(i){var v=parseFloat((i.value||'0').replace(/,/g,''));if(!isNaN(v))s+=v});return s}
+function upd(){var d=sum('.d'),c=sum('.c');document.getElementById('td').textContent=d.toFixed(2);document.getElementById('tc').textContent=c.toFixed(2);
+var ok=Math.abs(d-c)<0.005&&d>0;document.getElementById('jmsg').textContent=ok?'Balanced.':'Difference: '+(d-c).toFixed(2);document.getElementById('jpost').disabled=!ok}
+t.addEventListener('input',upd);document.getElementById('addrow').onclick=function(){t.appendChild(t.rows[0].cloneNode(true));[].forEach.call(t.rows[t.rows.length-1].querySelectorAll('input'),function(i){i.value=''});};upd();})();
+</script>
+{% endblock %}

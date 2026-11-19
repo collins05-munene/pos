@@ -1,0 +1,22 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Loan: {{ loan.lender }} {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Loan: {{ loan.lender }}</h2><p>{{ loan.interest_rate_percent }}% a year &middot; {{ loan.installments }} {{ loan.get_frequency_display|lower }} repayments &middot; started {{ loan.start_date|date:"d M Y" }}</p></div>
+  <div class="fin-actions"><a class="btn btn-secondary" href="{% url 'accounting:assets' %}?tab=loans">Back</a></div></div>
+<div class="fin-kpis"><div class="fin-kpi"><div class="k">Principal</div><div class="v">{{ loan.principal|money }}</div></div>
+  <div class="fin-kpi hero"><div class="k">Outstanding</div><div class="v">{{ loan.outstanding_principal|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Principal repaid</div><div class="v">{{ loan.principal_repaid|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Interest paid</div><div class="v">{{ loan.interest_paid|money }}</div></div></div>
+{% if not loan.is_closed %}
+<div class="fin-card" style="margin-bottom:16px"><h3>{{ title }}</h3>
+  <form method="post" class="fin-stack" style="max-width:480px" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="fin-alert bad">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for er in field.errors %}<span class="field-error-message">{{ er }}</span>{% endfor %}</div>{% endfor %}
+    <p class="fin-note">Only the interest is booked as an expense. Principal reduces what you owe.</p>
+    <button class="btn btn-primary" type="submit">{{ submit_label }}</button></form></div>{% endif %}
+<div class="fin-scroll"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">Repayments made</h3><table class="fin-table"><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="num">Principal</th><th class="num">Interest</th></tr></thead><tbody>
+{% for r in repayments %}<tr><td>{{ r.paid_on|date:"d M Y" }}</td><td>{{ r.get_payment_method_display }}</td><td>{{ r.reference }}</td><td class="num">{{ r.principal_paid|money }}</td><td class="num">{{ r.interest_paid|money }}</td></tr>{% empty %}<tr><td colspan="5" class="fin-empty">No repayments yet.</td></tr>{% endfor %}</tbody></table></div>
+<div class="fin-scroll"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">Planned schedule (a guide)</h3><table class="fin-table"><thead><tr><th>#</th><th>Due</th><th class="num">Opening</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Payment</th><th class="num">Closing</th></tr></thead><tbody>
+{% for s in schedule %}<tr><td>{{ s.no }}</td><td>{{ s.due|date:"d M Y" }}</td><td class="num">{{ s.opening|money }}</td><td class="num">{{ s.principal|money }}</td><td class="num">{{ s.interest|money }}</td><td class="num">{{ s.payment|money }}</td><td class="num">{{ s.closing|money }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

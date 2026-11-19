@@ -1,0 +1,16 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><h1>Orders</h1><a class="rs-btn primary" href="{% url 'restaurant:floor' %}">New order</a></div>
+  <div class="rs-tabs">{% for v,l in statuses %}<a class="rs-tab {% if status == v %}on{% endif %}" href="?status={{ v }}&type={{ kind }}">{{ l }}</a>{% endfor %}
+    <span style="width:12px"></span><a class="rs-tab {% if not kind %}on{% endif %}" href="?status={{ status }}">All types</a>
+    {% for v,l in types %}<a class="rs-tab {% if kind == v %}on{% endif %}" href="?status={{ status }}&type={{ v }}">{{ l }}</a>{% endfor %}</div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr><th>Order</th><th>Where</th><th>Waiter / customer</th><th>Items</th><th class="rs-right">Total</th><th class="rs-right">Balance</th><th>Opened</th><th></th></tr></thead><tbody>
+  {% for o in orders %}<tr><td><b>{{ o.number }}</b> {% if o.source == 'ONLINE' %}<span class="rs-badge blue">online</span>{% endif %}{% if o.needs_acceptance %}<span class="rs-badge amber">accept</span>{% endif %}</td>
+    <td>{{ o.place }}</td><td>{% if o.order_type == 'DINE_IN' %}{{ o.waiter.first_name|default:"-" }}{% else %}{{ o.customer_name|default:o.customer_phone }}{% endif %}</td>
+    <td>{{ o.lines.all|length }}</td><td class="rs-right">{{ o.total }}</td><td class="rs-right">{% if o.status == 'OPEN' %}{{ o.balance }}{% else %}-{% endif %}</td>
+    <td>{{ o.created_at|date:"d M H:i" }}</td><td class="rs-right"><a class="rs-btn sm" href="{% url 'restaurant:order' o.pk %}">Open</a></td></tr>
+  {% empty %}<tr><td colspan="8" class="rs-muted">No orders.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

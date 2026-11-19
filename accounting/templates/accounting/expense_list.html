@@ -1,0 +1,43 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Expenses {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Expenses</h2><p>Everything the business spends, paid or not.</p></div>
+  <div class="fin-actions"><a class="btn btn-primary" href="{% url 'accounting:expense-new' %}">Record expense</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:categories' %}">Categories</a>
+    {% if all_access %}<a class="btn btn-secondary" href="{% url 'accounting:recurring' %}">Repeating</a>{% endif %}
+    <a class="btn btn-secondary" href="{% url 'accounting:report-export' key='expense-register' fmt='pdf' %}?{{ qs }}">PDF</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:report-export' key='expense-register' fmt='xlsx' %}?{{ qs }}">Excel</a></div></div>
+<div class="fin-kpis">
+  <div class="fin-kpi"><div class="k">Incurred</div><div class="v">{{ incurred|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Paid</div><div class="v">{{ paid|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Still to pay</div><div class="v">{{ outstanding|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Overdue</div><div class="v {% if overdue %}neg{% endif %}">{{ overdue }}</div></div>
+</div>
+<form method="get" class="fin-filter">
+  <input type="hidden" name="period" value="custom"><input type="hidden" name="basis" value="{{ f.basis }}">
+  <div><label for="e-start">From</label><input id="e-start" type="date" name="start" value="{{ f.start|date:'Y-m-d' }}"></div>
+  <div><label for="e-end">To</label><input id="e-end" type="date" name="end" value="{{ f.end|date:'Y-m-d' }}"></div>
+  <div><label for="e-cat">Category</label><select id="e-cat" name="category"><option value="">All</option>{% for c in categories %}<option value="{{ c.pk }}" {% if request.GET.category == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+  {% if filter_branches %}<div><label for="e-br">Branch</label><select id="e-br" name="branch"><option value="all">All</option>{% for b in filter_branches %}<option value="{{ b.pk }}" {% if f.branch_ids and b.pk in f.branch_ids %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+  <div><label for="e-st">Status</label><select id="e-st" name="status"><option value="">All</option>{% for v, l in status_choices %}<option value="{{ v }}" {% if request.GET.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="grow"><label for="e-q">Search</label><input id="e-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="Title, payee or reference" style="width:100%"></div>
+  <div><button class="btn btn-primary" type="submit">Filter</button></div>
+</form>
+<div class="fin-scroll"><table class="fin-table">
+  <thead><tr><th>Date</th><th>Expense</th><th>Category</th><th>Branch</th><th>Payee</th><th class="num">Amount</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody>
+  {% for e in page %}<tr>
+    <td>{{ e.expense_date|date:"d M Y" }}</td><td><a href="{% url 'accounting:expense-detail' e.pk %}">{{ e.title }}</a>{% if e.receipt %} <span title="Receipt attached">&#128206;</span>{% endif %}</td>
+    <td>{{ e.category.name }}</td><td>{{ e.branch.name|default:"Head office" }}</td><td>{{ e.vendor }}</td>
+    <td class="num">{{ e.amount|money }}</td><td class="num">{{ e.paid_cache|money }}</td><td class="num">{{ e.balance_cache|money }}</td>
+    <td><span class="fin-pill {% if e.is_overdue %}Overdue{% else %}{{ e.status }}{% endif %}">{{ e.display_status }}</span></td></tr>
+  {% empty %}<tr><td colspan="9" class="fin-empty">No expenses match. <a href="{% url 'accounting:expense-new' %}">Record the first one</a>.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% if page.paginator.num_pages > 1 %}
+<div class="pagination-container"><span class="pagination-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  <ul class="pagination-list">
+    {% if page.has_previous %}<li class="pagination-item"><a class="pagination-link" href="?{% qs_without 'page' %}page={{ page.previous_page_number }}">Previous</a></li>{% endif %}
+    {% if page.has_next %}<li class="pagination-item"><a class="pagination-link" href="?{% qs_without 'page' %}page={{ page.next_page_number }}">Next</a></li>{% endif %}
+  </ul></div>
+{% endif %}
+{% endblock %}

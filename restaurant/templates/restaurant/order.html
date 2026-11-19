@@ -1,0 +1,140 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}{{ order.number }}{% endblock %}
+{% block content %}
+<style>@media print{body *{visibility:hidden}#ticket,#ticket *{visibility:visible}#ticket{position:absolute;left:0;top:0;width:100%;border:0}.noprint{display:none!important}}</style>
+<div class="rs-page">
+  <div class="rs-head"><div><h1><span id="h_num">{{ order.number }}</span> <span id="h_status" class="rs-badge"></span></h1>
+    <p class="rs-sub" id="h_sub"></p></div>
+    <div><a class="rs-btn" href="{% if order.order_type == 'DINE_IN' %}{% url 'restaurant:floor' %}{% else %}{% url 'restaurant:delivery' %}{% endif %}">&larr; Back</a></div></div>
+  <div id="banner"></div>
+  <div class="rs-order">
+    <div id="menuCol">
+      <div class="rs-tabs" id="cats"></div>
+      <input class="rs-in" id="search" placeholder="Search the menu..." style="margin-bottom:10px">
+      <div class="rs-menu-tiles" id="tiles"></div>
+    </div>
+    <div class="rs-ticket" id="ticket">
+      <div id="cust"></div>
+      <div id="lines"></div>
+      <div id="totals" style="margin-top:8px"></div>
+      <div class="rs-actions noprint" id="acts"></div>
+      <p id="err" class="rs-low noprint"></p>
+    </div>
+  </div>
+</div>
+
+<div class="rs-pop" id="optPop"><div class="rs-form"><h3 id="optTitle"></h3><div id="optList"></div>
+  <label>Note for the kitchen</label><input id="optNote" class="rs-in" maxlength="200" placeholder="e.g. no onions, well done">
+  <label>Quantity</label><input id="optQty" class="rs-in" type="number" min="1" value="1">
+  <div class="rs-actions"><button class="rs-btn primary" onclick="confirmOpt()">Add to order</button><button class="rs-btn" onclick="closePops()">Cancel</button></div></div></div>
+<div class="rs-pop" id="payPop"><div class="rs-form" id="payBody"></div></div>
+<div class="rs-pop" id="toolPop"><div class="rs-form" id="toolBody"></div></div>
+<div class="rs-toast" id="toast"></div>
+
+<script>
+const OID={{ order.pk }}, CSRF='{{ csrf_token }}', CAN_PAY={{ can_pay|yesno:"true,false" }}, MGMT={{ is_mgmt|yesno:"true,false" }};
+const METHODS={{ methods|safe }};
+const TABLES=[{% for t in tables %}{id:{{ t.pk }},name:"{{ t.name|escapejs }}"},{% endfor %}];
+const OTHERS=[{% for o in open_orders %}{id:{{ o.pk }},n:"{{ o.number }}",p:"{{ o.place|escapejs }}"},{% endfor %}];
+const RIDERS=[{% for r in riders %}{id:{{ r.pk }},name:"{{ r.name|escapejs }}"},{% endfor %}];
+let O=null,MENU=null,cat='all',pending=null,splitSel=new Set();
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=v=>Number(v).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+async function post(a,b){const r=await fetch(`/restaurant/api/order/${OID}/${a}/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify(b||{})});return [r.ok,await r.json()]}
+async function act(a,b,keepPop){const [ok,j]=await post(a,b);if(!ok){const e=$('toolErr')||$('err');e.textContent=j.error;return null}$('err').textContent='';if(j.redirect){location=j.redirect;return j}O=j.order;render();if(!keepPop)closePops();return j}
+function closePops(){document.querySelectorAll('.rs-pop').forEach(p=>p.classList.remove('on'))}
+document.querySelectorAll('.rs-pop').forEach(p=>p.addEventListener('click',e=>{if(e.target===p)closePops()}));
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',4000)}
+async function tick(url,id,a){const r=await fetch(`/restaurant/api/ticket/${id}/${a}/`,{method:'POST',headers:{'X-CSRFToken':CSRF}});const j=await r.json();if(!j.ok)$('err').textContent=j.error;refresh()}
+async function refresh(){const r=await fetch(`/restaurant/api/order/${OID}/`);if(r.ok){O=(await r.json()).order;render()}}
+
+/* ---------- menu */
+async function loadMenu(){MENU=(await (await fetch('/restaurant/api/menu/')).json());drawMenu()}
+function drawMenu(){if(!MENU)return;const q=$('search').value.toLowerCase();
+  $('cats').innerHTML=`<a class="rs-tab ${cat==='all'?'on':''}" onclick="cat='all';drawMenu()">All</a>`+MENU.categories.map(c=>`<a class="rs-tab ${cat==c.id?'on':''}" onclick="cat=${c.id};drawMenu()">${esc(c.name)}</a>`).join('');
+  const locked=!O||O.status!=='OPEN'||O.needs_acceptance;
+  $('tiles').innerHTML=MENU.items.filter(i=>(cat==='all'||i.cat===cat)&&i.name.toLowerCase().includes(q)).map(i=>`<button class="rs-tile ${(!i.available||locked)?'off':''}" onclick="tap(${i.id})"><b>${esc(i.name)}</b><span>${money(i.price)}</span>${i.options.length?'<small class="rs-muted"> · options</small>':''}${!i.available?'<small class="rs-low"> · sold out</small>':''}</button>`).join('')||'<p class="rs-muted">Nothing matches.</p>'}
+$('search').addEventListener('input',drawMenu);
+function tap(id){const i=MENU.items.find(x=>x.id===id);if(!i.available||!O||O.status!=='OPEN'||O.needs_acceptance)return;if(i.options.length){openOpt(i)}else act('add_line',{item_id:id,qty:1})}
+function openOpt(i){pending=i;$('optTitle').textContent=i.name;$('optNote').value='';$('optQty').value=1;
+  $('optList').innerHTML=i.options.map(o=>`<label style="font-weight:500;margin:6px 0"><input type="checkbox" class="opt" value="${o.id}"> ${esc(o.name)} ${o.kind==='REMOVE'?'<span class="rs-badge red">remove</span>':Number(o.price)?`<span class="rs-badge green">+${money(o.price)}</span>`:''}</label>`).join('');
+  $('optPop').classList.add('on')}
+async function confirmOpt(){const ids=[...document.querySelectorAll('.opt:checked')].map(c=>+c.value);const j=await act('add_line',{item_id:pending.id,qty:+$('optQty').value||1,option_ids:ids,note:$('optNote').value})}
+
+/* ---------- ticket */
+const ST={DRAFT:'',SENT:'rs-badge blue',PREPARING:'rs-badge amber',READY:'rs-badge green',SERVED:'rs-badge',VOID:'rs-badge red'};
+function render(){
+  const open=O.status==='OPEN';
+  $('h_status').textContent=O.status==='OPEN'?'Open':O.status==='PAID'?'Paid':'Cancelled';$('h_status').className='rs-badge '+(O.status==='PAID'?'green':O.status==='VOID'?'red':'blue');
+  $('h_sub').textContent=[O.type_label,O.table&&('Table '+O.table),O.waiter&&('Waiter '+O.waiter),O.type==='DINE_IN'?(O.guests+' guest'+(O.guests>1?'s':'')):'',O.split_from&&('split from '+O.split_from)].filter(Boolean).join(' · ');
+  $('banner').innerHTML=O.needs_acceptance?`<div class="rs-card" style="background:#eff6ff;border-color:#93c5fd">Online order waiting for acceptance. ${CAN_PAY?'<button class="rs-btn sm primary" onclick="act(\'accept\')">Accept and send to kitchen</button>':'A cashier or manager must accept it.'}</div>`:'';
+  let c='';if(O.type!=='DINE_IN'){c=`<div class="rs-card" style="padding:10px;background:#f8fafc"><b>${esc(O.customer_name||'Customer')}</b> ${esc(O.customer_phone)}${O.address?'<br>'+esc(O.address):''}${O.delivery_notes?'<br><span class="rs-muted">'+esc(O.delivery_notes)+'</span>':''}<br><span class="rs-badge blue">${esc(O.handover_label)}</span>${O.rider?' <span class="rs-badge">Rider: '+esc(O.rider)+'</span>':''}
+    ${open&&CAN_PAY&&O.type==='DELIVERY'?`<div class="rs-actions noprint"><select class="rs-in" style="width:auto" onchange="act('rider',{rider_id:this.value||null})"><option value="">Assign rider...</option>${RIDERS.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button class="rs-btn sm" onclick="editFee()">Delivery fee</button></div>`:''}</div>`}
+  $('cust').innerHTML=c;
+  $('lines').innerHTML=O.lines.length?O.lines.map(l=>{const canEdit=open&&l.status==='DRAFT';
+    return `<div class="rs-line ${l.status}">
+      <div>${splitMode?`<input type="checkbox" ${splitSel.has(l.id)?'checked':''} onchange="togSplit(${l.id},this.checked)"> `:''}<b>${esc(l.name)}</b> ${l.status!=='DRAFT'?`<span class="${ST[l.status]}">${esc(l.status_label)}</span>`:''}</div><div class="rs-right">${money(l.total)}</div>
+      ${l.mods.length||l.note?`<small>${l.mods.map(esc).join(', ')}${l.mods.length&&l.note?' · ':''}${l.note?'“'+esc(l.note)+'”':''}</small>`:''}
+      <div class="rs-qty noprint">${canEdit?`<button onclick="act('qty',{line_id:${l.id},qty:${l.qty-1}})">−</button><span>${l.qty}</span><button onclick="act('qty',{line_id:${l.id},qty:${l.qty+1}})">+</button>`:`<span>× ${l.qty}</span>`}</div>
+      <div class="rs-right noprint">${open&&l.status==='READY'&&l.ticket?`<button class="rs-btn sm primary" onclick="tick(0,${l.ticket},'serve')">Mark served</button> `:''}${open&&l.status!=='VOID'&&(l.status==='DRAFT'||MGMT)&&!splitMode?`<button class="rs-btn sm danger" onclick="voidLine(${l.id},'${l.status}')">${l.status==='DRAFT'?'Remove':'Cancel'}</button>`:''}</div></div>`}).join(''):'<p class="rs-muted">No items yet. Tap the menu to add.</p>';
+  let t=`<div class="rs-tot"><span>Subtotal</span><span>${money(O.subtotal)}</span></div>`;
+  if(+O.discount_total)t+=`<div class="rs-tot"><span>Discount${O.discount_reason?' ('+esc(O.discount_reason)+')':''}</span><span>−${money(O.discount_total)}</span></div>`;
+  if(+O.service_charge)t+=`<div class="rs-tot"><span>Service charge (${+O.service_pct}%)</span><span>${money(O.service_charge)}</span></div>`;
+  if(+O.delivery_fee)t+=`<div class="rs-tot"><span>Delivery fee</span><span>${money(O.delivery_fee)}</span></div>`;
+  t+=`<div class="rs-tot big"><span>Total</span><span>KSH ${money(O.total)}</span></div>`;
+  if(+O.paid)t+=`<div class="rs-tot"><span>Paid</span><span>${money(O.paid)}</span></div><div class="rs-tot"><b>Balance</b><b>${money(O.balance)}</b></div>`;
+  $('totals').innerHTML=t;
+  let a='';
+  if(open){
+    if(splitMode){a=`<button class="rs-btn primary" onclick="doSplit()">Move ${splitSel.size} item(s) to a new bill</button><button class="rs-btn" onclick="splitMode=false;splitSel.clear();render()">Cancel</button>`}
+    else{
+      a+=`<button class="rs-btn navy" ${O.draft_count?'':'disabled'} onclick="act('send')">Send to kitchen${O.draft_count?' ('+O.draft_count+')':''}</button>`;
+      if(CAN_PAY)a+=`<button class="rs-btn primary" ${O.lines.some(l=>l.status!=='VOID')?'':'disabled'} onclick="openPay()">Pay</button>`;
+      a+=`<button class="rs-btn" onclick="window.print()">Print bill</button>`;
+      if(MGMT)a+=`<button class="rs-btn" onclick="openDiscount()">Discount</button>`;
+      if(O.type==='DINE_IN')a+=`<button class="rs-btn" onclick="openTransfer()">Transfer / merge</button>`;
+      if(O.lines.filter(l=>l.status!=='VOID').length>1)a+=`<button class="rs-btn" onclick="splitMode=true;render()">Split bill</button>`;
+      if(MGMT)a+=`<button class="rs-btn danger" onclick="cancelOrder()">Cancel order</button>`}
+  }else if(O.status==='PAID'){a=O.receipt_url?`<a class="rs-btn primary" href="${O.receipt_url}">Open receipt</a>`:''}
+  $('acts').innerHTML=a;drawMenu()}
+let splitMode=false;
+function togSplit(id,on){on?splitSel.add(id):splitSel.delete(id);render()}
+async function doSplit(){const j=await act('split',{line_ids:[...splitSel]});if(j)splitSel.clear()}
+function voidLine(id,st){if(st==='DRAFT'){act('void_line',{line_id:id});return}const r=prompt('Why is this item cancelled? (the kitchen will see it)');if(r!==null)act('void_line',{line_id:id,reason:r})}
+function cancelOrder(){const r=prompt('Reason for cancelling the whole order?');if(r!==null)act('cancel',{reason:r})}
+function editFee(){const f=prompt('Delivery fee (KSH)',O.delivery_fee);if(f!==null)act('delivery_fee',{fee:f})}
+
+/* ---------- tools popups */
+function pop(html){$('toolBody').innerHTML=html+'<p id="toolErr" class="rs-low"></p>';$('toolPop').classList.add('on')}
+function openDiscount(){pop(`<h3>Discount</h3><label>Type</label><select id="d_type" class="rs-in"><option value="PERCENT">Percent (%)</option><option value="AMOUNT">Fixed amount (KSH)</option></select><label>Value</label><input id="d_val" class="rs-in" inputmode="decimal"><label>Reason</label><input id="d_reason" class="rs-in" placeholder="Regular customer, complaint...">
+  <div class="rs-actions"><button class="rs-btn primary" onclick="act('discount',{type:$('d_type').value,value:$('d_val').value,reason:$('d_reason').value},true)">Apply</button><button class="rs-btn" onclick="act('discount',{type:'NONE'})">Remove discount</button><button class="rs-btn" onclick="closePops()">Close</button></div>`)}
+function openTransfer(){pop(`<h3>Move this order</h3><label>Transfer to table</label><select id="t_tbl" class="rs-in">${TABLES.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+  <div class="rs-actions"><button class="rs-btn primary" onclick="act('transfer',{table_id:$('t_tbl').value},true).then(j=>{if(j)closePops()})">Transfer</button></div>
+  <hr><label>Merge into another open order</label><select id="m_ord" class="rs-in">${OTHERS.map(o=>`<option value="${o.id}">${o.n} - ${esc(o.p)}</option>`).join('')||'<option value="">No other open orders</option>'}</select>
+  <div class="rs-actions"><button class="rs-btn" onclick="act('merge',{target_id:$('m_ord').value},true)">Merge</button><button class="rs-btn" onclick="closePops()">Close</button></div>`)}
+
+/* ---------- payment */
+function openPay(){
+  const bal=+O.balance;let h=`<h3>Take payment</h3><div class="rs-tot big"><span>Balance</span><span>KSH ${money(bal)}</span></div>`;
+  if(O.payments.length)h+='<div style="margin:8px 0">'+O.payments.map(p=>`<div class="rs-tot ${p.void?'rs-muted':''}"><span>${esc(p.method)}${p.payer?' · '+esc(p.payer):''}${p.reference?' ('+esc(p.reference)+')':''}${p.void?' (voided)':''}</span><span>${money(p.amount)} ${MGMT&&!p.void?`<a href="#" onclick="act('void_payment',{payment_id:${p.id}});return false">void</a>`:''}</span></div>`).join('')+'</div>';
+  if(!(+O.total)){h+=`<p>This bill is free.</p><div class="rs-actions"><button class="rs-btn primary" onclick="act('complimentary')">Close as complimentary</button></div>`}
+  else{
+  h+=`<label>Split equally between</label><div style="display:flex;gap:6px"><input id="s_parts" class="rs-in" type="number" min="2" max="50" value="2" style="width:80px"><button class="rs-btn sm" onclick="shares()">Show shares</button></div><div id="shares" class="rs-help"></div>
+  <label>Method</label><select id="p_method" class="rs-in" onchange="syncPay()">${METHODS.map(m=>`<option value="${m.value}">${esc(m.label)}</option>`).join('')}</select>
+  <label id="p_amt_l">Cash received</label><input id="p_amt" class="rs-in" inputmode="decimal" value="${bal.toFixed(2)}">
+  <div id="p_ref_w" style="display:none"><label>M-Pesa code / slip number</label><input id="p_ref" class="rs-in"></div>
+  <label>Paid by (optional, for split bills)</label><input id="p_payer" class="rs-in" placeholder="Guest 2">
+  <div id="p_change" class="rs-help"></div>
+  <div class="rs-actions"><button class="rs-btn primary" onclick="doPay()">Take payment</button><button class="rs-btn" onclick="closePops()">Close</button></div>`}
+  $('payBody').innerHTML=h+'<p id="payErr" class="rs-low"></p>';$('payPop').classList.add('on');if(+O.total){syncPay();$('p_amt').addEventListener('input',syncPay)}}
+function syncPay(){const m=$('p_method').value,cash=m==='CASH';$('p_amt_l').textContent=cash?'Cash received':'Amount';$('p_ref_w').style.display=cash?'none':'block';
+  const v=+$('p_amt').value||0,bal=+O.balance;$('p_change').textContent=cash&&v>bal?'Change to give: KSH '+money(v-bal):cash&&v<bal&&v>0?'Part payment: KSH '+money(bal-v)+' will remain.':''}
+async function shares(){const [ok,j]=await post('shares',{parts:$('s_parts').value});$('shares').textContent=ok?'Each pays: '+j.shares.map(money).join(' · '):j.error;if(ok){$('p_amt').value=j.shares[0];syncPay()}}
+async function doPay(){const m=$('p_method').value;const body={method:m,reference:$('p_ref')?$('p_ref').value:'',payer:$('p_payer').value};
+  if(m==='CASH')body.tendered=$('p_amt').value;else body.amount=$('p_amt').value;
+  const [ok,j]=await post('pay',body);if(!ok){$('payErr').textContent=j.error;return}O=j.order;render();closePops();
+  if(O.status==='PAID'){toast('Bill paid. Receipt created.')}else{toast('Payment recorded. Balance KSH '+money(O.balance));openPay()}}
+
+refresh().then(loadMenu);setInterval(()=>{if(!document.querySelector('.rs-pop.on')&&!splitMode)refresh()},6000);
+</script>
+{% endblock %}

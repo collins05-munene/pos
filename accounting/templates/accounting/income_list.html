@@ -1,0 +1,18 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Other income {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Other income</h2><p>Income that does not come through the POS: rent, interest, services.</p></div>
+  <div class="fin-actions"><a class="btn btn-primary" href="{% url 'accounting:income-new' %}">Record income</a>
+  <a class="btn btn-secondary" href="{% url 'accounting:report-export' key='income-report' fmt='pdf' %}?{{ qs }}">PDF</a>
+  <a class="btn btn-secondary" href="{% url 'accounting:report-export' key='income-report' fmt='xlsx' %}?{{ qs }}">Excel</a></div></div>
+{% include 'accounting/_filter.html' %}
+<div class="fin-kpis"><div class="fin-kpi"><div class="k">Earned in period</div><div class="v">{{ total|money }}</div></div><div class="fin-kpi"><div class="k">Not yet received</div><div class="v">{{ owed|money }}</div></div></div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Earned</th><th>Description</th><th>Type</th><th>Branch</th><th>Paid by</th><th class="num">Amount</th><th>Received</th><th></th></tr></thead><tbody>
+{% for i in page %}<tr class="{% if i.is_cancelled %}muted{% endif %}"><td>{{ i.income_date|date:"d M Y" }}</td><td>{{ i.title }}</td><td>{{ i.get_kind_display }}</td><td>{{ i.branch.name|default:"Head office" }}</td><td>{{ i.payer }}</td><td class="num">{{ i.amount|money }}</td>
+  <td>{% if i.is_cancelled %}Cancelled{% elif i.received_on %}{{ i.received_on|date:"d M Y" }} ({{ i.get_payment_method_display }}){% else %}Not yet{% endif %}</td>
+  <td>{% if not i.is_cancelled %}
+    {% if not i.received_on %}<form method="post" action="{% url 'accounting:income-receive' i.pk %}" class="fin-inline">{% csrf_token %}<input type="date" name="received_on" value="{{ today|date:'Y-m-d' }}" aria-label="Date received"><select name="payment_method" aria-label="Method"><option value="CASH">Cash</option><option value="BANK">Bank</option><option value="MPESA">M-Pesa</option></select><button class="btn btn-secondary" type="submit">Mark received</button></form>{% endif %}
+    <form method="post" action="{% url 'accounting:income-cancel' i.pk %}" class="fin-inline" style="margin-top:4px" onsubmit="return confirm('Cancel this income?')">{% csrf_token %}<input name="reason" placeholder="Reason" required aria-label="Reason"><button class="btn btn-secondary fin-btn-danger" type="submit">Cancel</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="8" class="fin-empty">No other income in this period.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

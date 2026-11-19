@@ -61,7 +61,7 @@ def _record_payment(po, user, amount, method, reference, session):
             amount=amount,
             reason=f"Stock purchase - PO {po.po_number}{supplier_note}",
         )
-    return PurchasePayment.objects.create(
+    payment = PurchasePayment.objects.create(
         purchase_order=po,
         amount=amount,
         payment_method=method,
@@ -69,6 +69,9 @@ def _record_payment(po, user, amount, method, reference, session):
         paid_by=user,
         cash_transaction=cash_txn,
     )
+    from accounting.hooks import notify          # ledger entry (after commit)
+    notify("po_payment", payment.pk)
+    return payment
 
 class StockLevelListView(LiveSearchMixin, AdminRequiredMixin, ListView):
     model = StockLevel
@@ -262,10 +265,13 @@ class PurchaseOrderCreateView(CashierRequiredMixin, CreateView):
 
             if receive_now:
                 for item in self.object.items.select_related('variant', 'variant__base_variant'):
+                    from accounting import integration as _acct, hooks as _hooks
+                    _acct.apply_receipt_cost(self.object, item, item.quantity_ordered)   # moving-average cost
                     item.quantity_received = item.quantity_ordered
                     item.save(update_fields=['quantity_received'])
                     # Converts boxes/packets to base units and updates the single stock row.
                     change_stock(self.object.branch, item.variant, item.quantity_ordered)
+                    _hooks.notify("po_receipt", item.pk, str(item.quantity_ordered))
 
             if amount_paid > 0:
                 _record_payment(self.object, self.request.user, amount_paid, method, reference, session)
@@ -361,9 +367,12 @@ class ReceivePurchaseOrderView(AdminRequiredMixin, View):
 
                 if receive_qty > 0:
                     any_received = True
+                    from accounting import integration as _acct, hooks as _hooks
+                    _acct.apply_receipt_cost(po, item, receive_qty)          # moving-average cost
                     item.quantity_received += receive_qty
                     item.save(update_fields=['quantity_received'])
                     change_stock(po.branch, item.variant, receive_qty)
+                    _hooks.notify("po_receipt", item.pk, str(receive_qty))
 
                 if item.quantity_received < item.quantity_ordered:
                     fully_received = False
@@ -459,6 +468,8 @@ class StockAdjustmentCreateView(AdminRequiredMixin, CreateView):
                 return self.form_invalid(form)
 
             adjustment.save()
+            from accounting.hooks import notify
+            notify("stock_adjustment", adjustment.pk)
 
         self.object = adjustment
         messages.success(self.request, "Stock adjustment recorded.")
@@ -493,10 +504,12 @@ class OpeningStockCreateView(AdminRequiredMixin, View):
                         variant.cost_price = cost
                         variant.save(update_fields=['cost_price'])
                     change_stock(branch, variant, qty)
-                    StockAdjustment.objects.create(
+                    opening = StockAdjustment.objects.create(
                         branch=branch, variant=variant, adjustment_type='OPENING',
                         quantity_changed=qty, reason=notes, user=request.user,
                     )
+                    from accounting.hooks import notify
+                    notify("stock_adjustment", opening.pk)
             messages.success(request, "Opening stock saved.")
             return redirect('stock-level-list')
         return render(request, self.template_name, {'form': form, 'items': items})

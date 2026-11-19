@@ -54,7 +54,7 @@
     return Duka.el('tr', {}, [
       Duka.el('td', { text: s.full_name || '\u2014' }),
       Duka.el('td', { text: s.handle }),
-      Duka.el('td', { text: s.role === 'CASHIER' ? 'Cashier' : 'Manager' }),
+      Duka.el('td', { text: ({CASHIER: 'Cashier', WAITER: 'Waiter', KITCHEN: 'Kitchen'})[s.role] || 'Manager' }),
       Duka.el('td', { text: s.branch_name || '\u2014' }),
       Duka.el('td', { text: s.phone || '\u2014' }),
       Duka.el('td', { text: s.national_id || '\u2014' }),
@@ -169,12 +169,12 @@
     drawerContent.appendChild(Duka.el('hr', { class: 'rule' }));
     drawerContent.appendChild(Duka.el('h2', { text: 'Branch', style: 'font-size:15px;' }));
     const branchPick = Duka.el('select');
-    fillBranchSelect(branchPick, s.branch_id, s.role !== 'CASHIER');
+    fillBranchSelect(branchPick, s.branch_id, !['CASHIER', 'WAITER', 'KITCHEN'].includes(s.role));
     drawerContent.appendChild(Duka.el('div', { class: 'override-form' }, [
       branchPick,
       Duka.el('button', { class: 'secondary', text: 'Move', onclick: () => act(s.id, 'set-branch', { branch_id: branchPick.value }) }),
     ]));
-    if (s.role !== 'CASHIER') {
+    if (!['CASHIER', 'WAITER', 'KITCHEN'].includes(s.role)) {
       drawerContent.appendChild(Duka.el('p', { class: 'plan-note', text: 'Managers can switch between branches from the top bar; this is where they start.' }));
     }
 

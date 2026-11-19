@@ -1,0 +1,16 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} {{ e.reference }} {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>{{ e.reference }}</h2><p>{{ e.description }}</p></div><div class="fin-actions"><a class="btn btn-secondary" href="{% url 'accounting:ledger' %}">Back to ledger</a></div></div>
+<div class="fin-card" style="margin-bottom:16px"><p><b>Date:</b> {{ e.entry_date|date:"d M Y" }} &middot; <b>Status:</b> {{ e.get_status_display }} &middot; <b>Branch:</b> {{ e.branch.name|default:"-" }} &middot; <b>Source:</b> {{ e.source_type }} {{ e.source_id }}</p>
+  <p><b>Posted by:</b> {{ e.created_by.get_full_name|default:e.created_by.get_username|default:"System" }} on {{ e.created_at|date:"d M Y H:i" }}</p>
+  {% if e.reverses %}<p><b>This reverses</b> <a href="{% url 'accounting:journal' e.reverses.pk %}">{{ e.reverses.reference }}</a>: {{ e.reversal_reason }}</p>{% endif %}
+  {% if reversal %}<p><b>Reversed by</b> <a href="{% url 'accounting:journal' reversal.pk %}">{{ reversal.reference }}</a>.</p>{% endif %}</div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Account</th><th>Branch</th><th>Memo</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+{% for l in lines %}<tr><td>{{ l.account.code }} {{ l.account.name }}</td><td>{{ l.branch.name|default:"-" }}</td><td>{{ l.memo }}</td><td class="num">{% if l.debit %}{{ l.debit|money }}{% endif %}</td><td class="num">{% if l.credit %}{{ l.credit|money }}{% endif %}</td></tr>{% endfor %}
+<tr class="total"><td colspan="3">Total</td><td class="num">{{ e.total_debit|money }}</td><td class="num">{{ e.total_credit|money }}</td></tr></tbody></table></div>
+{% if e.status == 'POSTED' and not e.reverses and all_access %}
+<form method="post" action="{% url 'accounting:journal-reverse' e.pk %}" class="fin-inline" onsubmit="return confirm('Reverse this entry? A mirror entry is posted; the original stays on record.')">{% csrf_token %}
+  <input name="reason" placeholder="Reason for reversing" required style="min-width:280px" aria-label="Reason for reversing"><button class="btn btn-secondary fin-btn-danger" type="submit">Reverse entry</button></form>{% endif %}
+{% endblock %}

@@ -254,6 +254,10 @@ def provision_workspace(tenant, owner, branch_names=None):
             UnitOfMeasure.objects.create(name=name, short_name=short)
         Category.objects.create(name="General", slug="general")
 
+    if tenant.is_hospitality and apps.is_installed("restaurant"):
+        from restaurant.services.setup import ensure_restaurant_setup
+        ensure_restaurant_setup(tenant)
+
 
 def staff_handle(tenant, username):
     prefix = f"{tenant.slug}__"

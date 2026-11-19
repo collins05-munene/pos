@@ -22,7 +22,7 @@ from products.models import ProductVariant, Category
 from tenants.models import get_settings
 from promotions.pricing import PriceBook
 from .cart import POSCart
-from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund
+from .models import Order, OrderItem, CashRegisterSession, CashTransaction, Refund, cash_sales_expr
 from .refunds import refund_totals
 from .report_pdf import build_sales_report_pdf
 from .exceptions import InsufficientStockError
@@ -292,6 +292,9 @@ def _attach_availability(variants, branch):
 
 class PosTerminalView(CashierRequiredMixin, View):
     def get(self, request, *args, **kwargs):
+        if getattr(request.tenant, 'is_hospitality', False):
+            # Restaurants and hotels sell through tables / counter orders so recipe stock is right.
+            return redirect('restaurant:floor')
         branch = resolve_user_branch(request.user)
         session = CashRegisterSession.get_active_session(branch)
         if not session:
@@ -673,9 +676,8 @@ class SalesDashboardView(AdminRequiredMixin, TemplateView):
             'rows': discount_rows,
         }
 
-        total_cash_sales_all_time = orders.filter(
-            payment_method='CASH'
-        ).aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+        total_cash_sales_all_time = orders.aggregate(
+            total=Sum(cash_sales_expr()))['total'] or Decimal('0.00')
         total_cash_sales_all_time -= refund_totals(branch=branch)['amount']      # refunds are always paid in cash
 
         latest_closed_session_id_per_branch = (

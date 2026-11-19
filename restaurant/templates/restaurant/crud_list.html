@@ -1,0 +1,12 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><h1>{{ title }}</h1><a class="rs-btn primary" href="{% url 'restaurant:crud-new' key %}">Add</a></div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr>{% for c in cols %}<th>{{ c }}</th>{% endfor %}<th></th></tr></thead><tbody>
+    {% for obj, row in rows %}<tr>{% for v in row %}<td>{% if v == True %}Yes{% elif v == False %}No{% elif v == None %}-{% else %}{{ v }}{% endif %}</td>{% endfor %}
+      <td class="rs-right"><a class="rs-btn sm" href="{% url 'restaurant:crud-edit' key obj.pk %}">Edit</a></td></tr>
+    {% empty %}<tr><td colspan="{{ cols|length|add:1 }}" class="rs-muted">Nothing here yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'accounting/fin_base.html' %}
+{% load static %}
+{% block title %} Financial Analysis {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Financial Analysis</h2><p>How the business is trending. Actual figures unless marked as an estimate.</p></div></div>
+{% include 'accounting/_filter.html' %}
+{% for a in doc.alerts %}<div class="fin-alert" role="alert"><b>Watch:</b> {{ a }}</div>{% empty %}<div class="fin-alert ok">No unusual expense increases or falling profitability detected for this period.</div>{% endfor %}
+<div class="fin-grid">
+  <div class="fin-card"><h3>Net sales vs operating expenses</h3><div style="height:260px"><canvas id="ch-a-sales" role="img" aria-label="Net sales versus operating expenses by month"></canvas></div></div>
+  <div class="fin-card"><h3>Net profit and net cash</h3><div style="height:260px"><canvas id="ch-a-net" role="img" aria-label="Net profit and net cash by month"></canvas></div></div>
+</div>
+{% include 'accounting/_doc.html' %}
+{{ charts|json_script:"fin-charts" }}
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="{% static 'accounting/finance.js' %}"></script>
+<script>window.finAnalysisCharts(JSON.parse(document.getElementById('fin-charts').textContent));</script>
+{% endblock %}

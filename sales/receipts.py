@@ -31,7 +31,7 @@ def _line_name(variant):
     return name
 
 
-def create_receipt(order, issued_at=None):
+def create_receipt(order, issued_at=None, *, lines=None, meta=None):
     """
     Idempotent: returns the existing receipt if this order already has one.
     Call inside the same transaction as the sale so the receipt number (and the
@@ -42,8 +42,9 @@ def create_receipt(order, issued_at=None):
         return existing
 
     items = order.items.select_related('variant__product', 'variant__base_variant')
+    custom_lines = lines            # restaurant bills pass their own (with extras and notes)
     lines = []
-    for i in items:
+    for i in ([] if custom_lines is not None else items):
         line = {
             'name': _line_name(i.variant),
             'sku': i.variant.sku,
@@ -56,6 +57,8 @@ def create_receipt(order, issued_at=None):
             line['discount'] = _money(i.discount_line)
             line['discount_name'] = i.discount_name
         lines.append(line)
+    if custom_lines is not None:
+        lines = custom_lines
 
     branch = order.branch
     cashier = order.cashier
@@ -72,7 +75,10 @@ def create_receipt(order, issued_at=None):
         lines=lines,
         subtotal=order.subtotal,
         discount_total=order.discount_total,
-        total=order.total_revenue,
+        service_charge=order.service_charge,
+        delivery_fee=order.delivery_fee,
+        meta=meta or {},
+        total=order.grand_total,
         footer=get_settings(order.tenant).receipt_footer,
         amount_received=order.amount_received,
         change_given=order.change_given,

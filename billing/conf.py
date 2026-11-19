@@ -5,8 +5,8 @@ from django.conf import settings
 
 DEFAULTS = {
     "CURRENCY": "KES",
-    "MONTHLY_PRICE": Decimal("1499"),
-    "INSTALL_FEE": Decimal("3000"),
+    "MONTHLY_PRICE": Decimal("10"),
+    "INSTALL_FEE": Decimal("3"),
     "BRANCH_MONTHLY_PRICE": Decimal("0"),
     "MAX_BRANCHES": 10,              
     "TERM_DISCOUNT_PERCENT": {1: 0, 3: 30, 6: 30, 12: 30},

@@ -51,6 +51,14 @@ class RefundError(Exception):
     """A refund that cannot be made; the message is safe to show to the user."""
 
 
+def _is_prepared_dish(variant):
+    """A dish made to order from a recipe cannot be put back on the shelf (its ingredients are used)."""
+    try:
+        return variant.menu_item.fulfilment == 'RECIPE'
+    except Exception:          # no restaurant menu item for this variant (every non-restaurant shop)
+        return False
+
+
 def refund_window_days(tenant=None):
     """
     How long after a sale a manager may refund it (Settings -> Refunds). Admins may go past it.
@@ -137,7 +145,8 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
                 raise RefundError(
                     f"{line['name']}: only {line['refundable']} can still be refunded "
                     f"(sold {line['sold']}, already refunded {line['refunded']}).")
-            wanted.append((line, qty, bool(raw.get('restock'))))
+            restock = bool(raw.get('restock')) and not _is_prepared_dish(line['item'].variant)
+            wanted.append((line, qty, restock))
         if not wanted:
             raise RefundError("Enter a quantity for at least one item.")
 
@@ -185,6 +194,8 @@ def process_refund(order, user, lines, reason, notes='', client_uuid=None):
                 unit_price=item.net_price, unit_cost=item.cost_price,
                 restocked=restock, amount=amount, cogs_reversed=cogs,
             ).save()
+        from accounting.hooks import notify      # ledger entry (after commit; never blocks the refund)
+        notify("refund", refund.pk)
         return refund, True
 
 

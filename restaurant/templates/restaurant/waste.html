@@ -1,0 +1,18 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Waste{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Wastage</h1><p class="rs-sub">Last 30 days: <b>KSH {{ total|floatformat:2 }}</b> lost</p></div></div>
+  <div class="rs-two">
+    <div class="rs-card rs-form"><h3 style="margin-top:0">Record waste</h3>
+      <form method="post">{% csrf_token %}{{ form.non_field_errors }}
+        {% for f in form %}<label>{{ f.label }}</label>{{ f }}{% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}{% endfor %}
+        <button class="rs-btn primary" style="margin-top:10px">Record and take out of stock</button></form></div>
+    <div class="rs-card"><h3 style="margin-top:0">By reason</h3>
+      {% for r in by_reason %}<div class="rs-tot"><span>{{ r.reason }} ({{ r.n }})</span><b>KSH {{ r.total|floatformat:2 }}</b></div>{% empty %}<p class="rs-muted">Nothing recorded.</p>{% endfor %}</div>
+  </div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr><th>When</th><th>What</th><th class="rs-right">Qty</th><th>Reason</th><th class="rs-right">Cost</th><th>By</th></tr></thead><tbody>
+    {% for w in records %}<tr><td>{{ w.created_at|date:"d M H:i" }}</td><td>{{ w.subject.name }}</td><td class="rs-right">{{ w.quantity|floatformat:"-3" }}</td><td>{{ w.get_reason_display }}</td><td class="rs-right">{{ w.cost }}</td><td>{{ w.recorded_by.first_name|default:w.recorded_by.username }}</td></tr>
+    {% empty %}<tr><td colspan="6" class="rs-muted">No waste recorded.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

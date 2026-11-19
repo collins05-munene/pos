@@ -69,6 +69,10 @@
               <option value="CASHIER">Cashier</option>
               <option value="MANAGER">Manager</option>
               <option value="ACCOUNTANT">Accountant</option>
+              {% if request.tenant.is_hospitality %}
+              <option value="WAITER">Waiter</option>
+              <option value="KITCHEN">Kitchen</option>
+              {% endif %}
             </select>
             <div class="err"></div>
           </div>

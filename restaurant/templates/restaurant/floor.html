@@ -1,0 +1,66 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Floor plan{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Floor plan</h1><p class="rs-sub">{{ branch.name }} &middot; tap a table to open or manage it</p></div>
+    <div><button class="rs-btn" onclick="quickOrder()">Takeaway / delivery</button>
+    {% if can_manage %}<a class="rs-btn" href="{% url 'restaurant:floor-editor' %}">Edit layout</a>{% endif %}</div></div>
+  <div class="rs-legend"><span><i class="rs-dot" style="background:#10b981"></i>Available</span><span><i class="rs-dot" style="background:#ef4444"></i>Occupied</span>
+    <span><i class="rs-dot" style="background:#f59e0b"></i>Reserved</span><span><i class="rs-dot" style="background:#3b82f6"></i>Cleaning</span><span><i class="rs-dot" style="background:#64748b"></i>Out of service</span><span><b>Green pulse</b> = food ready</span></div>
+  <div class="rs-tabs" id="zoneTabs"></div>
+  <div class="rs-floor" id="plan"></div>
+  <p class="rs-muted" id="empty" style="display:none;margin-top:10px">No tables yet. {% if can_manage %}<a href="{% url 'restaurant:floor-editor' %}">Add your tables</a>.{% endif %}</p>
+</div>
+
+<div class="rs-pop" id="pop"><div class="rs-form" id="popBody"></div></div>
+<div class="rs-pop" id="qpop"><div class="rs-form"><h3>New takeaway / delivery</h3>
+  <label>Type</label><select id="q_type" class="rs-in" onchange="document.getElementById('q_del').style.display=this.value==='DELIVERY'?'block':'none'"><option value="TAKEAWAY">Takeaway</option><option value="DELIVERY">Delivery</option></select>
+  <label>Customer name</label><input id="q_name" class="rs-in"><label>Phone</label><input id="q_phone" class="rs-in" inputmode="tel">
+  <div id="q_del" style="display:none"><label>Delivery address</label><input id="q_addr" class="rs-in">
+    <label>Zone / fee</label><select id="q_zone" class="rs-in"><option value="">Standard fee (KSH {{ default_fee }})</option>{% for z in delivery_zones %}<option value="{{ z.pk }}">{{ z.name }} - KSH {{ z.fee }}</option>{% endfor %}</select></div>
+  <div class="rs-actions"><button class="rs-btn primary" onclick="makeQuick()">Start order</button><button class="rs-btn" onclick="closePops()">Cancel</button></div><p id="q_err" class="rs-low"></p></div></div>
+<div class="rs-toast" id="toast"></div>
+<script>
+const CSRF='{{ csrf_token }}', CAN_MANAGE={{ can_manage|yesno:"true,false" }};
+const WAITERS=[{% for w in waiters %}{id:{{ w.pk }},name:"{{ w.get_full_name|default:w.first_name|default:w.username|escapejs }}"},{% endfor %}];
+let tables=[], zone='all', seenReady=new Set(), first=true;
+const $=id=>document.getElementById(id);
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify(body||{})});return [r.ok,await r.json()]}
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();c.close()},180)}catch(e){}}
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',5000)}
+function closePops(){document.querySelectorAll('.rs-pop').forEach(p=>p.classList.remove('on'))}
+document.querySelectorAll('.rs-pop').forEach(p=>p.addEventListener('click',e=>{if(e.target===p)closePops()}));
+async function load(){
+  const r=await fetch('/restaurant/api/floor/');if(!r.ok)return;const j=await r.json();tables=j.tables;draw();
+  tables.forEach(t=>{if(t.food_ready&&!seenReady.has(t.id)){seenReady.add(t.id);if(!first){beep();toast('Food ready for '+t.label)}}if(!t.food_ready)seenReady.delete(t.id)});first=false}
+function draw(){
+  const zs=[...new Map(tables.filter(t=>t.zone_id).map(t=>[t.zone_id,t.zone])).entries()];
+  $('zoneTabs').innerHTML=zs.length>1?`<a class="rs-tab ${zone==='all'?'on':''}" onclick="setZone('all')">All areas</a>`+zs.map(([id,n])=>`<a class="rs-tab ${zone==id?'on':''}" onclick="setZone(${id})">${n}</a>`).join(''):'';
+  const vis=tables.filter(t=>zone==='all'||t.zone_id==zone);
+  $('empty').style.display=tables.length?'none':'block';
+  $('plan').innerHTML=vis.map(t=>{const o=t.orders,tot=o.reduce((a,x)=>a+parseFloat(x.total),0);
+    const sub=t.state==='MERGED'?'joined to '+t.merged_into_name:t.state==='OCCUPIED'?`${o.length>1?o.length+' bills · ':''}KSH ${tot.toFixed(0)}<br>${o[0].minutes}m`:t.state==='RESERVED'?('Reserved'+(t.reserved_for?': '+t.reserved_for:'')):t.state==='CLEANING'?'Cleaning':t.state==='BLOCKED'?'Out of service':t.capacity+' seats';
+    return `<div class="rs-tbl ${t.shape} ${t.state} ${t.food_ready?'ready':''}" style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%" onclick="openTable(${t.id})"><b>${t.label}</b><small>${sub}</small>${t.waiter?`<small>${t.waiter}</small>`:''}</div>`}).join('')}
+function setZone(z){zone=z;draw()}
+function openTable(id){
+  const t=tables.find(x=>x.id===id);let h=`<h3>${t.label} <span class="rs-badge">${t.state.toLowerCase()}</span></h3><p class="rs-muted">${t.capacity} seats${t.waiter?' · waiter '+t.waiter:''}</p>`;
+  if(t.state==='MERGED'){h+=`<p>This table is joined to <b>${t.merged_into_name}</b>. Use that table.</p>`;$('popBody').innerHTML=h+`<button class="rs-btn" onclick="closePops()">Close</button>`;$('pop').classList.add('on');return}
+  if(t.orders.length){h+='<div class="rs-card" style="padding:10px">'+t.orders.map(o=>`<div class="rs-tot"><span><b>${o.number}</b> · ${o.items} items · KSH ${o.total}${o.balance!==o.total?' (owing '+o.balance+')':''}</span><a class="rs-btn sm primary" href="/restaurant/order/${o.id}/">Open</a></div>`).join('')+'</div>'}
+  if(t.state!=='BLOCKED'){h+=`<label>Guests</label><input id="p_guests" class="rs-in" type="number" min="1" value="${t.seats>2?2:1}"><div class="rs-actions"><button class="rs-btn primary" onclick="newDine(${t.id})">${t.orders.length?'Add another bill':'Open table'}</button></div>`}
+  h+=`<label>Waiter</label><select id="p_waiter" class="rs-in" onchange="act(${t.id},'assign_waiter',{waiter_id:this.value||null})"><option value="">Not assigned</option>${WAITERS.map(w=>`<option value="${w.id}" ${w.id===t.waiter_id?'selected':''}>${w.name}</option>`).join('')}</select>`;
+  if(!t.orders.length){h+=`<label>Table status</label><div class="rs-actions"><button class="rs-btn sm" onclick="hold(${t.id},'NONE')">Available</button><button class="rs-btn sm" onclick="resv(${t.id})">Reserved</button><button class="rs-btn sm" onclick="hold(${t.id},'CLEANING')">Cleaning</button>${CAN_MANAGE?`<button class="rs-btn sm" onclick="hold(${t.id},'BLOCKED')">Out of service</button>`:''}</div>`}
+  const others=tables.filter(x=>x.id!==t.id&&!x.orders.length&&x.state!=='MERGED'&&x.state!=='BLOCKED');
+  if(others.length&&t.state!=='BLOCKED'){h+=`<label>Join tables to this one</label><div style="display:flex;flex-wrap:wrap;gap:6px">${others.map(x=>`<label style="font-weight:500;margin:0"><input type="checkbox" class="mg" value="${x.id}"> ${x.name}</label>`).join('')}</div><button class="rs-btn sm" style="margin-top:6px" onclick="merge(${t.id})">Join selected</button>`}
+  if(t.capacity>t.seats){h+=`<div class="rs-actions"><button class="rs-btn sm danger" onclick="act(${t.id},'split',{})">Separate joined tables</button></div>`}
+  h+=`<div class="rs-actions" style="margin-top:14px"><button class="rs-btn" onclick="closePops()">Close</button></div><p id="p_err" class="rs-low"></p>`;
+  $('popBody').innerHTML=h;$('pop').classList.add('on')}
+async function act(id,a,b){const [ok,j]=await post('/restaurant/api/table/'+id+'/'+a+'/',b);if(!ok){const e=$('p_err');e?e.textContent=j.error:alert(j.error);return}await load();closePops()}
+const hold=(id,s)=>act(id,'hold',{hold:s});
+function resv(id){const n=prompt('Reserved for (name, optional)');if(n!==null)act(id,'hold',{hold:'RESERVED',reserved_for:n})}
+function merge(id){const ids=[...document.querySelectorAll('.mg:checked')].map(c=>+c.value);act(id,'merge',{table_ids:ids})}
+async function newDine(id){const [ok,j]=await post('/restaurant/api/order/create/',{type:'DINE_IN',table_id:id,guests:$('p_guests').value});if(ok)location=j.url;else $('p_err').textContent=j.error}
+function quickOrder(){$('qpop').classList.add('on')}
+async function makeQuick(){const g=i=>$(i).value;const [ok,j]=await post('/restaurant/api/order/create/',{type:g('q_type'),customer_name:g('q_name'),customer_phone:g('q_phone'),address:g('q_addr'),delivery_zone_id:g('q_zone')||null});if(ok)location=j.url;else $('q_err').textContent=j.error}
+load();setInterval(load,5000);
+</script>
+{% endblock %}

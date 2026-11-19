@@ -1,0 +1,12 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Shift reports{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><h1>Shift reconciliation</h1></div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr><th>Cashier</th><th>Opened</th><th>Closed</th><th class="rs-right">Expected cash</th><th class="rs-right">Counted cash</th><th class="rs-right">M-Pesa</th><th class="rs-right">Card</th><th class="rs-right">Variance</th></tr></thead><tbody>
+  {% for s in shifts %}<tr><td>{{ s.cashier.first_name|default:s.cashier.username }}</td><td>{{ s.opened_at|date:"d M H:i" }}</td><td>{{ s.closed_at|date:"d M H:i" }}</td>
+    <td class="rs-right">{{ s.expected_cash }}</td><td class="rs-right">{{ s.counted_cash }}</td><td class="rs-right">{{ s.expected_mpesa }}</td><td class="rs-right">{{ s.expected_card }}</td>
+    <td class="rs-right">{% if s.variance == 0 %}<span class="rs-badge green">balanced</span>{% elif s.variance < 0 %}<span class="rs-badge red">short {{ s.variance }}</span>{% else %}<span class="rs-badge amber">over +{{ s.variance }}</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="rs-muted">No closed shifts yet.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

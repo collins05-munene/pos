@@ -1,0 +1,12 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Repeating expenses {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Repeating expenses</h2><p>Each period creates an unpaid expense. Nothing is paid automatically, and the same period is never created twice.</p></div>
+  <div class="fin-actions"><a class="btn btn-primary" href="{% url 'accounting:expense-new' %}">Add (choose &quot;Repeat this expense&quot;)</a><a class="btn btn-secondary" href="{% url 'accounting:expenses' %}">Back</a></div></div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Expense</th><th>Category</th><th>Branch</th><th>Repeats</th><th>Starts</th><th>Ends</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for r in recs %}<tr class="{% if not r.is_active %}muted{% endif %}"><td>{{ r.title }}</td><td>{{ r.category.name }}</td><td>{{ r.branch.name|default:"Head office" }}</td><td>{{ r.get_frequency_display }}</td>
+    <td>{{ r.start_date|date:"d M Y" }}</td><td>{{ r.end_date|date:"d M Y"|default:"No end" }}</td><td class="num">{{ r.amount|money }}</td><td>{% if r.is_active %}Active{% else %}Paused{% endif %}</td>
+    <td><form method="post" action="{% url 'accounting:recurring-toggle' r.pk %}">{% csrf_token %}<button class="btn btn-secondary" type="submit">{% if r.is_active %}Pause{% else %}Resume{% endif %}</button></form></td></tr>
+  {% empty %}<tr><td colspan="9" class="fin-empty">No repeating expenses yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

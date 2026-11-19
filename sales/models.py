@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Case, DecimalField, F, Sum, When
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from decimal import Decimal
@@ -29,6 +30,17 @@ def next_number(tenant, kind, prefix):
         return f"{prefix}{n + 1:06d}" 
 
     
+def cash_sales_expr():
+    """SQL expression: the cash an Order put in the drawer (see CashRegisterSession.total_cash_sales)."""
+    money = DecimalField(max_digits=12, decimal_places=2)
+    return Case(
+        When(cash_amount__isnull=False, then=F('cash_amount')),
+        When(payment_method='CASH', then=F('total_revenue')),
+        default=Decimal('0.00'),
+        output_field=money,
+    )
+
+
 class CashRegisterSession(TenantOwnedModel):
     """
     Represents ONE shared, continuous cash pool for a branch — not a
@@ -127,9 +139,14 @@ class CashRegisterSession(TenantOwnedModel):
 
     @property
     def total_cash_sales(self):
-        result = self.orders.filter(
-            payment_method='CASH'
-        ).aggregate(total=models.Sum('total_revenue'))['total']
+        """
+        Cash that came into the drawer from sales in this session.
+
+        A plain cash sale brings in its total_revenue. Restaurant bills can be split across
+        cash / M-Pesa / card and carry a service charge or delivery fee, so they record the
+        exact cash they kept in Order.cash_amount; that wins whenever it is set.
+        """
+        result = self.orders.aggregate(total=Sum(cash_sales_expr()))['total']
         return result or Decimal('0.00')
 
     @property
@@ -197,6 +214,10 @@ class CashTransaction(TenantOwnedModel):
 class Order(TenantOwnedModel):
     PAYMENT_METHODS = (
         ('CASH', 'Cash'),
+        ('MPESA', 'M-Pesa'),      # restaurant bills only (recorded manually, see restaurant app)
+        ('CARD', 'Card'),
+        ('ONLINE', 'Paid online'),
+        ('SPLIT', 'Split payment'),
     )
     invoice_number = models.CharField(max_length=50, blank=True, default="")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='sales', null=True)
@@ -213,6 +234,16 @@ class Order(TenantOwnedModel):
         max_digits=12, decimal_places=2, default=0.00, help_text="Total discounts given on this sale.")
     total_cogs = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_profit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    service_charge = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00,
+        help_text="Restaurant service charge. Not part of total_revenue/profit; added on top of it.")
+    delivery_fee = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00,
+        help_text="Restaurant delivery fee. Not part of total_revenue/profit; added on top of it.")
+    cash_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Cash this sale left in the drawer, when that is not simply total_revenue "
+                  "(split bills, service charge, delivery fee). Blank = use the plain rule.")
     amount_received = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Cash physically handed over by the customer"
@@ -248,6 +279,11 @@ class Order(TenantOwnedModel):
 
     def __str__(self):
         return f"Invoice {self.invoice_number}"
+
+    @property
+    def grand_total(self):
+        """What the customer paid in all: goods + service charge + delivery fee."""
+        return self.total_revenue + self.service_charge + self.delivery_fee
 
     @property
     def refunded_amount(self):
@@ -319,7 +355,11 @@ class Receipt(TenantOwnedModel):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                    help_text="Before discounts (0 on receipts issued before discounts existed)")
     discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    service_charge = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    delivery_fee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2)
+    meta = models.JSONField(default=dict, blank=True,
+                            help_text="Restaurant extras: table, order type, waiter, how it was paid ...")
     footer = models.CharField(max_length=200, blank=True, default='', help_text="Shop's footer text at the time of sale")
     amount_received = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     change_given = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)

@@ -1,0 +1,31 @@
+{% extends 'accounting/fin_base.html' %}
+{% block title %} {{ report_title }} {% endblock %}
+{% block fin_body %}
+<div class="fin-head">
+  <div><h2>{{ report_title }}</h2><p>{{ doc.branch_label }} &middot; {{ doc.period_label }} &middot; {{ doc.basis_label }}</p></div>
+  <div class="fin-actions">
+    <a class="btn btn-secondary" href="{% url 'accounting:report-export' key=report_key fmt='pdf' %}?{{ qs }}">Download PDF</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:report-export' key=report_key fmt='xlsx' %}?{{ qs }}">Download Excel</a>
+  </div>
+</div>
+{% include 'accounting/_filter.html' %}
+{% if report_key == 'expense-register' %}
+<form method="get" class="fin-filter">
+  {% for k, v in request.GET.items %}{% if k != 'category' and k != 'status' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <div><label for="x-cat">Category</label><select id="x-cat" name="category"><option value="">All</option>{% for c in categories %}<option value="{{ c.pk }}" {% if request.GET.category == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label for="x-st">Status</label><select id="x-st" name="status"><option value="">All</option>{% for v, l in status_choices %}<option value="{{ v }}" {% if request.GET.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div><button class="btn btn-secondary" type="submit">Filter</button></div>
+</form>
+{% endif %}
+{% if report_key == 'general-ledger' %}
+<form method="get" class="fin-filter">
+  {% for k, v in request.GET.items %}{% if k != 'account' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <div class="grow"><label for="x-acc">Account</label><select id="x-acc" name="account"><option value="">All accounts</option>{% for a in gl_accounts %}<option value="{{ a.pk }}" {% if request.GET.account == a.pk|stringformat:'s' %}selected{% endif %}>{{ a.code }} {{ a.name }}</option>{% endfor %}</select></div>
+  <div><button class="btn btn-secondary" type="submit">Show</button></div>
+</form>
+{% endif %}
+{% if report_key == 'profit-loss' %}
+<p class="fin-note">{% if compare %}<a href="?{{ qs }}&compare=0">Hide previous period</a>{% else %}<a href="?{{ qs }}&compare=1">Compare with previous period</a>{% endif %}</p>
+{% endif %}
+{% include 'accounting/_doc.html' %}
+{% endblock %}

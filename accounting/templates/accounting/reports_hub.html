@@ -1,0 +1,18 @@
+{% extends 'accounting/fin_base.html' %}
+{% block title %} Financial Reports {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Financial Reports</h2><p>Set the period and branch once, then open or download any report as PDF or Excel.</p></div></div>
+{% include 'accounting/_filter.html' %}
+<div class="fin-cards">
+  {% for key, title, blurb in items %}
+  <div class="fin-card">
+    <h3>{{ title }}</h3><p class="fin-note">{{ blurb }}</p>
+    <div class="fin-actions">
+      <a class="btn btn-primary" href="{% url 'accounting:report' key=key %}?{{ qs }}">View</a>
+      <a class="btn btn-secondary" href="{% url 'accounting:report-export' key=key fmt='pdf' %}?{{ qs }}">PDF</a>
+      <a class="btn btn-secondary" href="{% url 'accounting:report-export' key=key fmt='xlsx' %}?{{ qs }}">Excel</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

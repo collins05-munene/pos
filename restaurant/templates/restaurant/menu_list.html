@@ -1,0 +1,20 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Menu & recipes{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Menu &amp; recipes</h1><p class="rs-sub">Cost comes from each recipe and today's ingredient prices.</p></div>
+    <div><form method="post" action="{% url 'restaurant:recost' %}" style="display:inline">{% csrf_token %}<button class="rs-btn">Refresh costs</button></form>
+    <a class="rs-btn primary" href="{% url 'restaurant:menu-new' %}">Add menu item</a></div></div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr><th>Item</th><th>Category</th><th>Station</th><th class="rs-right">Price</th><th class="rs-right">Cost</th><th class="rs-right">Margin</th><th class="rs-right">Food cost %</th><th></th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td><b>{{ r.item.name }}</b> {% if not r.item.is_available %}<span class="rs-badge red">86'd</span>{% endif %}{% if not r.item.is_active %}<span class="rs-badge">hidden</span>{% endif %}
+        {% if not r.has_recipe %}<span class="rs-badge amber">no recipe</span>{% endif %}</td>
+    <td>{{ r.item.category.name }}</td><td>{{ r.item.station.name|default:"-" }}</td>
+    <td class="rs-right">{{ r.item.price }}</td><td class="rs-right">{{ r.cost }}</td><td class="rs-right">{{ r.margin }}</td>
+    <td class="rs-right">{% if r.fc is not None %}{{ r.fc }}%{% else %}-{% endif %}</td>
+    <td class="rs-right">{% if r.item.fulfilment == 'RECIPE' %}<a class="rs-btn sm" href="{% url 'restaurant:recipe' r.item.pk %}">Recipe</a>{% endif %}
+      <a class="rs-btn sm" href="{% url 'restaurant:menu-edit' r.item.pk %}">Edit</a></td></tr>
+  {% empty %}<tr><td colspan="8" class="rs-muted">No menu items yet. Add your first dish.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

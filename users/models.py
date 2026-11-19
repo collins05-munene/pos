@@ -22,6 +22,8 @@ class User(AbstractUser):
         MANAGER = "MANAGER", "Manager"
         CASHIER = "CASHIER", "Cashier"
         ACCOUNTANT = "ACCOUNTANT", "Accountant"
+        WAITER = "WAITER", "Waiter"      # restaurants / hotels only
+        KITCHEN = "KITCHEN", "Kitchen"   # restaurants / hotels only: sees the kitchen display
 
     role = models.CharField(max_length=15, choices=Roles.choices, default=Roles.CASHIER)
     last_seen = models.DateTimeField(null=True, blank=True)

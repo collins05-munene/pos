@@ -1,0 +1,30 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Kitchen display{% endblock %}
+{% block content %}
+<div class="rs-page" style="max-width:none">
+  <div class="rs-head"><div><h1>Kitchen display</h1><p class="rs-sub"><span id="count">0</span> active tickets &middot; late after {{ late }} min</p></div>
+    <div class="rs-tabs" id="stTabs" style="margin:0"><a class="rs-tab on" data-s="" onclick="setStation('')">All stations</a>
+      {% for s in stations %}<a class="rs-tab" data-s="{{ s.pk }}" onclick="setStation('{{ s.pk }}')" style="border-left:6px solid {{ s.color }}">{{ s.name }}</a>{% endfor %}</div>
+    <label class="rs-muted"><input type="checkbox" id="snd" checked> Sound</label></div>
+  <div class="kds-body"><div class="kds-grid" id="grid"></div><p id="none" style="color:#94a3b8;text-align:center;padding:40px;display:none">No orders waiting. 🎉</p></div>
+</div>
+<script>
+const CSRF='{{ csrf_token }}';let station='',seen=new Set(),first=true,data=[],offset=0;
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function beep(){if(!$('snd').checked)return;try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=660;o.start();setTimeout(()=>{o.stop();c.close()},250)}catch(e){}}
+function setStation(s){station=s;document.querySelectorAll('#stTabs .rs-tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));first=true;load()}
+const fmt=sec=>{sec=Math.max(0,sec);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')}
+async function load(){const r=await fetch('/restaurant/api/kds/'+(station?'?station='+station:''));if(!r.ok)return;const j=await r.json();data=j.tickets;
+  data.forEach(t=>{t.t0=Date.now()-t.elapsed*1000});
+  data.forEach(t=>{if(!seen.has(t.id)){seen.add(t.id);if(!first&&t.status==='PENDING')beep()}});first=false;draw()}
+function draw(){$('count').textContent=data.filter(t=>t.status!=='CANCELLED').length;$('none').style.display=data.length?'none':'block';
+  $('grid').innerHTML=data.map(t=>{const live=t.status==='PENDING'||t.status==='PREPARING';const el=live?Math.floor((Date.now()-t.t0)/1000):t.elapsed;
+    return `<div class="kds-card ${t.status} ${t.late?'late':''}" id="k${t.id}"><div class="kds-top"><div><b>${esc(t.where)}</b> <span class="rs-muted">${esc(t.order)}${t.round>1?' · round '+t.round:''}</span></div><span class="kds-timer" data-id="${t.id}">${fmt(el)}</span></div>
+      <div style="padding:4px 12px;font-size:.8rem;display:flex;gap:6px;flex-wrap:wrap"><span class="kds-st" style="background:${t.color}">${esc(t.station)}</span><span class="rs-badge">${esc(t.type_label)}</span>${t.waiter?'<span class="rs-muted">'+esc(t.waiter)+'</span>':''}${t.customer?'<span class="rs-muted">'+esc(t.customer)+'</span>':''}${t.status==='CANCELLED'?'<span class="rs-badge red">CANCELLED</span>':''}</div>
+      <div class="kds-lines">${t.lines.map(l=>`<div class="${l.void?'v':''}"><b>${l.qty} ×</b> ${esc(l.name)}${l.void?' (cancelled)':''}${l.mods.map(m=>`<div class="m">${esc(m)}</div>`).join('')}${l.note?`<div class="m">“${esc(l.note)}”</div>`:''}</div>`).join('')}${t.notes?`<div class="m" style="color:#b91c1c">Order note: ${esc(t.notes)}</div>`:''}</div>
+      <div class="kds-foot">${t.status==='PENDING'?`<button class="rs-btn navy" onclick="go(${t.id},'start')">Start</button><button class="rs-btn primary" onclick="go(${t.id},'ready')">Ready</button>`:''}${t.status==='PREPARING'?`<button class="rs-btn primary" onclick="go(${t.id},'ready')">Ready</button>`:''}${t.status==='READY'?`<button class="rs-btn" onclick="go(${t.id},'recall')">Recall</button><button class="rs-btn primary" onclick="go(${t.id},'serve')">Served</button>`:''}</div></div>`}).join('')}
+setInterval(()=>{document.querySelectorAll('.kds-timer').forEach(e=>{const t=data.find(x=>x.id==e.dataset.id);if(t&&(t.status==='PENDING'||t.status==='PREPARING'))e.textContent=fmt(Math.floor((Date.now()-t.t0)/1000))})},1000);
+async function go(id,a){const r=await fetch('/restaurant/api/ticket/'+id+'/'+a+'/',{method:'POST',headers:{'X-CSRFToken':CSRF}});const j=await r.json();if(!j.ok)alert(j.error);load()}
+load();setInterval(load,4000);
+</script>
+{% endblock %}

@@ -25,6 +25,8 @@ class Tenant(models.Model):
         PHARMACY = "PHARMACY", "Pharmacy"
         HARDWARE = "HARDWARE", "Hardware"
         AGROVET = "AGROVET", "Agrovet"
+        RESTAURANT = "RESTAURANT", "Restaurant / Cafe"
+        HOTEL = "HOTEL", "Hotel / Lodge"
         OTHER = "OTHER", "Other"
 
     name = models.CharField(max_length=150)
@@ -48,6 +50,11 @@ class Tenant(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.slug})"
+
+    @property
+    def is_hospitality(self):
+        """Restaurants and hotels get the restaurant module (tables, kitchen, recipes ...)."""
+        return self.business_type in (self.BusinessType.RESTAURANT, self.BusinessType.HOTEL)
 
     @property
     def has_access(self):

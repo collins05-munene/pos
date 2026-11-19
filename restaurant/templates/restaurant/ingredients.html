@@ -1,0 +1,16 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Ingredients{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Ingredients</h1><p class="rs-sub">Receive stock with a <a href="{% url 'purchase-order-list' %}">Purchase Order</a>; count it in <a href="{% url 'stock-level-list' %}">Stock Management</a>.</p></div>
+    <a class="rs-btn primary" href="{% url 'restaurant:ingredient-new' %}">Add ingredient</a></div>
+  <div class="rs-tabs"><a class="rs-tab {% if not only_low %}on{% endif %}" href="?">All</a><a class="rs-tab {% if only_low %}on{% endif %}" href="?low=1">Low stock</a></div>
+  <div class="rs-card rs-scroll"><table class="rs-table"><thead><tr><th>Ingredient</th><th class="rs-right">In stock</th><th>Unit</th><th class="rs-right">Cost / unit</th><th class="rs-right">Alert at</th><th></th></tr></thead><tbody>
+  {% for r in rows %}{% if not only_low or r.low %}<tr><td>{{ r.ing.name }}{% if not r.ing.is_active %} <span class="rs-badge">inactive</span>{% endif %}</td>
+    <td class="rs-right {% if r.low %}rs-low{% endif %}">{{ r.qty|floatformat:"-3" }}</td><td>{{ r.ing.stock_unit }}</td>
+    <td class="rs-right">{{ r.ing.variant.cost_price|floatformat:"-4" }}</td><td class="rs-right">{{ r.ing.variant.low_stock_threshold|floatformat:"-3" }}</td>
+    <td class="rs-right"><a class="rs-btn sm" href="{% url 'restaurant:ingredient-edit' r.ing.pk %}">Edit</a></td></tr>{% endif %}
+  {% empty %}<tr><td colspan="6" class="rs-muted">No ingredients yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

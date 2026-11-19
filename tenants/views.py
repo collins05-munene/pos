@@ -193,7 +193,9 @@ class VerifyEmailView(View):
         return redirect("/billing/")
 
 
-ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER", "ACCOUNTANT")  
+ALLOWED_STAFF_ROLES = ("CASHIER", "MANAGER", "ACCOUNTANT")
+HOSPITALITY_STAFF_ROLES = ("WAITER", "KITCHEN")   # only offered to restaurants / hotels
+BRANCH_PINNED_ROLES = ("CASHIER", "WAITER", "KITCHEN")  # work at exactly one branch
 
 def _staff_payload(user):
     return {
@@ -222,16 +224,17 @@ class StaffListView(OwnerRequiredMixin, View):
         role = (request.POST.get("role") or "").strip().upper()
         credential = request.POST.get("credential") or ""
 
-        if role not in ALLOWED_STAFF_ROLES:
-            return JsonResponse({"errors": {"role": ["Choose Cashier, Manager or Accountant."]}}, status=400)
+        allowed = ALLOWED_STAFF_ROLES + (HOSPITALITY_STAFF_ROLES if request.tenant.is_hospitality else ())
+        if role not in allowed:
+            return JsonResponse({"errors": {"role": ["Choose one of the roles in the list."]}}, status=400)
 
         form = StaffDetailsForm(request.POST, tenant=request.tenant)
         if not form.is_valid():
             return JsonResponse({"errors": _form_errors(form)}, status=400)
 
         branch = active_branches(request.tenant).filter(pk=request.POST.get("branch_id") or 0).first()
-        if branch is None and role == "CASHIER":
-            return JsonResponse({"errors": {"branch_id": ["Choose which branch this cashier works at."]}}, status=400)
+        if branch is None and role in BRANCH_PINNED_ROLES:
+            return JsonResponse({"errors": {"branch_id": ["Choose which branch this person works at."]}}, status=400)
 
         try:
             user = create_staff_user(tenant=request.tenant, handle=handle, role=role, branch=branch,

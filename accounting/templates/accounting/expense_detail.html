@@ -1,0 +1,45 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} {{ e.title }} {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>{{ e.title }}</h2><p>{{ e.category.name }} &middot; {{ e.branch.name|default:"Head office" }} &middot; <span class="fin-pill {% if e.is_overdue %}Overdue{% else %}{{ e.status }}{% endif %}">{{ e.display_status }}</span></p></div>
+  <div class="fin-actions"><a class="btn btn-secondary" href="{% url 'accounting:expenses' %}">Back</a>
+    {% if e.status != 'CANCELLED' %}<a class="btn btn-secondary" href="{% url 'accounting:expense-edit' e.pk %}">Edit</a>{% endif %}
+    {% if e.receipt %}<a class="btn btn-secondary" href="{% url 'accounting:receipt' e.pk %}" target="_blank" rel="noopener">View receipt</a><a class="btn btn-secondary" href="{% url 'accounting:receipt' e.pk %}?download=1">Download</a>{% endif %}</div></div>
+<div class="fin-kpis">
+  <div class="fin-kpi"><div class="k">Amount</div><div class="v">{{ e.amount|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Paid</div><div class="v">{{ e.amount_paid|money }}</div></div>
+  <div class="fin-kpi hero"><div class="k">Balance</div><div class="v">{{ e.balance|money }}</div></div>
+  <div class="fin-kpi"><div class="k">Due</div><div class="v" style="font-size:1.05rem">{{ e.due_date|date:"d M Y"|default:"Not set" }}</div></div>
+</div>
+<div class="fin-grid">
+  <div class="fin-card"><h3>Details</h3>
+    <p><b>Date incurred:</b> {{ e.expense_date|date:"d M Y" }}</p>
+    <p><b>Payee:</b> {{ e.vendor|default:"-" }}</p><p><b>Reference:</b> {{ e.reference|default:"-" }}</p>
+    <p><b>Recorded by:</b> {{ e.created_by.get_full_name|default:e.created_by.get_username }} on {{ e.created_at|date:"d M Y H:i" }}</p>
+    {% if e.recurring_id %}<p><b>Repeats:</b> generated from a repeating expense.</p>{% endif %}
+    {% if e.description %}<p>{{ e.description|linebreaksbr }}</p>{% endif %}
+    {% if allocations %}<p><b>Shared across:</b> {% for a in allocations %}{{ a.branch.name }} {{ a.percent }}%{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+    {% if e.status == 'CANCELLED' %}<div class="fin-alert bad">Cancelled: {{ e.cancel_reason }}</div>{% endif %}</div>
+  {% if e.status != 'CANCELLED' and e.balance > 0 %}
+  <div class="fin-card"><h3>Record a payment</h3>
+    <form method="post" action="{% url 'accounting:expense-pay' e.pk %}" class="fin-stack">{% csrf_token %}
+      {% for field in form %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="fin-note">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+      <button class="btn btn-primary" type="submit">Record payment</button></form></div>{% endif %}
+</div>
+<div class="fin-scroll"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">Payments</h3>
+  <table class="fin-table"><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Paid from</th><th>By</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+  {% for p in payments %}<tr class="{% if p.is_voided %}muted{% endif %}"><td>{{ p.payment_date|date:"d M Y" }}</td><td>{{ p.get_payment_method_display }}</td><td>{{ p.reference|default:"-" }}</td><td>{{ p.account.name }}</td>
+    <td>{{ p.paid_by.get_full_name|default:p.paid_by.get_username }}</td><td class="num">{{ p.amount|money }}</td>
+    <td>{% if p.is_voided %}Voided: {{ p.void_reason }}{% else %}<form method="post" action="{% url 'accounting:payment-void' p.pk %}" class="fin-inline" onsubmit="return confirm('Void this payment? The expense goes back to unpaid for this amount.')">{% csrf_token %}<input name="reason" placeholder="Reason" required aria-label="Reason for voiding"><button class="btn btn-secondary fin-btn-danger" type="submit">Void</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="fin-empty">No payments yet. An unpaid expense is a bill you owe, not money spent.</td></tr>{% endfor %}</tbody></table></div>
+{% if e.status != 'CANCELLED' and e.amount_paid == 0 %}
+<form method="post" action="{% url 'accounting:expense-cancel' e.pk %}" class="fin-inline" onsubmit="return confirm('Cancel this expense? It is removed from your profit and loss.')">{% csrf_token %}
+  <input name="reason" placeholder="Reason for cancelling" required aria-label="Reason for cancelling"><button class="btn btn-secondary fin-btn-danger" type="submit">Cancel expense</button></form>{% endif %}
+{% if all_access %}
+<div class="fin-scroll" style="margin-top:16px"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">Ledger entries</h3><table class="fin-table"><tbody>
+  {% for je in entries %}<tr><td><a href="{% url 'accounting:journal' je.pk %}">{{ je.reference }}</a></td><td>{{ je.entry_date|date:"d M Y" }}</td><td>{{ je.description }}</td><td>{{ je.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="fin-scroll" style="margin-top:16px"><h3 style="padding:12px 12px 0;margin:0;font-size:1rem">History</h3><table class="fin-table"><tbody>
+  {% for h in history %}<tr><td>{{ h.created_at|date:"d M Y H:i" }}</td><td>{{ h.user.get_full_name|default:h.user.get_username|default:"System" }}</td><td>{{ h.action }}</td></tr>
+  {% empty %}<tr><td class="fin-empty">No history.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

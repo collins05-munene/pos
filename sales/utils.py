@@ -191,6 +191,9 @@ def complete_pos_sale(cart, payment_method, cashier, cash_session=None, amount_r
         # Receipt is a frozen snapshot of the sale; created in the same transaction.
         create_receipt(order, issued_at=occurred_at)
 
+        from accounting.hooks import notify      # ledger entry (after commit; never blocks the sale)
+        notify("sale", order.pk)
+
         from notifications.checks import check_stock_after_sale
         transaction.on_commit(
             lambda: check_stock_after_sale(order.tenant, branch.pk, sold_variants))

@@ -1,0 +1,21 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}My tables{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>My tables</h1><p class="rs-sub">{{ branch.name }}</p></div><a class="rs-btn primary" href="{% url 'restaurant:floor' %}">Floor plan</a></div>
+  <div class="rs-card" id="readyBox" style="border-color:#6ee7b7;background:#ecfdf5;display:none"><h3 style="margin-top:0">Food ready to serve</h3><div id="ready"></div></div>
+  <div class="rs-grid" id="tbls"></div>
+</div>
+<div class="rs-toast" id="toast"></div>
+<script>
+const CSRF='{{ csrf_token }}';let seen=new Set(),first=true;const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();c.close()},200)}catch(e){}}
+async function load(){const r=await fetch('/restaurant/api/waiter/');if(!r.ok)return;const j=await r.json();
+  $('readyBox').style.display=j.ready.length?'block':'none';
+  $('ready').innerHTML=j.ready.map(t=>`<div class="rs-tot"><span><b>${esc(t.where)}</b> · ${esc(t.station)}: ${t.lines.filter(l=>!l.void).map(l=>l.qty+' × '+esc(l.name)).join(', ')}</span><button class="rs-btn sm primary" onclick="served(${t.id})">Served</button></div>`).join('');
+  j.ready.forEach(t=>{if(!seen.has(t.id)){seen.add(t.id);if(!first){beep();const e=$('toast');e.textContent='Food ready: '+t.where;e.style.display='block';setTimeout(()=>e.style.display='none',5000)}}});first=false;
+  $('tbls').innerHTML=j.tables.filter(t=>t.state!=='MERGED').map(t=>`<a class="rs-stat" href="${t.orders.length?'/restaurant/order/'+t.orders[0].id+'/':'/restaurant/floor/'}" style="text-decoration:none;border-width:2px;border-color:${t.state==='OCCUPIED'?'#ef4444':'#10b981'}"><b>${esc(t.label)}</b><span>${t.orders.length?t.orders.length+' bill(s) · KSH '+t.orders.reduce((a,o)=>a+parseFloat(o.total),0).toFixed(0):'free'}</span>${t.food_ready?'<br><span class="rs-badge green">food ready</span>':''}</a>`).join('')}
+async function served(id){await fetch('/restaurant/api/ticket/'+id+'/serve/',{method:'POST',headers:{'X-CSRFToken':CSRF}});load()}
+load();setInterval(load,5000);
+</script>
+{% endblock %}

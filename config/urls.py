@@ -54,6 +54,8 @@ urlpatterns = [
     path("platform/helpdesk/", include("platform_admin.helpdesk_urls")),
     path("assistant/", include("assistant.urls")),
     path("getting-started/", include("onboarding.urls")),
+    path("finance/", include("accounting.urls")),
+    path("restaurant/", include("restaurant.urls")),
 ]
 
 

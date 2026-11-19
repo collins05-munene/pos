@@ -112,6 +112,8 @@ def dispatch_transfer(transfer, user):
     t.status = 'IN_TRANSIT'
     t.dispatched_by, t.dispatched_at = user, timezone.now()
     t.save(update_fields=['status', 'dispatched_by', 'dispatched_at', 'updated_at'])
+    from accounting.hooks import notify
+    notify("transfer_dispatch", t.pk)
     return t
 
 
@@ -145,6 +147,8 @@ def receive_transfer(transfer, user, received=None):
     t.status = 'COMPLETED'
     t.received_by, t.received_at = user, timezone.now()
     t.save(update_fields=['status', 'received_by', 'received_at', 'updated_at'])
+    from accounting.hooks import notify
+    notify("transfer_receive", t.pk)
     return t
 
 
@@ -162,4 +166,7 @@ def cancel_transfer(transfer, user):
     t.status = 'CANCELLED'
     t.cancelled_by, t.cancelled_at = user, timezone.now()
     t.save(update_fields=['status', 'cancelled_by', 'cancelled_at', 'updated_at'])
+    from accounting.hooks import notify
+    if t.dispatched_at:
+        notify("transfer_cancel", t.pk)
     return t

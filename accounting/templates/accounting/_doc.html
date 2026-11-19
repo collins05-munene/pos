@@ -1,0 +1,21 @@
+{% load finance %}
+{% for a in doc.alerts %}<div class="fin-alert {% if doc.balanced is False %}bad{% endif %}" role="alert">{{ a }}</div>{% endfor %}
+{% for t in doc.tables %}
+<div class="fin-scroll">
+  <h3 style="padding:12px 12px 0;margin:0;font-size:1rem">{{ t.title }}</h3>
+  <table class="fin-table">
+    <thead><tr>{% for c in t.columns %}<th scope="col" class="{% if forloop.counter0 in t.money_cols %}num{% endif %}">{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in t.rows %}
+      <tr class="{{ r.style }}">
+        {% for cell in r.cells %}
+          <td class="{% if cell|is_num %}num{% endif %}{% if cell|neg %} negative{% endif %}"{% if forloop.first and r.indent %} style="padding-left:{{ r.indent|add:1 }}.2rem"{% endif %}>{% if cell|is_dec %}{{ cell|money }}{% else %}{{ cell }}{% endif %}</td>
+        {% endfor %}
+      </tr>
+    {% empty %}<tr><td colspan="{{ t.columns|length }}" class="fin-empty">Nothing to show for this period.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% if doc.balanced is True %}<div class="fin-alert ok">Debits equal credits. The books balance.</div>{% endif %}
+{% for n in doc.notes %}<p class="fin-note">{{ n }}</p>{% endfor %}

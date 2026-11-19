@@ -1,0 +1,55 @@
+/* Financial Management: extends the Unisale look (uses the global design tokens). */
+.fin-page{max-width:1280px;margin:0 auto;padding:0 4px 40px}
+.fin-head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.fin-head h2{margin:0;font-size:1.5rem;color:var(--text)}
+.fin-head p{margin:4px 0 0;color:#6b7280;font-size:.92rem}
+.fin-actions{display:flex;flex-wrap:wrap;gap:8px}
+.fin-subnav{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 16px;padding:0;list-style:none;border-bottom:1px solid var(--border)}
+.fin-subnav a{display:block;padding:9px 14px;color:#4b5563;text-decoration:none;font-size:.92rem;border-bottom:2px solid transparent;margin-bottom:-1px}
+.fin-subnav a:hover{color:var(--primary)}
+.fin-subnav a.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.fin-filter{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;box-shadow:var(--shadow)}
+.fin-filter label{display:block;font-size:.74rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.fin-filter select,.fin-filter input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:.92rem;background:#fff;min-width:120px}
+.fin-filter .grow{flex:1}
+.fin-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+.fin-kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+.fin-kpi .k{font-size:.76rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+.fin-kpi .v{font-size:1.35rem;font-weight:700;margin-top:6px;color:var(--text);font-variant-numeric:tabular-nums}
+.fin-kpi .d{font-size:.8rem;color:#6b7280;margin-top:2px}
+.fin-kpi .v.neg{color:var(--danger)}
+.fin-kpi.hero{border-left:4px solid var(--primary)}
+.fin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:18px}
+.fin-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+.fin-card h3{margin:0 0 10px;font-size:1rem;color:var(--text)}
+.fin-card canvas{max-width:100%}
+.fin-note{font-size:.84rem;color:#6b7280;margin:6px 0}
+.fin-alert{background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:.92rem}
+.fin-alert.bad{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}
+.fin-alert.ok{background:#dcfce7;border-color:#86efac;color:#14532d}
+.fin-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.fin-table th{background:#f3f4f6;text-align:left;padding:8px 10px;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em;color:#4b5563;border-bottom:1px solid var(--border);white-space:nowrap}
+.fin-table td{padding:7px 10px;border-bottom:1px solid #f1f3f5;vertical-align:top}
+.fin-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fin-table tr.section td{background:#eff6ff;font-weight:700;color:#1e3a8a}
+.fin-table tr.subtotal td{font-weight:600;border-top:1px solid #9ca3af}
+.fin-table tr.total td{font-weight:700;background:#f3f4f6;border-top:1px solid #6b7280}
+.fin-table tr.muted td{color:#9ca3af}
+.fin-table td.negative{color:var(--danger)}
+.fin-scroll{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px}
+.fin-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.76rem;font-weight:600;background:#e5e7eb;color:#374151}
+.fin-pill.PAID{background:#dcfce7;color:#166534}.fin-pill.PARTIAL{background:#fef3c7;color:#92400e}
+.fin-pill.UNPAID{background:#dbeafe;color:#1e40af}.fin-pill.Overdue{background:#fee2e2;color:#991b1b}
+.fin-pill.CANCELLED{background:#f3f4f6;color:#6b7280}
+.fin-inline{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.fin-inline input,.fin-inline select{padding:7px 9px;border:1px solid var(--border);border-radius:8px}
+.fin-stack>div{margin-bottom:10px}
+.fin-stack label{display:block;font-size:.82rem;font-weight:600;margin-bottom:3px}
+.fin-stack input,.fin-stack select,.fin-stack textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
+.fin-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.fin-cards a.fin-card{text-decoration:none;color:inherit;display:block}
+.fin-cards a.fin-card:hover{border-color:var(--primary)}
+.fin-empty{text-align:center;padding:36px 16px;color:#6b7280}
+.fin-btn-danger{background:#fff;border:1px solid #fca5a5;color:#b91c1c}
+@media(max-width:640px){.fin-kpis{grid-template-columns:repeat(2,1fr)}.fin-grid{grid-template-columns:1fr}.fin-filter>div{flex:1 1 45%}.fin-filter select,.fin-filter input{width:100%}}
+@media print{.sidebar,.topbar,.fin-filter,.fin-actions,.fin-subnav{display:none!important}}

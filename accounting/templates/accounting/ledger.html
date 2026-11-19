@@ -1,0 +1,45 @@
+{% extends 'accounting/fin_base.html' %}
+{% load finance %}
+{% block title %} Accounting Ledger {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Accounting Ledger</h2><p>Every transaction as a balanced journal entry. Posted entries are never edited: they are reversed.</p></div>
+  <div class="fin-actions"><a class="btn btn-primary" href="{% url 'accounting:journal-new' %}">New journal entry</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:report' key='trial-balance' %}">Trial balance</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:report' key='general-ledger' %}">General ledger</a>
+    <a class="btn btn-secondary" href="{% url 'accounting:settings' %}">Settings</a></div></div>
+<ul class="fin-subnav"><li><a href="?tab=journal" class="{% if tab == 'journal' %}on{% endif %}">Journal</a></li><li><a href="?tab=accounts" class="{% if tab == 'accounts' %}on{% endif %}">Chart of accounts</a></li><li><a href="?tab=till" class="{% if tab == 'till' %}on{% endif %}">Till movements</a></li><li><a href="?tab=tools" class="{% if tab == 'tools' %}on{% endif %}">Checks &amp; tools</a></li></ul>
+{% if tab == 'accounts' %}
+<div class="fin-actions" style="margin-bottom:10px"><a class="btn btn-secondary" href="{% url 'accounting:account-new' %}">Add account</a></div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody>
+{% for a in accounts %}<tr class="{% if not a.is_active %}muted{% endif %}"><td>{{ a.code }}</td><td>{% if a.is_header %}<b>{{ a.name }}</b>{% else %}{{ a.name }}{% endif %}</td><td>{{ a.get_account_type_display }}</td><td>{% if a.is_active %}Active{% else %}Switched off{% endif %}</td>
+ <td>{% if not a.is_header and can_configure %}<form method="post" action="{% url 'accounting:account-toggle' a.pk %}">{% csrf_token %}<button class="btn btn-secondary" type="submit">{% if a.is_active %}Switch off{% else %}Switch on{% endif %}</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% elif tab == 'till' %}
+<p class="fin-note">Cash In and Cash Out entries made at the till say that money moved, not why. Tell the books what each one was. Supplier payments are already recorded automatically.</p>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Date</th><th>Branch</th><th>Type</th><th>Reason given</th><th class="num">Amount</th><th>Post it as</th></tr></thead><tbody>
+{% for m in movements %}<tr><td>{{ m.created_at|date:"d M Y H:i" }}</td><td>{{ m.session.branch.name }}</td><td>{{ m.get_transaction_type_display }}</td><td>{{ m.reason }}</td><td class="num">{{ m.amount|money }}</td>
+ <td><form method="post" action="{% url 'accounting:classify' m.pk %}" class="fin-inline">{% csrf_token %}<select name="account" required aria-label="Account"><option value="">Choose account...</option>{% for a in classify_accounts %}<option value="{{ a.pk }}">{{ a.code }} {{ a.name }}</option>{% endfor %}</select><button class="btn btn-secondary" type="submit">Post</button></form></td></tr>
+{% empty %}<tr><td colspan="6" class="fin-empty">Nothing waiting. Every till movement is accounted for.</td></tr>{% endfor %}</tbody></table></div>
+{% elif tab == 'tools' %}
+<div class="fin-grid">
+  <div class="fin-card"><h3>Catch up the ledger</h3><p class="fin-note">Posts any sale, refund, supplier payment, stock adjustment or transfer that is missing from the books (for example after an offline sync). Safe to run any time: nothing is ever posted twice.</p>
+    <form method="post" action="{% url 'accounting:catch-up' %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Catch up now</button></form></div>
+  <div class="fin-card"><h3>Stock value check</h3><p class="fin-note">Compares what the Inventory account says with what your shelves are worth (stock on hand x cost). Differences come from cost changes or stock counted outside the system.</p>
+    <table class="fin-table"><thead><tr><th>Branch</th><th class="num">Ledger</th><th class="num">Stock value</th><th class="num">Difference</th></tr></thead><tbody>
+    {% for r in inventory_rows %}<tr><td>{{ r.branch.name }}</td><td class="num">{{ r.ledger|money }}</td><td class="num">{{ r.physical|money }}</td><td class="num {% if r.difference|neg %}negative{% endif %}">{{ r.difference|money }}</td></tr>{% endfor %}</tbody></table>
+    <form method="post" action="{% url 'accounting:revalue' %}" onsubmit="return confirm('Adjust the Inventory account to match stock value? The difference goes to Stock Losses and Adjustments.')" style="margin-top:10px">{% csrf_token %}<button class="btn btn-secondary" type="submit">Adjust inventory to stock value</button></form></div>
+</div>
+{% else %}
+{% include 'accounting/_filter.html' %}
+<form method="get" class="fin-filter">
+  {% for k, v in request.GET.items %}{% if k != 'q' and k != 'source' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <div class="grow"><label for="j-q">Search</label><input id="j-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="Reference or description" style="width:100%"></div>
+  <div><label for="j-s">Source</label><select id="j-s" name="source"><option value="">All</option>{% for s in sources %}<option value="{{ s }}" {% if request.GET.source == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+  <div><button class="btn btn-secondary" type="submit">Search</button></div></form>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Branch</th><th>Source</th><th>Status</th><th class="num">Amount</th></tr></thead><tbody>
+{% for e in page %}<tr class="{% if e.status == 'REVERSED' %}muted{% endif %}"><td>{{ e.entry_date|date:"d M Y" }}</td><td><a href="{% url 'accounting:journal' e.pk %}">{{ e.reference }}</a></td><td>{{ e.description }}</td><td>{{ e.branch.name|default:"-" }}</td><td>{{ e.source_type }}</td><td>{{ e.get_status_display }}</td><td class="num">{{ e.amount|money }}</td></tr>
+{% empty %}<tr><td colspan="7" class="fin-empty">No journal entries in this period.</td></tr>{% endfor %}</tbody></table></div>
+{% if page.paginator.num_pages > 1 %}<div class="pagination-container"><span class="pagination-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span><ul class="pagination-list">
+{% if page.has_previous %}<li class="pagination-item"><a class="pagination-link" href="?{% qs_without 'page' %}page={{ page.previous_page_number }}">Previous</a></li>{% endif %}
+{% if page.has_next %}<li class="pagination-item"><a class="pagination-link" href="?{% qs_without 'page' %}page={{ page.next_page_number }}">Next</a></li>{% endif %}</ul></div>{% endif %}
+{% endif %}
+{% endblock %}

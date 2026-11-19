@@ -1,0 +1,26 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Restaurant settings{% endblock %}
+{% block content %}
+<div class="rs-page" style="max-width:760px">
+  <div class="rs-head"><h1>Restaurant settings</h1></div>
+  <form method="post" class="rs-card rs-form">{% csrf_token %}{{ form.non_field_errors }}
+    {% for f in form %}
+      {% if f.field.widget.input_type == 'checkbox' %}<label style="font-weight:500">{{ f }} {{ f.label }}</label>
+      {% else %}<label>{{ f.label }}</label>{{ f }}{% endif %}
+      {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
+    {% endfor %}
+    <button class="rs-btn primary" style="margin-top:16px">Save settings</button>
+  </form>
+  <div class="rs-card rs-form"><h3 style="margin-top:0">Online ordering link</h3>
+    <p class="rs-help">Lets your website, app or a delivery platform send orders straight in. Switch on "online ordering" above, then create a key.</p>
+    {% if new_key %}<div class="rs-card" style="background:#ecfdf5;border-color:#6ee7b7"><b>Copy this key now. It is shown only once.</b>
+      <div style="font-family:monospace;word-break:break-all;margin:8px 0">{{ new_key }}</div></div>{% endif %}
+    <p>Key status: {% if rs.online_key_id %}<span class="rs-badge green">active (id {{ rs.online_key_id }})</span>{% else %}<span class="rs-badge">none</span>{% endif %}</p>
+    <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="key_new"><button class="rs-btn navy">{% if rs.online_key_id %}Replace key{% else %}Create key{% endif %}</button></form>
+    {% if rs.online_key_id %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="key_revoke"><button class="rs-btn danger">Revoke</button></form>{% endif %}
+    <p class="rs-help" style="margin-top:12px">Endpoints (send <code>Authorization: Bearer &lt;key&gt;</code>):<br>
+      <code>GET {{ api_base }}menu/</code><br><code>POST {{ api_base }}orders/</code> (JSON; <code>external_ref</code>, <code>type</code>, <code>customer</code>, <code>address</code>, <code>items</code>[{<code>menu_item_id</code> or <code>sku</code>, <code>quantity</code>, <code>option_ids</code>, <code>note</code>}], <code>paid</code>)<br>
+      <code>GET {{ api_base }}orders/&lt;external_ref&gt;/</code></p>
+  </div>
+</div>
+{% endblock %}

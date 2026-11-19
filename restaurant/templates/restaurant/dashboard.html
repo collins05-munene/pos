@@ -1,0 +1,29 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Restaurant overview{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Restaurant overview</h1><p class="rs-sub">{{ branch.name }} &middot; today</p></div>
+    <div><a class="rs-btn primary" href="{% url 'restaurant:floor' %}">Open floor</a>
+    <a class="rs-btn" href="{% url 'restaurant:kds' %}">Kitchen display</a></div></div>
+  {% if not register %}<div class="rs-card" style="border-color:#fcd34d;background:#fffbeb">The cash register is closed. Cashiers can take M-Pesa/card payments, but cash needs an <a href="{% url 'open_register' %}">open register</a>.</div>{% endif %}
+  {% if pending_online %}<div class="rs-card" style="border-color:#93c5fd;background:#eff6ff"><b>{{ pending_online }}</b> online order{{ pending_online|pluralize }} waiting to be accepted. <a href="{% url 'restaurant:delivery' %}">Review</a></div>{% endif %}
+  <div class="rs-grid">
+    <div class="rs-stat"><b>{{ tables_occupied }}/{{ tables_total }}</b><span>Tables occupied</span></div>
+    <div class="rs-stat"><b>{{ open_count }}</b><span>Open orders</span></div>
+    <div class="rs-stat"><b>{{ kitchen_queue }}</b><span>In the kitchen</span></div>
+    <div class="rs-stat"><b>{{ ready_now }}</b><span>Ready to serve</span></div>
+    <div class="rs-stat"><b>{{ paid_today }}</b><span>Bills paid today</span></div>
+    <div class="rs-stat"><b>KSH {{ sales_today|floatformat:2 }}</b><span>Taken today</span></div>
+    <div class="rs-stat"><b>KSH {{ waste_today|floatformat:2 }}</b><span>Waste today</span></div>
+  </div>
+  <div class="rs-two" style="margin-top:16px">
+    <div class="rs-card"><h3 style="margin-top:0">Low-stock ingredients</h3>
+      {% for sl in low_stock %}<div class="rs-tot"><span>{{ sl.variant.product.name }}</span><span class="rs-low">{{ sl.quantity }} {{ sl.variant.ingredient.stock_unit }}</span></div>
+      {% empty %}<p class="rs-muted">Nothing is running low.</p>{% endfor %}
+      <a href="{% url 'restaurant:ingredients' %}?low=1">See all ingredients</a></div>
+    <div class="rs-card"><h3 style="margin-top:0">Kitchen speed today</h3>
+      {% for p in prep %}<div class="rs-tot"><span>{{ p.station }} ({{ p.tickets }})</span><span>avg {{ p.avg_minutes }} min &middot; slowest {{ p.slowest_minutes }}</span></div>
+      {% empty %}<p class="rs-muted">No finished tickets yet.</p>{% endfor %}</div>
+  </div>
+</div>
+{% endblock %}

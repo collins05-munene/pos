@@ -1,0 +1,13 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'accounting/finance.css' %}">{% endblock %}
+{% block content %}
+<div class="fin-page">
+  {% if nav|length > 1 %}
+  <ul class="fin-subnav" aria-label="Financial Management sections">
+    {% for key, label, url in nav %}<li><a href="{{ url }}" class="{% if key == section %}on{% endif %}"{% if key == section %} aria-current="page"{% endif %}>{{ label }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% block fin_body %}{% endblock %}
+</div>
+{% endblock %}

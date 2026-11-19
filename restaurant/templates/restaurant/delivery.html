@@ -1,0 +1,44 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Takeaway & delivery{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Takeaway &amp; delivery</h1><p class="rs-sub">Pick-ups and deliveries still to hand over.</p></div>
+    <button class="rs-btn primary" onclick="newOrder()">New takeaway / delivery</button></div>
+  {% if pending %}<div class="rs-card" style="border-color:#93c5fd;background:#eff6ff"><h3 style="margin-top:0">Online orders to accept</h3>
+    {% for o in pending %}<div class="rs-tot"><span><b>{{ o.number }}</b> {{ o.customer_name|default:o.customer_phone }} &middot; {{ o.get_order_type_display }} &middot; KSH {{ o.total }}</span>
+      <span><a class="rs-btn sm" href="{% url 'restaurant:order' o.pk %}">View</a> <button class="rs-btn sm primary" onclick="act({{ o.pk }},'accept')">Accept</button></span></div>{% endfor %}</div>{% endif %}
+  {% for title, rows in groups %}{% if rows %}
+  <div class="rs-card rs-scroll"><h3 style="margin-top:0">{{ title }} <span class="rs-badge">{{ rows|length }}</span></h3>
+    <table class="rs-table"><tbody>
+    {% for o in rows %}<tr><td><b>{{ o.number }}</b><br><span class="rs-badge {% if o.order_type == 'DELIVERY' %}blue{% endif %}">{{ o.get_order_type_display }}</span></td>
+      <td>{{ o.customer_name|default:"-" }}<br><span class="rs-muted">{{ o.customer_phone }}</span></td>
+      <td>{{ o.delivery_address|default:"Pick-up" }}{% if o.delivery_notes %}<br><span class="rs-muted">{{ o.delivery_notes }}</span>{% endif %}</td>
+      <td class="rs-right">KSH {{ o.total }}<br><span class="rs-muted">{% if o.balance > 0 %}owing {{ o.balance }}{% else %}paid{% endif %}</span></td>
+      <td>{% if o.order_type == 'DELIVERY' %}<select class="rs-in" onchange="rider({{ o.pk }},this.value)"><option value="">Rider...</option>
+        {% for r in riders %}<option value="{{ r.pk }}" {% if o.rider_id == r.pk %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select>{% endif %}</td>
+      <td class="rs-right" style="white-space:nowrap">
+        {% if o.handover == 'PENDING' %}<button class="rs-btn sm" onclick="hand({{ o.pk }},'READY')">Mark ready</button>{% endif %}
+        {% if o.handover == 'READY' and o.order_type == 'TAKEAWAY' %}<button class="rs-btn sm primary" onclick="hand({{ o.pk }},'COMPLETED')">Collected</button>{% endif %}
+        {% if o.handover == 'ASSIGNED' %}<button class="rs-btn sm" onclick="hand({{ o.pk }},'OUT')">Out for delivery</button>{% endif %}
+        {% if o.handover == 'OUT' %}<button class="rs-btn sm primary" onclick="hand({{ o.pk }},'COMPLETED')">Delivered</button><button class="rs-btn sm danger" onclick="hand({{ o.pk }},'FAILED')">Failed</button>{% endif %}
+        <a class="rs-btn sm" href="{% url 'restaurant:order' o.pk %}">Open</a></td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}{% endfor %}
+  <div class="rs-pop" id="newPop"><div class="rs-form"><h3>New order</h3>
+    <label>Type</label><select id="n_type" class="rs-in" onchange="syncType()"><option value="TAKEAWAY">Takeaway</option><option value="DELIVERY">Delivery</option></select>
+    <label>Customer name</label><input id="n_name" class="rs-in"><label>Phone</label><input id="n_phone" class="rs-in" inputmode="tel">
+    <div id="n_del"><label>Delivery address</label><input id="n_addr" class="rs-in"><label>Delivery notes</label><input id="n_dnotes" class="rs-in">
+      <label>Delivery zone / fee</label><select id="n_zone" class="rs-in"><option value="">Standard fee (KSH {{ default_fee }})</option>{% for z in zones %}<option value="{{ z.pk }}">{{ z.name }} - KSH {{ z.fee }}</option>{% endfor %}</select></div>
+    <div class="rs-actions"><button class="rs-btn primary" onclick="createOrder()">Start order</button><button class="rs-btn" onclick="document.getElementById('newPop').classList.remove('on')">Cancel</button></div>
+    <p id="n_err" class="rs-low"></p></div></div>
+</div>
+<script>
+const CSRF='{{ csrf_token }}';
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify(body||{})});return [r.ok,await r.json()]}
+async function act(id,a,b){const [ok,j]=await post('/restaurant/api/order/'+id+'/'+a+'/',b);if(!ok)alert(j.error);else location.reload()}
+const rider=(id,v)=>act(id,'rider',{rider_id:v||null}), hand=(id,s)=>act(id,'handover',{status:s});
+function newOrder(){document.getElementById('newPop').classList.add('on');syncType()}
+function syncType(){document.getElementById('n_del').style.display=document.getElementById('n_type').value==='DELIVERY'?'block':'none'}
+async function createOrder(){const g=i=>document.getElementById(i).value;const [ok,j]=await post('/restaurant/api/order/create/',{type:g('n_type'),customer_name:g('n_name'),customer_phone:g('n_phone'),address:g('n_addr'),delivery_notes:g('n_dnotes'),delivery_zone_id:g('n_zone')||null,phone_order:true});
+ if(ok)location=j.url;else document.getElementById('n_err').textContent=j.error}
+</script>
+{% endblock %}

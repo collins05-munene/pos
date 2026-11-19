@@ -106,7 +106,7 @@ def _clean(name, code, location="", phone=""):
     if code and not CODE_RE.match(code):
         raise ValidationError("Code: 2-10 letters or digits.")
     if phone:
-        from billing.phone import normalize_phone
+        from billing.mpesa import normalize_phone
         try:
             phone = normalize_phone(phone)
         except ValueError as exc:
@@ -195,8 +195,8 @@ def assign_user_branch(user, branch):
     """Cashiers need a branch; managers/admins may have none (they start at main)."""
     if branch is not None and (branch.tenant_id != user.tenant_id or not branch.is_active):
         raise ValidationError("Pick one of your active branches.")
-    if branch is None and user.role == user.Roles.CASHIER:
-        raise ValidationError("A cashier must be assigned to a branch.")
+    if branch is None and user.role in (user.Roles.CASHIER, user.Roles.WAITER, user.Roles.KITCHEN):
+        raise ValidationError("This role must be assigned to a branch.")
     user.branch = branch
     user.save(update_fields=["branch"])
     return user

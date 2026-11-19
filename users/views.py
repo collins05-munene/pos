@@ -34,10 +34,19 @@ def home_for(user):
     """Where a freshly signed-in user lands, by who they are."""
     if user.is_superuser:
         return reverse('platform_admin:overview')
+    if user.role == User.Roles.ACCOUNTANT:          # accountants land on Finance at every business type
+        return reverse('accounting:overview')
+    tenant = getattr(user, 'tenant', None)
+    if tenant is not None and tenant.is_hospitality:
+        if user.role == User.Roles.KITCHEN:
+            return reverse('restaurant:kds')
+        if user.role == User.Roles.WAITER:
+            return reverse('restaurant:waiter')
+        if user.role == User.Roles.CASHIER:
+            return reverse('restaurant:floor')
+        return reverse('restaurant:dashboard')
     if user.role == User.Roles.CASHIER:
         return reverse('pos_terminal')
-    if user.role == User.Roles.ACCOUNTANT:
-        return reverse('accounting:overview')
     return reverse('admin-dashboard')
 
 

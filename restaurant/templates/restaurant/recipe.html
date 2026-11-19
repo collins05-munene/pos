@@ -1,0 +1,32 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}Recipe: {{ item.name }}{% endblock %}
+{% block content %}
+<div class="rs-page">
+  <div class="rs-head"><div><h1>Recipe: {{ item.name }}</h1><p class="rs-sub">What one batch uses. Stock is deducted per portion sold.</p></div><a class="rs-btn" href="{% url 'restaurant:menu' %}">Back to menu</a></div>
+  <div class="rs-grid" style="margin-bottom:16px">
+    <div class="rs-stat"><b>KSH {{ bd.cost }}</b><span>Cost per portion</span></div>
+    <div class="rs-stat"><b>KSH {{ bd.price }}</b><span>Selling price</span></div>
+    <div class="rs-stat"><b>KSH {{ bd.profit }}</b><span>Profit per portion</span></div>
+    <div class="rs-stat"><b>{% if bd.food_cost_percent is not None %}{{ bd.food_cost_percent }}%{% else %}-{% endif %}</b><span>Food cost</span></div>
+  </div>
+  <div class="rs-two">
+    <div class="rs-card"><h3 style="margin-top:0">Ingredients</h3>
+      <table class="rs-table"><thead><tr><th>Ingredient</th><th class="rs-right">Per batch</th><th class="rs-right">Waste</th><th class="rs-right">Cost / portion</th><th></th></tr></thead><tbody>
+      {% for r in bd.rows %}<tr><td>{{ r.line.ingredient.name }}</td><td class="rs-right">{{ r.line.quantity|floatformat:"-3" }} {{ r.line.ingredient.unit_label }}</td>
+        <td class="rs-right">{{ r.line.waste_percent|floatformat:"-1" }}%</td><td class="rs-right">{{ r.cost }}</td>
+        <td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="line_id" value="{{ r.line.pk }}"><button class="rs-btn sm danger">Remove</button></form></td></tr>
+      {% empty %}<tr><td colspan="5" class="rs-muted">No ingredients yet. Without any, selling this dish takes nothing out of stock.</td></tr>{% endfor %}
+      </tbody></table>
+      <form method="post" class="rs-form" style="margin-top:14px">{% csrf_token %}<input type="hidden" name="action" value="yield">
+        <label>This recipe makes (portions)</label><input class="form-input" name="yield_portions" value="{{ recipe.yield_portions|floatformat:'-2' }}">
+        <label>Notes</label><textarea class="form-input" name="notes" rows="2">{{ recipe.notes }}</textarea>
+        <button class="rs-btn" style="margin-top:8px">Update</button></form></div>
+    <div class="rs-card rs-form"><h3 style="margin-top:0">Add an ingredient</h3>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="add">{{ form.non_field_errors }}
+        {% for f in form %}<label>{{ f.label }}</label>{{ f }}{{ f.errors }}{% endfor %}
+        <p class="rs-help">Quantity is for the whole batch, in the ingredient's recipe unit. Waste adds trimming / cooking loss.</p>
+        <button class="rs-btn primary" style="margin-top:8px">Add</button></form>
+      <p class="rs-help" style="margin-top:12px">Ingredient missing? <a href="{% url 'restaurant:ingredient-new' %}">Create it</a> first.</p></div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends 'restaurant/rbase.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="rs-page" style="max-width:640px">
+  <div class="rs-head"><h1>{{ title }}</h1><a class="rs-btn" href="{{ back }}">Back</a></div>
+  <form method="post" class="rs-card rs-form">{% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for f in form %}
+      {% if f.field.widget.input_type == 'checkbox' %}
+        <label style="font-weight:500">{{ f }} {{ f.label }}</label>
+      {% else %}<label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+      {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
+    {% endfor %}
+    <div style="margin-top:18px"><button class="rs-btn primary" type="submit">Save</button></div>
+  </form>
+</div>
+{% endblock %}

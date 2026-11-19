@@ -1,0 +1,31 @@
+{% if user.role == 'ADMIN' or user.role == 'MANAGER' or user.role == 'CASHIER' %}
+<li class="menu-title">Restaurant</li>
+{% if user.role != 'CASHIER' %}<li><a href="{% url 'restaurant:dashboard' %}">Overview</a></li>{% endif %}
+<li><a href="{% url 'restaurant:floor' %}">Floor &amp; Tables</a></li>
+<li><a href="{% url 'restaurant:orders' %}">Orders</a></li>
+<li><a href="{% url 'restaurant:delivery' %}">Takeaway &amp; Delivery</a></li>
+<li><a href="{% url 'restaurant:shift' %}">My Shift</a></li>
+{% if user.role != 'CASHIER' %}
+<li><a href="{% url 'restaurant:kds' %}">Kitchen Display</a></li>
+<li class="menu-title">Menu &amp; Kitchen</li>
+<li><a href="{% url 'restaurant:menu' %}">Menu &amp; Recipes</a></li>
+<li><a href="{% url 'restaurant:ingredients' %}">Ingredients</a></li>
+<li><a href="{% url 'restaurant:waste' %}">Waste</a></li>
+<li><a href="{% url 'restaurant:crud' 'modifiers' %}">Extras &amp; Options</a></li>
+<li><a href="{% url 'restaurant:crud' 'stations' %}">Stations</a></li>
+<li><a href="{% url 'restaurant:crud' 'riders' %}">Riders</a></li>
+<li><a href="{% url 'restaurant:crud' 'zones' %}">Delivery Zones</a></li>
+<li><a href="{% url 'restaurant:reports' %}">Restaurant Reports</a></li>
+<li><a href="{% url 'restaurant:shifts' %}">Shift Reports</a></li>
+<li><a href="{% url 'restaurant:settings' %}">Restaurant Settings</a></li>
+{% endif %}
+{% elif user.role == 'WAITER' %}
+<li class="menu-title">Service</li>
+<li><a href="{% url 'restaurant:waiter' %}">My Tables</a></li>
+<li><a href="{% url 'restaurant:floor' %}">Floor Plan</a></li>
+<li><a href="{% url 'restaurant:orders' %}">My Orders</a></li>
+{% elif user.role == 'KITCHEN' %}
+<li class="menu-title">Kitchen</li>
+<li><a href="{% url 'restaurant:kds' %}">Kitchen Display</a></li>
+<li><a href="{% url 'restaurant:waste' %}">Record Waste</a></li>
+{% endif %}

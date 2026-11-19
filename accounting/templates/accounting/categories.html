@@ -1,0 +1,17 @@
+{% extends 'accounting/fin_base.html' %}
+{% block title %} Expense categories {% endblock %}
+{% block fin_body %}
+<div class="fin-head"><div><h2>Expense categories</h2><p>Each category records its costs in a ledger account. Switch off the ones you do not use.</p></div>
+  <div class="fin-actions"><a class="btn btn-secondary" href="{% url 'accounting:expenses' %}">Back to expenses</a></div></div>
+<div class="fin-grid">
+  <div class="fin-card"><h3>Add a category</h3>
+    <form method="post" class="fin-stack" novalidate>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="fin-alert bad">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for er in field.errors %}<span class="field-error-message">{{ er }}</span>{% endfor %}{% if field.help_text %}<span class="fin-note">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+      <button class="btn btn-primary" type="submit">Add category</button></form></div>
+</div>
+<div class="fin-scroll"><table class="fin-table"><thead><tr><th>Category</th><th>Ledger account</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for c in categories %}<tr class="{% if not c.is_active %}muted{% endif %}"><td>{{ c.name }}</td><td>{{ c.account.code }} {{ c.account.name }}</td><td>{% if c.is_system %}Default{% else %}Custom{% endif %}</td><td>{% if c.is_active %}Active{% else %}Switched off{% endif %}</td>
+    <td><form method="post" action="{% url 'accounting:category-toggle' c.pk %}">{% csrf_token %}<button class="btn btn-secondary" type="submit">{% if c.is_active %}Switch off{% else %}Switch on{% endif %}</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}
