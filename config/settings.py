@@ -38,6 +38,7 @@ ALLOWED_HOSTS = [
     '.ngrok-free.app',
     "unisalesystems.store",
     "www.unisalesystems.store",
+    "app.unisalesystems.store",
 ]
 
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
